@@ -111,8 +111,12 @@ endif
 
 DTC_FLAGS += $(DTC_FLAGS_$(target-stem))
 
+ifeq ($(CONFIG_OF_OVERLAY),y)
+DTC_FLAGS += -@
+else
 # Set -@ if the target is a base DTB that overlay is applied onto
 DTC_FLAGS += $(if $(filter $(patsubst $(obj)/%,%,$@), $(base-dtb-y)), -@)
+endif
 
 DTC_INCLUDE := $(srctree)/scripts/dtc/include-prefixes
 
