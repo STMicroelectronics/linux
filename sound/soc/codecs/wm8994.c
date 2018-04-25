@@ -2071,10 +2071,10 @@ static const struct snd_soc_dapm_route wm8994_lateclk_intercon[] = {
 };
 
 static const struct snd_soc_dapm_route wm8994_revd_intercon[] = {
-	{ "AIF1DACDAT", NULL, "AIF2DACDAT" },
-	{ "AIF2DACDAT", NULL, "AIF1DACDAT" },
-	{ "AIF1ADCDAT", NULL, "AIF2ADCDAT" },
-	{ "AIF2ADCDAT", NULL, "AIF1ADCDAT" },
+//	{ "AIF1DACDAT", NULL, "AIF2DACDAT" },
+//	{ "AIF2DACDAT", NULL, "AIF1DACDAT" },
+//	{ "AIF1ADCDAT", NULL, "AIF2ADCDAT" },
+//	{ "AIF2ADCDAT", NULL, "AIF1ADCDAT" },
 	{ "MICBIAS1", NULL, "CLK_SYS" },
 	{ "MICBIAS1", NULL, "MICBIAS Supply" },
 	{ "MICBIAS2", NULL, "CLK_SYS" },
