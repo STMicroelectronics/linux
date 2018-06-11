@@ -171,6 +171,11 @@
 #define SII902X_MIN_PIXEL_CLOCK_KHZ		25000
 #define SII902X_MAX_PIXEL_CLOCK_KHZ		165000
 
+/* CEC device */
+#define SII902X_CEC_I2C_ADDR			0x30
+
+#define SII902X_CEC_SETUP			0x8e
+
 struct sii902x {
 	struct i2c_client *i2c;
 	struct regmap *regmap;
@@ -1154,6 +1159,13 @@ static int sii902x_init(struct sii902x *sii902x)
 {
 	struct device *dev = &sii902x->i2c->dev;
 	unsigned int status = 0;
+	unsigned char data[2] = { SII902X_CEC_SETUP, 0};
+	struct i2c_msg msg = {
+		.addr	= SII902X_CEC_I2C_ADDR << 1,
+		.flags	= 0,
+		.len	= 2,
+		.buf	= data,
+	};
 	u8 chipid[4];
 	int ret;
 
@@ -1175,6 +1187,14 @@ static int sii902x_init(struct sii902x *sii902x)
 			chipid[0]);
 		return -EINVAL;
 	}
+
+	/*
+	 * By default, CEC must be disabled to allow other CEC devives
+	 * to bypass the bridge.
+	 */
+	ret = i2c_transfer(sii902x->i2c->adapter, &msg, 1);
+	if (ret < 0)
+		dev_warn(&sii902x->i2c->dev, "Failed to disable CEC device!\n");
 
 	/* Clear all pending interrupts */
 	regmap_read(sii902x->regmap, SII902X_INT_STATUS, &status);
