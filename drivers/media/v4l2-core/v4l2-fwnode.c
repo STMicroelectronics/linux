@@ -405,6 +405,9 @@ v4l2_fwnode_endpoint_parse_parallel_bus(struct fwnode_handle *fwnode,
 		pr_debug("data-enable-active %s\n", v ? "high" : "low");
 	}
 
+	if (!fwnode_property_read_u32(fwnode, "pclk-max-frequency", &v))
+		bus->pclk_max_frequency = v;
+
 	switch (bus_type) {
 	default:
 		bus->flags = flags;
