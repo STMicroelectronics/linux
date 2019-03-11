@@ -183,6 +183,12 @@ static int wm8994_resume(struct device *dev)
 	if (!wm8994->suspended)
 		return 0;
 
+	/*
+	 * LDO1/2 minimum cycle time is 36ms according to codec specification
+	 * Wait before enabling regulator to make sure we fit this requirement
+	 */
+	msleep(40);
+
 	ret = regulator_bulk_enable(wm8994->num_supplies,
 				    wm8994->supplies);
 	if (ret != 0) {
