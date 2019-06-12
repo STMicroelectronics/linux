@@ -79,8 +79,7 @@
 #define ONE_MHZ			1000000
 #define POLL_TIMEOUT		5000
 #define STARTUP_TIME		40
-#define TS1_T0_VAL0		30000  /* 30 celsius */
-#define TS1_T0_VAL1		130000 /* 130 celsius */
+#define T0			30000  /* 30 celsius */
 #define NO_HW_TRIG		0
 #define SAMPLING_TIME		15
 
@@ -93,7 +92,7 @@ struct stm_thermal_sensor {
 	unsigned int high_temp_enabled;
 	int irq;
 	void __iomem *base;
-	int t0, fmt0, ramp_coeff;
+	int fmt0, ramp_coeff;
 };
 
 static int stm_enable_irq(struct stm_thermal_sensor *sensor)
@@ -240,14 +239,6 @@ static int stm_thermal_calibration(struct stm_thermal_sensor *sensor)
 /* Fill in DTS structure with factory sensor values */
 static int stm_thermal_read_factory_settings(struct stm_thermal_sensor *sensor)
 {
-	/* Retrieve engineering calibration temperature */
-	sensor->t0 = readl_relaxed(sensor->base + DTS_T0VALR1_OFFSET) &
-					TS1_T0_MASK;
-	if (!sensor->t0)
-		sensor->t0 = TS1_T0_VAL0;
-	else
-		sensor->t0 = TS1_T0_VAL1;
-
 	/* Retrieve fmt0 and put it on Hz */
 	sensor->fmt0 = ADJUST * (readl_relaxed(sensor->base +
 				 DTS_T0VALR1_OFFSET) & TS1_FMT0_MASK);
@@ -261,8 +252,8 @@ static int stm_thermal_read_factory_settings(struct stm_thermal_sensor *sensor)
 		return -EINVAL;
 	}
 
-	dev_dbg(sensor->dev, "%s: T0 = %doC, FMT0 = %dHz, RAMP_COEFF = %dHz/oC",
-		__func__, sensor->t0, sensor->fmt0, sensor->ramp_coeff);
+	dev_dbg(sensor->dev, "%s: FMT0 = %dHz, RAMP_COEFF = %dHz/oC",
+		__func__, sensor->fmt0, sensor->ramp_coeff);
 
 	return 0;
 }
@@ -273,8 +264,7 @@ static int stm_thermal_calculate_threshold(struct stm_thermal_sensor *sensor,
 	int freqM;
 
 	/* Figure out the CLK_PTAT frequency for a given temperature */
-	freqM = ((temp - sensor->t0) * sensor->ramp_coeff) / 1000 +
-		sensor->fmt0;
+	freqM = ((temp - T0) * sensor->ramp_coeff) / 1000 + sensor->fmt0;
 
 	/* Figure out the threshold sample number */
 	*th = clk_get_rate(sensor->clk) * SAMPLING_TIME / freqM;
@@ -369,7 +359,7 @@ static int stm_thermal_get_temp(struct thermal_zone_device *tz, int *temp)
 		return -EINVAL;
 
 	/* Figure out the temperature in mili celsius */
-	*temp = (freqM - sensor->fmt0) * 1000 / sensor->ramp_coeff + sensor->t0;
+	*temp = (freqM - sensor->fmt0) * 1000 / sensor->ramp_coeff + T0;
 
 	return 0;
 }
