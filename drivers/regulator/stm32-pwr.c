@@ -3,11 +3,14 @@
 // Authors: Gabriel Fernandez <gabriel.fernandez@st.com>
 //          Pascal Paillet <p.paillet@st.com>.
 
+#include <linux/arm-smccc.h>
 #include <linux/io.h>
 #include <linux/iopoll.h>
+#include <linux/mfd/syscon.h>
 #include <linux/module.h>
 #include <linux/of.h>
 #include <linux/platform_device.h>
+#include <linux/regmap.h>
 #include <linux/regulator/driver.h>
 #include <linux/regulator/of_regulator.h>
 
@@ -22,6 +25,11 @@
 #define REG_1_8_RDY BIT(29)
 #define REG_1_1_EN BIT(30)
 #define REG_1_1_RDY BIT(31)
+
+#define STM32_SMC_PWR		0x82001001
+#define STM32_WRITE		0x1
+#define STM32_SMC_REG_SET	0x2
+#define STM32_SMC_REG_CLEAR	0x3
 
 /* list of supported regulators */
 enum {
@@ -38,9 +46,17 @@ static u32 ready_mask_table[STM32PWR_REG_NUM_REGS] = {
 };
 
 struct stm32_pwr_reg {
+	int tzen;
 	void __iomem *base;
 	u32 ready_mask;
 };
+
+#define SMC(class, op, address, val)\
+	({\
+	struct arm_smccc_res res;\
+	arm_smccc_smc(class, op, address, val,\
+			0, 0, 0, 0, &res);\
+	})
 
 static int stm32_pwr_reg_is_ready(struct regulator_dev *rdev)
 {
@@ -68,9 +84,15 @@ static int stm32_pwr_reg_enable(struct regulator_dev *rdev)
 	int ret;
 	u32 val;
 
-	val = readl_relaxed(priv->base + REG_PWR_CR3);
-	val |= rdev->desc->enable_mask;
-	writel_relaxed(val, priv->base + REG_PWR_CR3);
+	if (priv->tzen) {
+		SMC(STM32_SMC_PWR, STM32_SMC_REG_SET, REG_PWR_CR3,
+		    rdev->desc->enable_mask);
+	} else {
+		val = readl_relaxed(priv->base + REG_PWR_CR3);
+		val |= rdev->desc->enable_mask;
+		writel_relaxed(val, priv->base + REG_PWR_CR3);
+	}
+
 
 	/* use an arbitrary timeout of 20ms */
 	ret = readx_poll_timeout(stm32_pwr_reg_is_ready, rdev, val, val,
@@ -87,9 +109,14 @@ static int stm32_pwr_reg_disable(struct regulator_dev *rdev)
 	int ret;
 	u32 val;
 
-	val = readl_relaxed(priv->base + REG_PWR_CR3);
-	val &= ~rdev->desc->enable_mask;
-	writel_relaxed(val, priv->base + REG_PWR_CR3);
+	if (priv->tzen) {
+		SMC(STM32_SMC_PWR, STM32_SMC_REG_CLEAR, REG_PWR_CR3,
+		    rdev->desc->enable_mask);
+	} else {
+		val = readl_relaxed(priv->base + REG_PWR_CR3);
+		val &= ~rdev->desc->enable_mask;
+		writel_relaxed(val, priv->base + REG_PWR_CR3);
+	}
 
 	/* use an arbitrary timeout of 20ms */
 	ret = readx_poll_timeout(stm32_pwr_reg_is_enabled, rdev, val, !val,
@@ -120,11 +147,49 @@ static const struct regulator_ops stm32_pwr_reg_ops = {
 		.supply_name = _supply, \
 	} \
 
-static const struct regulator_desc stm32_pwr_desc[] = {
+static struct regulator_desc stm32_pwr_desc[] = {
 	PWR_REG(PWR_REG11, "reg11", 1100000, REG_1_1_EN, "vdd"),
 	PWR_REG(PWR_REG18, "reg18", 1800000, REG_1_8_EN, "vdd"),
 	PWR_REG(PWR_USB33, "usb33", 3300000, USB_3_3_EN, "vdd_3v3_usbfs"),
 };
+
+static int is_stm32_soc_secured(struct platform_device *pdev, int *val)
+{
+	struct device_node *np = pdev->dev.of_node;
+	struct regmap *syscon;
+	u32 reg, mask;
+	int tzc_val = 0;
+	int err;
+
+	syscon = syscon_regmap_lookup_by_phandle(np, "st,tzcr");
+	if (IS_ERR(syscon)) {
+		if (PTR_ERR(syscon) != -EPROBE_DEFER)
+			dev_err(&pdev->dev, "tzcr syscon required\n");
+		return PTR_ERR(syscon);
+	}
+
+	err = of_property_read_u32_index(np, "st,tzcr", 1, &reg);
+	if (err) {
+		dev_err(&pdev->dev, "tzcr offset required !\n");
+		return err;
+	}
+
+	err = of_property_read_u32_index(np, "st,tzcr", 2, &mask);
+	if (err) {
+		dev_err(&pdev->dev, "tzcr mask required !\n");
+		return err;
+	}
+
+	err = regmap_read(syscon, reg, &tzc_val);
+	if (err) {
+		dev_err(&pdev->dev, "failed to read tzcr status !\n");
+		return err;
+	}
+
+	*val = tzc_val & mask;
+
+	return 0;
+}
 
 static int stm32_pwr_regulator_probe(struct platform_device *pdev)
 {
@@ -133,6 +198,11 @@ static int stm32_pwr_regulator_probe(struct platform_device *pdev)
 	struct regulator_dev *rdev;
 	struct regulator_config config = { };
 	int i, ret = 0;
+	int tzen = 0;
+
+	ret = is_stm32_soc_secured(pdev, &tzen);
+	if (ret)
+		return ret;
 
 	base = devm_platform_ioremap_resource(pdev, 0);
 	if (IS_ERR(base)) {
@@ -147,6 +217,7 @@ static int stm32_pwr_regulator_probe(struct platform_device *pdev)
 				    GFP_KERNEL);
 		if (!priv)
 			return -ENOMEM;
+		priv->tzen = tzen;
 		priv->base = base;
 		priv->ready_mask = ready_mask_table[i];
 		config.driver_data = priv;
