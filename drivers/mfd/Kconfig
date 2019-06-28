@@ -2303,6 +2303,16 @@ config MFD_STPMIC1
 	  To compile this driver as a module, choose M here: the
 	  module will be called stpmic1.
 
+config MFD_STM32MP1_PWR
+	bool "STM32MP1 wake-up pins"
+	depends on MACH_STM32MP157
+	default y
+	help
+	  Select this option to enable STM32 PWR Wake-up pins driver.
+
+	  This driver provides interruptions that can be used to wake-up from
+	  suspend.
+
 config MFD_STMFX
 	tristate "Support for STMicroelectronics Multi-Function eXpander (STMFX)"
 	depends on I2C
