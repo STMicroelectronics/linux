@@ -202,6 +202,9 @@ static int stpmic1_suspend(struct device *dev)
 
 	disable_irq(pmic_dev->irq);
 
+	if (device_may_wakeup(dev))
+		enable_irq_wake(pmic_dev->irq);
+
 	return 0;
 }
 
@@ -214,6 +217,9 @@ static int stpmic1_resume(struct device *dev)
 	ret = regcache_sync(pmic_dev->regmap);
 	if (ret)
 		return ret;
+
+	if (device_may_wakeup(dev))
+		disable_irq_wake(pmic_dev->irq);
 
 	enable_irq(pmic_dev->irq);
 
