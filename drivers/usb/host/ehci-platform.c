@@ -35,6 +35,7 @@
 #include <linux/usb/hcd.h>
 #include <linux/usb/ehci_pdriver.h>
 #include <linux/usb/of.h>
+#include <linux/pm_wakeirq.h>
 
 #include "ehci.h"
 
@@ -445,6 +446,9 @@ static int __maybe_unused ehci_platform_suspend(struct device *dev)
 	if (pdata->power_suspend)
 		pdata->power_suspend(pdev);
 
+	if (device_may_wakeup(dev) || device_wakeup_path(dev))
+		enable_irq_wake(hcd->irq);
+
 	return ret;
 }
 
@@ -455,6 +459,9 @@ static int __maybe_unused ehci_platform_resume(struct device *dev)
 	struct platform_device *pdev = to_platform_device(dev);
 	struct ehci_platform_priv *priv = hcd_to_ehci_priv(hcd);
 	struct device *companion_dev;
+
+	if (device_may_wakeup(dev) || device_wakeup_path(dev))
+		disable_irq_wake(hcd->irq);
 
 	if (pdata->power_on) {
 		int err = pdata->power_on(pdev);
