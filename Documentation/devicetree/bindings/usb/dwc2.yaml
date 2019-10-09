@@ -177,6 +177,8 @@ properties:
     minItems: 1
     maxItems: 2
 
+  wakeup-source: true
+
 dependencies:
   port: [ usb-role-switch ]
   role-switch-default-mode: [ usb-role-switch ]
