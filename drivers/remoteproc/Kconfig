@@ -31,6 +31,16 @@ config REMOTEPROC_SRM_CORE
 	  The SRM handles resources allocated to remote processors.
 	  The core part is in charge of controlling the device children.
 
+config REMOTEPROC_SRM_DEV
+	tristate "Remoteproc System Resource Manager device"
+	depends on REMOTEPROC_SRM_CORE
+	help
+	  Say y here to enable the device driver of the remoteproc System
+	  Resource Manager (SRM).
+	  The SRM handles resources allocated to remote processors.
+	  The device part is in charge of reserving and initializing resources
+	  for a peripheral assigned to a coprocessor.
+
 config IMX_REMOTEPROC
 	tristate "i.MX remoteproc support"
 	depends on ARCH_MXC
