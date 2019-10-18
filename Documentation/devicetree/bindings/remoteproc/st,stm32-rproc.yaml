@@ -184,6 +184,13 @@ properties:
     description:
       SRAM only. Preserves power during a suspend/resume cycle.
 
+  m4_system_resources:
+    $ref: /schemas/remoteproc/rproc-srm.yaml#
+    description:
+      Child node used to declare system resources managed through the
+      remoteproc system resource manager.
+    minItems: 1
+
 required:
   - compatible
   - reg
@@ -245,6 +252,7 @@ allOf:
       properties:
         reg:
           minItems: 1
+        m4_system_resources: false
 
 additionalProperties: false
 

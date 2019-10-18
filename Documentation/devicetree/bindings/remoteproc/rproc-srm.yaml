@@ -1,0 +1,97 @@
+# SPDX-License-Identifier: (GPL-2.0 OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/remoteproc/rproc-srm.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: Remoteproc System Resource Manager
+
+maintainers:
+  - Arnaud Pouliquen <arnaud.pouliquen@foss.st.com>
+
+description: |
+  The remoteproc SRM (System Resource Manager) handles resources allocated
+  to remote processors.
+  This makes it possible to reserve some system resources for a peripheral
+  assigned to a coprocessor.
+
+properties:
+  compatible:
+    const: rproc-srm-core
+
+  '#address-cells':
+    const: 1
+
+  '#size-cells':
+    const: 1
+
+$defs:
+  rproc-srm-dev:
+    type: object
+    description:
+      Peripheral resource node managed by SRM for the remote processor.
+    properties:
+      compatible:
+        const: rproc-srm-dev
+
+      reg:
+        maxItems: 1
+
+      clocks: true
+
+      clock-names: true
+
+      pinctrl-0: true
+
+      pinctrl-names:
+        items:
+          - const: default
+
+      interrupts: true
+
+      interrupt-parent: true
+
+      interrupt-names: true
+
+    patternProperties:
+      "^[a-zA-Z0-9-]+-supply$":
+        $ref: /schemas/types.yaml#/definitions/phandle
+
+    required:
+      - compatible
+
+    additionalProperties: true
+
+required:
+  - compatible
+
+additionalProperties:
+  $ref: "#/$defs/rproc-srm-dev"
+
+examples:
+  - |
+    m4_rproc {
+      m4_system_resources {
+        #address-cells = <1>;
+        #size-cells = <1>;
+        status = "okay";
+
+        button {
+          compatible = "rproc-srm-dev";
+          interrupt-parent = <&gpioa>;
+          interrupts = <14 2>;
+          interrupt-names = "irq";
+          status = "okay";
+        };
+
+        sai4: sai@50027000 {
+          compatible = "rproc-srm-dev";
+          reg = <0x50027000 0x4>;
+          clocks = <&rcc 0>;
+          clock-names = "sai_ck";
+          status = "disabled";
+        };
+      };
+    };
+
+...
