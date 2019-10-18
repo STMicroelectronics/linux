@@ -23,6 +23,14 @@ config REMOTEPROC_CDEV
 
 	  It's safe to say N if you don't want to use this interface.
 
+config REMOTEPROC_SRM_CORE
+	tristate "Remoteproc System Resource Manager core"
+	help
+	  Say y here to enable the core driver of the remoteproc System Resource
+	  Manager (SRM).
+	  The SRM handles resources allocated to remote processors.
+	  The core part is in charge of controlling the device children.
+
 config IMX_REMOTEPROC
 	tristate "i.MX remoteproc support"
 	depends on ARCH_MXC

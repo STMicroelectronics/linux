@@ -358,3 +358,25 @@ Of course, RSC_VDEV resource entries are only good enough for static
 allocation of virtio devices. Dynamic allocations will also be made possible
 using the rpmsg bus (similar to how we already do dynamic allocations of
 rpmsg channels; read more about it in rpmsg.txt).
+
+8. System Resource Manager (SRM)
+
+Since some resources are shared (directly or not) between the processors, a
+processor cannot manage such resources without potentially impacting the other
+processors : as an example, if a processor changes the frequency of a clock, the
+frequency of another clock managed by another processor may be updated too.
+
+The System Resource Manager prevents such resource conflicts between the
+processors : it reserves and initializes the system resources of the peripherals
+assigned to a remote processor.
+
+As of today the following resources are controlled by the SRM:
+- clocks
+- regulators (power supplies)
+
+The SRM is implemented as an 'rproc_subdev' and registered to remoteproc_core.
+Unlike the virtio device (vdev), the SRM subdev is probed *before* the rproc
+boots, ensuring the availability of the resources before the remoteproc starts.
+
+The resources handled by the SRM are defined in the DeviceTree: please read
+Documentation/devicetree/bindings/remoteproc/rproc-srm.txt for details.
