@@ -498,11 +498,9 @@ static int stm_thermal_probe(struct platform_device *pdev)
 	sensor->base = base;
 
 	sensor->clk = devm_clk_get(&pdev->dev, "pclk");
-	if (IS_ERR(sensor->clk)) {
-		dev_err(&pdev->dev, "%s: failed to fetch PCLK clock\n",
-			__func__);
-		return PTR_ERR(sensor->clk);
-	}
+	if (IS_ERR(sensor->clk))
+		return dev_err_probe(&pdev->dev, PTR_ERR(sensor->clk),
+				     "Failed to get PCLK clock\n");
 
 	stm_disable_irq(sensor);
 
