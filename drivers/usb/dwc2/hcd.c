@@ -1701,7 +1701,8 @@ static void dwc2_hcd_cleanup_channels(struct dwc2_hsotg *hsotg)
 		 * release_channel_ddma(), which is called from ep_disable when
 		 * device disconnects
 		 */
-		channel->qh = NULL;
+		if (hsotg->params.host_dma && hsotg->params.dma_desc_enable)
+			channel->qh = NULL;
 	}
 	/* All channels have been freed, mark them available */
 	if (hsotg->params.uframe_sched) {
