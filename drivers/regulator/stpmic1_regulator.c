@@ -2,7 +2,9 @@
 // Copyright (C) STMicroelectronics 2018
 // Author: Pascal Paillet <p.paillet@st.com> for STMicroelectronics.
 
+#include <linux/delay.h>
 #include <linux/interrupt.h>
+#include <linux/ktime.h>
 #include <linux/mfd/stpmic1.h>
 #include <linux/module.h>
 #include <linux/of_irq.h>
@@ -30,11 +32,27 @@ struct stpmic1_regulator_cfg {
 	u8 icc_mask;
 };
 
+/**
+ * struct boost_data - this structure is used as driver data for the usb boost
+ * @boost_rdev: device for boost regulator
+ * @vbus_otg_rdev: device for vbus_otg regulator
+ * @sw_out_rdev: device for sw_out regulator
+ * @occ_timeout: overcurrent detection timeout
+ */
+struct boost_data {
+	struct regulator_dev *boost_rdev;
+	struct regulator_dev *vbus_otg_rdev;
+	struct regulator_dev *sw_out_rdev;
+	ktime_t occ_timeout;
+};
+
 static int stpmic1_set_mode(struct regulator_dev *rdev, unsigned int mode);
 static unsigned int stpmic1_get_mode(struct regulator_dev *rdev);
 static int stpmic1_set_icc(struct regulator_dev *rdev, int lim, int severity,
 			   bool enable);
 static unsigned int stpmic1_map_mode(unsigned int mode);
+static int regulator_enable_boost(struct regulator_dev *rdev);
+static int regulator_disable_boost(struct regulator_dev *rdev);
 
 enum {
 	STPMIC1_BUCK1 = 0,
@@ -182,8 +200,8 @@ static const struct regulator_ops stpmic1_vref_ddr_ops = {
 
 static const struct regulator_ops stpmic1_boost_regul_ops = {
 	.is_enabled = regulator_is_enabled_regmap,
-	.enable = regulator_enable_regmap,
-	.disable = regulator_disable_regmap,
+	.enable = regulator_enable_boost,
+	.disable = regulator_disable_boost,
 	.set_over_current_protection = stpmic1_set_icc,
 };
 
@@ -529,6 +547,78 @@ static irqreturn_t stpmic1_curlim_irq_handler(int irq, void *data)
 	return IRQ_HANDLED;
 }
 
+static int regulator_enable_boost(struct regulator_dev *rdev)
+{
+	struct boost_data *usb_data = rdev_get_drvdata(rdev);
+
+	usb_data->occ_timeout = ktime_add_us(ktime_get(), 100000);
+
+	return regulator_enable_regmap(rdev);
+}
+
+static int regulator_disable_boost(struct regulator_dev *rdev)
+{
+	struct boost_data *usb_data = rdev_get_drvdata(rdev);
+
+	usb_data->occ_timeout = 0;
+
+	return regulator_disable_regmap(rdev);
+}
+
+static void stpmic1_reset_boost(struct boost_data *usb_data)
+{
+	int otg_on = 0;
+	int sw_out_on = 0;
+
+	dev_dbg(rdev_get_dev(usb_data->boost_rdev), "reset usb boost\n");
+
+	/* the boost was actually disabled by the over-current protection */
+	regulator_disable_regmap(usb_data->boost_rdev);
+
+	if (usb_data->vbus_otg_rdev)
+		otg_on = regulator_is_enabled_regmap(usb_data->vbus_otg_rdev);
+	if (otg_on)
+		regulator_disable_regmap(usb_data->vbus_otg_rdev);
+
+	if (usb_data->sw_out_rdev)
+		sw_out_on = regulator_is_enabled_regmap(usb_data->sw_out_rdev);
+	if (sw_out_on)
+		regulator_disable_regmap(usb_data->sw_out_rdev);
+
+	regulator_enable_regmap(usb_data->boost_rdev);
+
+	/* sleep at least 5ms */
+	usleep_range(5000, 10000);
+
+	if (otg_on)
+		regulator_enable_regmap(usb_data->vbus_otg_rdev);
+
+	if (sw_out_on)
+		regulator_enable_regmap(usb_data->sw_out_rdev);
+}
+
+static irqreturn_t stpmic1_boost_irq_handler(int irq, void *data)
+{
+	struct boost_data *usb_data = (struct boost_data *)data;
+
+	dev_dbg(rdev_get_dev(usb_data->boost_rdev), "usb boost irq handler\n");
+
+	/* overcurrent detected on boost after timeout */
+	if (usb_data->occ_timeout != 0 &&
+	    ktime_compare(ktime_get(), usb_data->occ_timeout) > 0) {
+		/* reset usb boost and usb power switches */
+		stpmic1_reset_boost(usb_data);
+		return IRQ_HANDLED;
+	}
+
+	/* Send an overcurrent notification */
+	regulator_notifier_call_chain(usb_data->boost_rdev,
+				      REGULATOR_EVENT_OVER_CURRENT,
+				      NULL);
+
+	return IRQ_HANDLED;
+}
+
 #define MATCH(_name, _id) \
 	[STPMIC1_##_id] = { \
 		.name = #_name, \
@@ -552,9 +642,10 @@ static struct of_regulator_match stpmic1_matches[] = {
 	MATCH(pwr_sw2, SW_OUT),
 };
 
-static int stpmic1_regulator_register(struct platform_device *pdev, int id,
-				      struct of_regulator_match *match,
-				      const struct stpmic1_regulator_cfg *cfg)
+static struct regulator_dev *
+stpmic1_regulator_register(struct platform_device *pdev, int id,
+			   struct of_regulator_match *match,
+			   const struct stpmic1_regulator_cfg *cfg)
 {
 	struct stpmic1 *pmic_dev = dev_get_drvdata(pdev->dev.parent);
 	struct regulator_dev *rdev;
@@ -572,7 +663,7 @@ static int stpmic1_regulator_register(struct platform_device *pdev, int id,
 	if (IS_ERR(rdev)) {
 		dev_err(&pdev->dev, "failed to register %s regulator\n",
 			cfg->desc.name);
-		return PTR_ERR(rdev);
+		return rdev;
 	}
 
 	/* set mask reset */
@@ -584,7 +675,7 @@ static int stpmic1_regulator_register(struct platform_device *pdev, int id,
 					 cfg->mask_reset_mask);
 		if (ret) {
 			dev_err(&pdev->dev, "set mask reset failed\n");
-			return ret;
+			return ERR_PTR(ret);
 		}
 	}
 
@@ -598,15 +689,60 @@ static int stpmic1_regulator_register(struct platform_device *pdev, int id,
 						pdev->name, rdev);
 		if (ret) {
 			dev_err(&pdev->dev, "Request IRQ failed\n");
-			return ret;
+			return ERR_PTR(ret);
 		}
 	}
-	return 0;
+
+	return rdev;
+}
+
+static struct regulator_dev *
+stpmic1_boost_register(struct platform_device *pdev, int id,
+		       struct of_regulator_match *match,
+		       const struct stpmic1_regulator_cfg *cfg,
+		       struct boost_data *usb_data)
+{
+	struct stpmic1 *pmic_dev = dev_get_drvdata(pdev->dev.parent);
+	struct regulator_dev *rdev;
+	struct regulator_config config = {};
+	int ret = 0;
+	int irq;
+
+	config.dev = &pdev->dev;
+	config.init_data = match->init_data;
+	config.of_node = match->of_node;
+	config.regmap = pmic_dev->regmap;
+	config.driver_data = (void *)usb_data;
+
+	rdev = devm_regulator_register(&pdev->dev, &cfg->desc, &config);
+	if (IS_ERR(rdev)) {
+		dev_err(&pdev->dev, "failed to register %s regulator\n",
+			cfg->desc.name);
+		return rdev;
+	}
+
+	/* setup an irq handler for over-current detection */
+	irq = of_irq_get(config.of_node, 0);
+	if (irq > 0) {
+		ret = devm_request_threaded_irq(&pdev->dev,
+						irq, NULL,
+						stpmic1_boost_irq_handler,
+						IRQF_ONESHOT, pdev->name,
+						usb_data);
+		if (ret) {
+			dev_err(&pdev->dev, "Request IRQ failed\n");
+			return ERR_PTR(ret);
+		}
+	}
+
+	return rdev;
 }
 
 static int stpmic1_regulator_probe(struct platform_device *pdev)
 {
 	int i, ret;
+	struct boost_data *usb_data;
+	struct regulator_dev *rdev;
 
 	ret = of_regulator_match(&pdev->dev, pdev->dev.of_node, stpmic1_matches,
 				 ARRAY_SIZE(stpmic1_matches));
@@ -616,11 +752,30 @@ static int stpmic1_regulator_probe(struct platform_device *pdev)
 		return ret;
 	}
 
+	usb_data = devm_kzalloc(&pdev->dev, sizeof(*usb_data), GFP_KERNEL);
+	if (!usb_data)
+		return -ENOMEM;
+
 	for (i = 0; i < ARRAY_SIZE(stpmic1_regulator_cfgs); i++) {
-		ret = stpmic1_regulator_register(pdev, i, &stpmic1_matches[i],
-						 &stpmic1_regulator_cfgs[i]);
-		if (ret < 0)
-			return ret;
+		if (i == STPMIC1_BOOST) {
+			rdev =
+			stpmic1_boost_register(pdev, i, &stpmic1_matches[i],
+					       &stpmic1_regulator_cfgs[i],
+					       usb_data);
+
+			usb_data->boost_rdev = rdev;
+		} else {
+			rdev =
+			stpmic1_regulator_register(pdev, i, &stpmic1_matches[i],
+						   &stpmic1_regulator_cfgs[i]);
+
+			if (i == STPMIC1_VBUS_OTG)
+				usb_data->vbus_otg_rdev = rdev;
+			else if (i == STPMIC1_SW_OUT)
+				usb_data->sw_out_rdev = rdev;
+		}
+		if (IS_ERR(rdev))
+			return PTR_ERR(rdev);
 	}
 
 	dev_dbg(&pdev->dev, "stpmic1_regulator driver probed\n");
