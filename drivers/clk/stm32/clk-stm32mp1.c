@@ -1852,19 +1852,19 @@ static const struct clock_config stm32mp1_clock_cfg[] = {
 		   _MUX(RCC_MSSCKSELR, 0, 2, 0),
 		   _DIV(RCC_MCUDIVR, 0, 4, 0, mcu_div_table)),
 
-	DIV_TABLE(NO_ID, "pclk1", "ck_mcu", CLK_IGNORE_UNUSED, RCC_APB1DIVR, 0,
+	DIV_TABLE(PCLK1, "pclk1", "ck_mcu", CLK_IGNORE_UNUSED, RCC_APB1DIVR, 0,
 		  3, CLK_DIVIDER_READ_ONLY, apb_div_table),
 
-	DIV_TABLE(NO_ID, "pclk2", "ck_mcu", CLK_IGNORE_UNUSED, RCC_APB2DIVR, 0,
+	DIV_TABLE(PCLK2, "pclk2", "ck_mcu", CLK_IGNORE_UNUSED, RCC_APB2DIVR, 0,
 		  3, CLK_DIVIDER_READ_ONLY, apb_div_table),
 
-	DIV_TABLE(NO_ID, "pclk3", "ck_mcu", CLK_IGNORE_UNUSED, RCC_APB3DIVR, 0,
+	DIV_TABLE(PCLK3, "pclk3", "ck_mcu", CLK_IGNORE_UNUSED, RCC_APB3DIVR, 0,
 		  3, CLK_DIVIDER_READ_ONLY, apb_div_table),
 
-	DIV_TABLE(NO_ID, "pclk4", "ck_axi", CLK_IGNORE_UNUSED, RCC_APB4DIVR, 0,
+	DIV_TABLE(PCLK4, "pclk4", "ck_axi", CLK_IGNORE_UNUSED, RCC_APB4DIVR, 0,
 		  3, CLK_DIVIDER_READ_ONLY, apb_div_table),
 
-	DIV_TABLE(NO_ID, "pclk5", "ck_axi", CLK_IGNORE_UNUSED, RCC_APB5DIVR, 0,
+	DIV_TABLE(PCLK5, "pclk5", "ck_axi", CLK_IGNORE_UNUSED, RCC_APB5DIVR, 0,
 		  3, CLK_DIVIDER_READ_ONLY, apb_div_table),
 
 	/* Kernel Timers */
