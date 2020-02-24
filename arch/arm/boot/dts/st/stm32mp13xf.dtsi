@@ -4,6 +4,29 @@
  * Author: Alexandre Torgue <alexandre.torgue@foss.st.com> for STMicroelectronics.
  */
 
+&cpu_thermal {
+	trips {
+		cpu_alert: cpu-alert0 {
+			temperature = <90000>;
+			hysteresis = <10000>;
+			type = "passive";
+		};
+
+		cpu_crit: cpu-crit0 {
+			temperature = <100000>;
+			hysteresis = <1000>;
+			type = "critical";
+		};
+	};
+
+	cooling-maps {
+		map0 {
+			trip = <&cpu_alert>;
+			cooling-device = <&cpu0 1 1>;
+		};
+	};
+};
+
 &etzpc {
 	cryp: crypto@54002000 {
 		compatible = "st,stm32mp1-cryp";

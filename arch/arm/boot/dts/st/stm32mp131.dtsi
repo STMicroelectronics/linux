@@ -8,6 +8,7 @@
 #include <dt-bindings/clock/stm32mp13-clks.h>
 #include <dt-bindings/regulator/st,stm32mp13-regulator.h>
 #include <dt-bindings/reset/stm32mp13-resets.h>
+#include <dt-bindings/thermal/thermal.h>
 
 / {
 	#address-cells = <1>;
@@ -23,6 +24,7 @@
 			reg = <0>;
 			power-domains = <&scmi_perf 0>;
 			power-domain-names = "perf";
+			#cooling-cells = <2>;
 		};
 	};
 
@@ -124,20 +126,11 @@
 			thermal-sensors = <&dts>;
 
 			trips {
-				cpu_alert1: cpu-alert1 {
-					temperature = <85000>;
-					hysteresis = <0>;
-					type = "passive";
-				};
-
-				cpu-crit {
+				cpu_crit: cpu-crit0 {
 					temperature = <120000>;
-					hysteresis = <0>;
+					hysteresis = <1000>;
 					type = "critical";
 				};
-			};
-
-			cooling-maps {
 			};
 		};
 	};
