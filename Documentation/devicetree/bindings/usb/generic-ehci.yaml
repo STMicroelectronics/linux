@@ -159,6 +159,11 @@ properties:
       - host
       - otg
 
+  wakeup-source:
+    $ref: /schemas/types.yaml#/definitions/flag
+    description:
+      Indicate this device has wakeup capabilities.
+
 required:
   - compatible
   - reg
