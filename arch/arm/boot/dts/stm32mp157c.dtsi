@@ -1822,11 +1822,15 @@
 			clock-names = "stmmaceth",
 				      "mac-clk-tx",
 				      "mac-clk-rx",
-				      "ethstp";
+				      "ethstp",
+				      "ptp_ref";
 			clocks = <&rcc ETHMAC>,
 				 <&rcc ETHTX>,
 				 <&rcc ETHRX>,
-				 <&rcc ETHSTP>;
+				 <&rcc ETHSTP>,
+				 <&rcc ETHPTP_K>;
+			assigned-clocks = <&rcc ETHPTP_K>;
+			assigned-clock-parents = <&rcc PLL4_P>;
 			st,syscon = <&syscfg 0x4>;
 			snps,mixed-burst;
 			snps,pbl = <2>;
