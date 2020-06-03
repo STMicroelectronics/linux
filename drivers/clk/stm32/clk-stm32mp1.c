@@ -1079,6 +1079,45 @@ static const struct clk_ops rtc_div_clk_ops = {
 	.determine_rate = clk_divider_rtc_determine_rate
 };
 
+static int clk_div_get_duty_cycle(struct clk_hw *hw, struct clk_duty *duty)
+{
+	struct clk_divider *divider = to_clk_divider(hw);
+	unsigned int val;
+
+	val = readl(divider->reg) >> divider->shift;
+	val &= clk_div_mask(divider->width);
+
+	duty->num = (val + 1) / 2;
+	duty->den = (val + 1);
+
+	return 0;
+}
+
+static unsigned long clk_div_duty_cycle_recalc_rate(struct clk_hw *hw,
+						    unsigned long parent_rate)
+{
+	return clk_divider_ops.recalc_rate(hw, parent_rate);
+}
+
+static long clk_div_duty_cycle_round_rate(struct clk_hw *hw, unsigned long rate,
+					  unsigned long *prate)
+{
+	return clk_divider_ops.round_rate(hw, rate, prate);
+}
+
+static int clk_div_duty_cycle_set_rate(struct clk_hw *hw, unsigned long rate,
+				       unsigned long parent_rate)
+{
+	return clk_divider_ops.set_rate(hw, rate, parent_rate);
+}
+
+static const struct clk_ops div_dc_clk_ops = {
+	.recalc_rate	= clk_div_duty_cycle_recalc_rate,
+	.round_rate	= clk_div_duty_cycle_round_rate,
+	.set_rate	= clk_div_duty_cycle_set_rate,
+	.get_duty_cycle = clk_div_get_duty_cycle,
+};
+
 struct stm32_pll_cfg {
 	u32 offset;
 	u32 muxoff;
@@ -1312,6 +1351,11 @@ _clk_stm32_register_composite(struct device *dev,
 #define _DIV(_div_offset, _div_shift, _div_width, _div_flags, _div_table)\
 	_STM32_DIV(_div_offset, _div_shift, _div_width,\
 		   _div_flags, _div_table, NULL)\
+
+#define _DIV_DUTY_CYCLE(_div_offset, _div_shift, _div_width, _div_flags,\
+			_div_table)\
+	_STM32_DIV(_div_offset, _div_shift, _div_width,\
+		   _div_flags, _div_table, &div_dc_clk_ops)
 
 #define _DIV_RTC(_div_offset, _div_shift, _div_width, _div_flags, _div_table)\
 	_STM32_DIV(_div_offset, _div_shift, _div_width,\
@@ -1784,7 +1828,7 @@ static const struct clock_config stm32mp1_clock_cfg[] = {
 	COMPOSITE(PLL3_Q, "pll3_q", PARENT("pll3"), 0,
 		  _GATE(RCC_PLL3CR, 5, 0),
 		  _NO_MUX,
-		  _DIV(RCC_PLL3CFGR2, 8, 7, 0, NULL)),
+		  _DIV_DUTY_CYCLE(RCC_PLL3CFGR2, 8, 7, 0, NULL)),
 
 	COMPOSITE(PLL3_R, "pll3_r", PARENT("pll3"), 0,
 		  _GATE(RCC_PLL3CR, 6, 0),
@@ -1804,7 +1848,7 @@ static const struct clock_config stm32mp1_clock_cfg[] = {
 	COMPOSITE(PLL4_R, "pll4_r", PARENT("pll4"), 0,
 		  _GATE(RCC_PLL4CR, 6, 0),
 		  _NO_MUX,
-		  _DIV(RCC_PLL4CFGR2, 16, 7, 0, NULL)),
+		  _DIV_DUTY_CYCLE(RCC_PLL4CFGR2, 16, 7, 0, NULL)),
 
 	/* MUX system clocks */
 	MUX(CK_PER, "ck_per", per_src, CLK_OPS_PARENT_ENABLE,
