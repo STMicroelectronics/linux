@@ -19,15 +19,17 @@ properties:
     enum:
       - st,stm32mp1-m4
       - st,stm32mp1-m4-tee
+      - st,stm32mp2-m33
+      - st,stm32mp2-m33-tee
     description:
-      Use "st,stm32mp1-m4" for the Cortex-M4 coprocessor management by non-secure context
-      Use "st,stm32mp1-m4-tee" for the Cortex-M4 coprocessor management by secure context
-
+      Use "st,stm32mp1-m4" for the stm32mp15 Cortex-M4 coprocessor management by Linux
+      Use "st,stm32mp1-m4-tee" for the stm32mp15 Cortex-M4 coprocessor management by OPTEE
+      Use "st,stm32mp2-m33" for the stm32mp2 Cortex-M33 coprocessor management by Linux
+      Use "st,stm32mp2-m33-tee" for the stm32mp2 Cortex-M33 coprocessor management by OPTEE
   reg:
     description:
       Address ranges of the RETRAM and MCU SRAM memories used by the remote
       processor.
-    maxItems: 3
 
   resets:
     minItems: 1
@@ -62,6 +64,8 @@ properties:
   interrupts:
     description: Should contain the WWDG1 watchdog reset interrupt
     maxItems: 1
+
+  interrupt-names: true
 
   wakeup-source: true
 
@@ -106,6 +110,23 @@ properties:
       the remote processor (e.g. remoteproc firmware and carveouts, rpmsg
       vrings, ...).
       (see ../reserved-memory/reserved-memory.txt)
+
+  nvmem-cells:
+    minItems: 2
+
+  nvmem-cell-names:
+    items:
+      - const: rsc-tbl-addr
+      - const: rsc-tbl-size
+
+  st,syscfg-nsvtor:
+    description: NSVTOR register used to configure Cortex-M33 vector table.
+    $ref: /schemas/types.yaml#/definitions/phandle-array
+    items:
+      - items:
+          - description: Phandle of syscon block
+          - description: The offset of the NSVTOR register
+          - description: The field mask of the NSVTOR register
 
   st,syscfg-pdds:
     $ref: /schemas/types.yaml#/definitions/phandle-array
@@ -157,6 +178,18 @@ allOf:
       properties:
         compatible:
           contains:
+            enum:
+              - st,stm32mp1-m4
+              - st,stm32mp1-m4-tee
+    then:
+      properties:
+        reg:
+          minItems: 3
+
+  - if:
+      properties:
+        compatible:
+          contains:
             const: st,stm32mp1-m4
     then:
       if:
@@ -185,6 +218,18 @@ allOf:
         st,syscfg-holdboot: false
         reset-names: false
         resets: false
+
+  - if:
+      properties:
+        compatible:
+          contains:
+            enum:
+              - st,stm32mp2-m33
+              - st,stm32mp2-m33-tee
+    then:
+      properties:
+        reg:
+          minItems: 1
 
 additionalProperties: false
 
