@@ -7,6 +7,7 @@
  * Author: Mark Brown <broonie@opensource.wolfsonmicro.com>
  */
 
+#include <linux/clk.h>
 #include <linux/module.h>
 #include <linux/moduleparam.h>
 #include <linux/init.h>
@@ -838,6 +839,37 @@ static int clk_sys_event(struct snd_soc_dapm_widget *w,
 	return 0;
 }
 
+static int mclk_event(struct snd_soc_dapm_widget *w,
+		      struct snd_kcontrol *kcontrol, int event)
+{
+	struct snd_soc_component *comp = snd_soc_dapm_to_component(w->dapm);
+	struct wm8994_priv *wm8994 = snd_soc_component_get_drvdata(comp);
+	int ret, mclk_id = 0;
+
+	if (!strncmp(w->name, "MCLK2", 5))
+		mclk_id = 1;
+
+	switch (event) {
+	case SND_SOC_DAPM_PRE_PMU:
+		dev_dbg(comp->dev, "Enable master clock %s\n",
+			mclk_id ? "MCLK2" : "MCLK1");
+
+		ret = clk_prepare_enable(wm8994->mclk[mclk_id].clk);
+		if (ret < 0) {
+			dev_err(comp->dev, "Failed to enable clock: %d\n", ret);
+			return ret;
+		}
+		break;
+	case SND_SOC_DAPM_POST_PMD:
+		dev_dbg(comp->dev, "Disable master clock %s\n",
+			mclk_id ? "MCLK2" : "MCLK1");
+		clk_disable_unprepare(wm8994->mclk[mclk_id].clk);
+		break;
+	}
+
+	return 0;
+}
+
 static void vmid_reference(struct snd_soc_component *component)
 {
 	struct wm8994_priv *wm8994 = snd_soc_component_get_drvdata(component);
@@ -1224,7 +1256,6 @@ static int aif2clk_ev(struct snd_soc_dapm_widget *w,
 			adc = WM8994_AIF2ADCL_ENA;
 		else
 			adc = WM8994_AIF2ADCL_ENA | WM8994_AIF2ADCR_ENA;
-
 
 		val = snd_soc_component_read(component, WM8994_AIF2_CONTROL_2);
 		if ((val & WM8994_AIF2DACL_SRC) &&
@@ -1845,6 +1876,16 @@ SND_SOC_DAPM_POST("Debug log", post_ev),
 
 static const struct snd_soc_dapm_widget wm8994_specific_dapm_widgets[] = {
 SND_SOC_DAPM_MUX("AIF3ADC Mux", SND_SOC_NOPM, 0, 0, &wm8994_aif3adc_mux),
+};
+
+static const struct snd_soc_dapm_widget wm8994_mclk1_dapm_widgets[] = {
+SND_SOC_DAPM_SUPPLY("MCLK1", SND_SOC_NOPM, 0, 0, mclk_event,
+		    SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMD),
+};
+
+static const struct snd_soc_dapm_widget wm8994_mclk2_dapm_widgets[] = {
+SND_SOC_DAPM_SUPPLY("MCLK2", SND_SOC_NOPM, 0, 0, mclk_event,
+		    SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMD),
 };
 
 static const struct snd_soc_dapm_widget wm8958_dapm_widgets[] = {
@@ -2506,11 +2547,24 @@ static int wm8994_set_dai_sysclk(struct snd_soc_dai *dai,
 {
 	struct snd_soc_component *component = dai->component;
 	struct wm8994_priv *wm8994 = snd_soc_component_get_drvdata(component);
-	int ret, i;
+	int i, ret;
 
+	/*
+	 * Simple card provides unconditionnaly clock_id = 0.
+	 * Workaround to select master clock for aif1/2
+	 */
 	switch (dai->id) {
 	case 1:
+		if (wm8994->mclk[0].clk)
+			clk_id = WM8994_SYSCLK_MCLK1;
+		else if (wm8994->mclk[1].clk)
+			clk_id = WM8994_SYSCLK_MCLK2;
+		break;
 	case 2:
+		if (wm8994->mclk[1].clk)
+			clk_id = WM8994_SYSCLK_MCLK2;
+		else if (wm8994->mclk[0].clk)
+			clk_id = WM8994_SYSCLK_MCLK1;
 		break;
 
 	default:
@@ -2521,6 +2575,10 @@ static int wm8994_set_dai_sysclk(struct snd_soc_dai *dai,
 	switch (clk_id) {
 	case WM8994_SYSCLK_MCLK1:
 		wm8994->sysclk[dai->id - 1] = WM8994_SYSCLK_MCLK1;
+
+		/* Avoid busy error on exclusive rate change request */
+		if (!freq)
+			break;
 
 		ret = wm8994_set_mclk_rate(wm8994, dai->id - 1, &freq);
 		if (ret < 0)
@@ -2534,6 +2592,9 @@ static int wm8994_set_dai_sysclk(struct snd_soc_dai *dai,
 	case WM8994_SYSCLK_MCLK2:
 		/* TODO: Set GPIO AF */
 		wm8994->sysclk[dai->id - 1] = WM8994_SYSCLK_MCLK2;
+
+		if (!freq)
+			break;
 
 		ret = wm8994_set_mclk_rate(wm8994, dai->id - 1, &freq);
 		if (ret < 0)
@@ -4443,6 +4504,14 @@ static int wm8994_component_probe(struct snd_soc_component *component)
 					       ARRAY_SIZE(wm8994_snd_controls));
 		snd_soc_dapm_new_controls(dapm, wm8994_specific_dapm_widgets,
 					  ARRAY_SIZE(wm8994_specific_dapm_widgets));
+		if (wm8994->mclk[0].clk)
+			snd_soc_dapm_new_controls(dapm, wm8994_mclk1_dapm_widgets,
+						  ARRAY_SIZE(wm8994_mclk1_dapm_widgets));
+
+		if (wm8994->mclk[1].clk)
+			snd_soc_dapm_new_controls(dapm, wm8994_mclk2_dapm_widgets,
+						  ARRAY_SIZE(wm8994_mclk2_dapm_widgets));
+
 		if (control->revision < 4) {
 			snd_soc_dapm_new_controls(dapm, wm8994_lateclk_revd_widgets,
 						  ARRAY_SIZE(wm8994_lateclk_revd_widgets));
