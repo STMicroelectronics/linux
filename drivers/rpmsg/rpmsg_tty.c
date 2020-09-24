@@ -146,6 +146,8 @@ static int rpmsg_tty_write(struct tty_struct *tty, const unsigned char *buf,
 		}
 	} while (count > 0);
 
+	tty_port_tty_wakeup(cport->port);
+
 	return total;
 }
 
