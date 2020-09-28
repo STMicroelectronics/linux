@@ -331,7 +331,7 @@
 	#size-cells = <0>;
 	status = "okay";
 
-	panel@0 {
+	panel_dsi: panel@0 {
 		compatible = "raydium,rm68200";
 		reg = <0>;
 		reset-gpios = <&gpiof 15 GPIO_ACTIVE_LOW>;
@@ -488,11 +488,30 @@
 			#interrupt-cells = <2>;
 			gpio-ranges = <&stmfx_pinctrl 0 0 24>;
 
+			goodix_pins: goodix-pins {
+				pins = "gpio14";
+				bias-pull-down;
+			};
+
 			joystick_pins: joystick-pins {
 				pins = "gpio0", "gpio1", "gpio2", "gpio3", "gpio4";
 				bias-pull-down;
 			};
 		};
+	};
+
+	gt9147: goodix-ts@5d {
+		compatible = "goodix,gt9147";
+		reg = <0x5d>;
+		panel = <&panel_dsi>;
+		pinctrl-0 = <&goodix_pins>;
+		pinctrl-names = "default";
+		AVDD28-supply = <&v3v3>;
+		VDDIO-supply = <&v3v3>;
+		status = "okay";
+
+		interrupts = <14 IRQ_TYPE_EDGE_RISING>;
+		interrupt-parent = <&stmfx_pinctrl>;
 	};
 };
 
