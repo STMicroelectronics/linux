@@ -703,10 +703,11 @@
 			reg = <0x5800d000 0x1000>;
 			clocks = <&usbphyc>, <&rcc USBH>;
 			resets = <&rcc USBH_R>;
-			interrupts = <GIC_SPI 75 IRQ_TYPE_LEVEL_HIGH>;
+			interrupts-extended = <&exti 43 IRQ_TYPE_LEVEL_HIGH>;
 			companion = <&usbh_ohci>;
 			phys = <&usbphyc_port0>;
 			phy-names = "usb";
+			wakeup-source;
 			status = "disabled";
 		};
 
