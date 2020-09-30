@@ -1884,6 +1884,15 @@ static int dcmi_graph_notify_bound(struct v4l2_async_notifier *notifier,
 
 	dev_dbg(dcmi->dev, "Subdev \"%s\" bound\n", subdev->name);
 
+	ret = video_register_device(dcmi->vdev, VFL_TYPE_VIDEO, -1);
+	if (ret) {
+		dev_err(dcmi->dev, "Failed to register video device\n");
+		return ret;
+	}
+
+	dev_dbg(dcmi->dev, "Device registered as %s\n",
+		video_device_node_name(dcmi->vdev));
+
 	/*
 	 * Link this sub-device to DCMI, it could be
 	 * a parallel camera sensor or a bridge
@@ -1896,12 +1905,14 @@ static int dcmi_graph_notify_bound(struct v4l2_async_notifier *notifier,
 				    &dcmi->vdev->entity, 0,
 				    MEDIA_LNK_FL_IMMUTABLE |
 				    MEDIA_LNK_FL_ENABLED);
-	if (ret)
+	if (ret) {
 		dev_err(dcmi->dev, "Failed to create media pad link with subdev \"%s\"\n",
 			subdev->name);
-	else
+		video_unregister_device(dcmi->vdev);
+	} else {
 		dev_dbg(dcmi->dev, "DCMI is now linked to \"%s\"\n",
 			subdev->name);
+	}
 
 	dcmi->s_subdev = subdev;
 
@@ -2138,15 +2149,6 @@ static int dcmi_probe(struct platform_device *pdev)
 		goto err_device_release;
 	}
 	dcmi->vdev->entity.flags |= MEDIA_ENT_FL_DEFAULT;
-
-	ret = video_register_device(dcmi->vdev, VFL_TYPE_VIDEO, -1);
-	if (ret) {
-		dev_err(dcmi->dev, "Failed to register video device\n");
-		goto err_media_entity_cleanup;
-	}
-
-	dev_dbg(dcmi->dev, "Device registered as %s\n",
-		video_device_node_name(dcmi->vdev));
 
 	/* Buffer queue */
 	q->type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
