@@ -953,6 +953,10 @@ static int edt_ft5x06_ts_identify(struct i2c_client *client,
 			snprintf(model_name, EDT_NAME_LEN, "EP%i%i0ML00",
 				 rdbuf[0] >> 4, rdbuf[0] & 0x0F);
 			break;
+		case 0x51:   /* Rocktech Rk043fn48h Display */
+			tsdata->version = EV_FT;
+			snprintf(model_name, EDT_NAME_LEN, "FT5336GQQ");
+			break;
 		case 0x5a:   /* Solomon Goldentek Display */
 			snprintf(model_name, EDT_NAME_LEN, "GKTW50SCED1R0");
 			break;
