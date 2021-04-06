@@ -437,6 +437,13 @@
 				 <&rcc SYSCFG>;
 			status = "disabled";
 		};
+		m4_fmc: memory-controller@58002000 {
+			compatible = "rproc-srm-dev";
+			reg = <0x5800200 0x1000>;
+			clocks = <&rcc FMC_K>;
+			clock-names = "mux";
+			status = "disabled";
+		};
 	};
 };
 
