@@ -272,6 +272,7 @@ struct stm32_dma3_hwdesc {
 struct stm32_dma3_lli {
 	struct stm32_dma3_hwdesc *hwdesc;
 	dma_addr_t hwdesc_addr;
+	size_t residue; /* Transfer residue calculated starting from this item */
 };
 
 struct stm32_dma3_swdesc {
@@ -1183,10 +1184,11 @@ static int stm32_dma3_chan_get_curr_hwdesc(struct stm32_dma3_swdesc *swdesc, u32
 
 	/* As transfer is in progress, look backward from the last item */
 	for (i = swdesc->lli_size - 1; i > 0; i--) {
-		*residue += FIELD_GET(CBR1_BNDT, swdesc->lli[i].hwdesc->cbr1);
 		lli_offset = swdesc->lli[i].hwdesc_addr & CLLR_LA;
-		if (lli_offset == next_lli_offset)
+		if (lli_offset == next_lli_offset) {
+			*residue += swdesc->lli[i].residue;
 			return i - 1;
+		}
 	}
 
 	return -EINVAL;
@@ -1579,7 +1581,7 @@ static struct dma_async_tx_descriptor *stm32_dma3_prep_dma_memcpy(struct dma_cha
 {
 	struct stm32_dma3_chan *chan = to_stm32_dma3_chan(c);
 	struct stm32_dma3_swdesc *swdesc;
-	size_t next_size, offset;
+	size_t global_remaining = len, next_size, offset;
 	u32 count, i, ctr1, ctr2;
 	bool prevent_refactor = !!FIELD_GET(STM32_DMA3_DT_NOPACK, chan->dt_config.tr_conf) ||
 				!!FIELD_GET(STM32_DMA3_DT_NOREFACT, chan->dt_config.tr_conf);
@@ -1615,6 +1617,9 @@ static struct dma_async_tx_descriptor *stm32_dma3_prep_dma_memcpy(struct dma_cha
 
 		stm32_dma3_chan_prep_hwdesc(chan, swdesc, i, src + offset, dst + offset, next_size,
 					    ctr1, ctr2, next_size == remaining, false);
+
+		swdesc->lli[i].residue = global_remaining;
+		global_remaining -= next_size;
 	}
 
 	/* Enable Errors interrupts */
@@ -1641,7 +1646,7 @@ static struct dma_async_tx_descriptor *stm32_dma3_prep_slave_sg(struct dma_chan 
 	struct stm32_dma3_chan *chan = to_stm32_dma3_chan(c);
 	struct stm32_dma3_swdesc *swdesc;
 	struct scatterlist *sg;
-	size_t len;
+	size_t remaining = 0, len;
 	dma_addr_t sg_addr, dev_addr, src, dst;
 	u32 i, j, count, ctr1, ctr2;
 	bool prevent_refactor = !!FIELD_GET(STM32_DMA3_DT_NOPACK, chan->dt_config.tr_conf) ||
@@ -1653,8 +1658,10 @@ static struct dma_async_tx_descriptor *stm32_dma3_prep_slave_sg(struct dma_chan 
 		return NULL;
 
 	count = 0;
-	for_each_sg(sgl, sg, sg_len, i)
+	for_each_sg(sgl, sg, sg_len, i) {
 		count += stm32_dma3_get_ll_count(chan, sg_dma_len(sg), prevent_refactor);
+		remaining += sg_dma_len(sg);
+	}
 
 	swdesc = stm32_dma3_chan_desc_alloc(chan, count);
 	if (!swdesc)
@@ -1701,6 +1708,8 @@ static struct dma_async_tx_descriptor *stm32_dma3_prep_slave_sg(struct dma_chan 
 			stm32_dma3_chan_prep_hwdesc(chan, swdesc, j, src, dst, chunk,
 						    ctr1, ctr2, j == (count - 1), false);
 
+			swdesc->lli[j].residue = remaining;
+			remaining -= chunk;
 			sg_addr += chunk;
 			len -= chunk;
 			j++;
@@ -1734,6 +1743,7 @@ static struct dma_async_tx_descriptor *stm32_dma3_prep_dma_cyclic(struct dma_cha
 {
 	struct stm32_dma3_chan *chan = to_stm32_dma3_chan(c);
 	struct stm32_dma3_swdesc *swdesc;
+	size_t remaining = buf_len;
 	dma_addr_t src, dst;
 	u32 count, i, ctr1, ctr2;
 	int ret;
@@ -1788,6 +1798,9 @@ static struct dma_async_tx_descriptor *stm32_dma3_prep_dma_cyclic(struct dma_cha
 
 		stm32_dma3_chan_prep_hwdesc(chan, swdesc, i, src, dst, period_len,
 					    ctr1, ctr2, i == (count - 1), true);
+
+		swdesc->lli[i].residue = remaining;
+		remaining -= period_len;
 	}
 
 	/* Enable Error interrupts */
