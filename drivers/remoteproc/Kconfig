@@ -235,6 +235,13 @@ config STM32_RPROC
 
 	  This can be either built-in or a loadable module.
 
+config STM32_RPROC_SDB
+	tristate "STM32 remoteproc shared data buffer support"
+	depends on STM32_RPROC
+	help
+	  Support for shared data buffers (large data) for rempote 
+	  processor communication.  For now this must be a loadable
+	  module.
 
 config TEE_REMOTEPROC
 	tristate "trusted firmware Support by a Trusted Application"
