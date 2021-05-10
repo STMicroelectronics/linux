@@ -11,3 +11,5 @@ obj-$(CONFIG_UIO_PRUSS)         += uio_pruss.o
 obj-$(CONFIG_UIO_MF624)         += uio_mf624.o
 obj-$(CONFIG_UIO_FSL_ELBC_GPCM)	+= uio_fsl_elbc_gpcm.o
 obj-$(CONFIG_UIO_HV_GENERIC)	+= uio_hv_generic.o
+CONFIG_UIO_STM32_FMC2_FPGA=y
+obj-$(CONFIG_UIO_STM32_FMC2_FPGA)	+= uio_stm32_fmc2_fpga.o

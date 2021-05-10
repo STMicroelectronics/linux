@@ -165,4 +165,11 @@ config UIO_HV_GENERIC
 	  to network and storage devices from userspace.
 
 	  If you compile this as a module, it will be called uio_hv_generic.
+
+config UIO_STM32_FMC2_FPGA
+	tristate "Datum STM32MPU FMC FPGA interface driver"
+	depends on UIO && ARCH_STM32
+	help
+	  Userspace I/O driver to STM32MPU FMC SRAM interface to FPGAs.
+	  Used for FPGA configuration, FPGA register reading and writing.
 endif
