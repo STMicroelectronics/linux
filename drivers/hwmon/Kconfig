@@ -949,6 +949,17 @@ config SENSORS_MCP3021
 	  This driver can also be built as a module. If so, the module
 	  will be called mcp3021.
 
+config SENSORS_MCP9902
+	tristate "Microchip MCP9902 and compatibles"
+	depends on I2C
+	help
+	  If you say yes here you get support for MCP9902.
+	  The MCP9902 is a single channel temperature sensor
+	  with internal thermal diode.
+
+	  This driver can also be built as a module. If so, the module
+	  will be called mcp9902.
+
 config SENSORS_MLXREG_FAN
 	tristate "Mellanox Mellanox FAN driver"
 	depends on MELLANOX_PLATFORM
