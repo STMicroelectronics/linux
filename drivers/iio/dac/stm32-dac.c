@@ -74,6 +74,17 @@ static int stm32_dac_set_enable_state(struct iio_dev *indio_dev, int ch,
 		}
 	}
 
+	// Datum brick use CH2 in unbuffered mode
+	if(ch == 2)
+	{
+		ret = regmap_update_bits(dac->common->regmap, STM32_DAC_MCR, 
+			STM32_DAC_MCR_MODE2_MASK, STM32_DAC_MCR_MODE2(2));
+		if(ret < 0) 
+		{
+			dev_err(&indio_dev->dev, "Ch%d disable buffer failed\n", ch);
+			return ret;
+		}
+	}
 	ret = regmap_update_bits(dac->common->regmap, STM32_DAC_CR, msk, en);
 	mutex_unlock(&indio_dev->mlock);
 	if (ret < 0) {
