@@ -34,12 +34,18 @@ struct rpmsg_sdb_ioctl_get_data_size {
 	uint32_t size;
 };
 
+struct rpmsg_sdb_ioctl_get_phys_addr {
+	int bufferId;
+	uint32_t paddr;
+};
+
 /* ioctl numbers */
 /* _IOW means userland is writing and kernel is reading */
 /* _IOR means userland is reading and kernel is writing */
 /* _IOWR means userland and kernel can both read and write */
 #define RPMSG_SDB_IOCTL_SET_EFD _IOW('R', 0x00, struct rpmsg_sdb_ioctl_set_efd *)
 #define RPMSG_SDB_IOCTL_GET_DATA_SIZE _IOWR('R', 0x01, struct rpmsg_sdb_ioctl_get_data_size *)
+#define RPMSG_SDB_IOCTL_GET_PHYS_ADDR _IOWR('R', 0x02, struct rpmsg_sdb_ioctl_get_phys_addr *)
 
 struct sdb_buf_t {
 	int index; /* index of buffer */
@@ -283,11 +289,11 @@ static long rpmsg_sdb_ioctl(struct file *file, unsigned int cmd, unsigned long a
 
 	struct rpmsg_sdb_ioctl_set_efd q_set_efd;
 	struct rpmsg_sdb_ioctl_get_data_size q_get_dat_size;
+	struct rpmsg_sdb_ioctl_get_phys_addr q_get_phys_addr;
 
 	void __user *argp = (void __user *)arg;
 
-	_rpmsg_sdb = container_of(file->private_data, struct rpmsg_sdb_t,
-								mdev);
+	_rpmsg_sdb = container_of(file->private_data, struct rpmsg_sdb_t, mdev);
 
 	switch (cmd) {
 	case RPMSG_SDB_IOCTL_SET_EFD:
@@ -346,10 +352,37 @@ static long rpmsg_sdb_ioctl(struct file *file, unsigned int cmd, unsigned long a
 
 		/* Reset the writing size*/
 		datastructureptr->writing_size = -1;
-
 		break;
+
+	case RPMSG_SDB_IOCTL_GET_PHYS_ADDR:
+		if (copy_from_user(&q_get_phys_addr, (struct rpmsg_sdb_ioctl_get_phys_addr *)argp,
+					sizeof(struct rpmsg_sdb_ioctl_get_phys_addr))) {
+			pr_warn("rpmsg_sdb: RPMSG_SDB_IOCTL_GET_PHYS_ADDR: copy from user failed.\n");
+			return -EFAULT;
+		}
+
+		/* Get the index of the requested buffer and then look-up in the buffer list*/
+		idx = q_get_phys_addr.bufferId;
+
+		list_for_each(pos, &_rpmsg_sdb->buffer_list)
+		{
+			datastructureptr = list_entry(pos, struct sdb_buf_t, buflist);
+			if (datastructureptr->index == idx) {
+				/* Get the physical address*/
+				q_get_phys_addr.paddr = (uint32_t)(datastructureptr->paddr);
+				break;
+			}
+		}
+		if (copy_to_user((struct rpmsg_sdb_ioctl_get_phys_addr *)argp, &q_get_phys_addr,
+					 sizeof(struct rpmsg_sdb_ioctl_get_phys_addr))) {
+			pr_warn("rpmsg_sdb: RPMSG_SDB_IOCTL_GET_PHYS_ADDR: copy to user failed.\n");
+			return -EFAULT;
+		}
+		break;
+
 	default:
 		return -EINVAL;
+		break;
 	}
 
 	return 0;
@@ -376,11 +409,11 @@ static int rpmsg_sdb_drv_cb(struct rpmsg_device *rpdev, void *data, int len,
 	struct rpmsg_sdb_t *drv = dev_get_drvdata(&rpdev->dev);
 
 	if (len == 0) {
-		dev_err(rpmsg_sdb_dev, "(%s) Empty lenght requested\n", __func__);
+		dev_err(rpmsg_sdb_dev, "(%s) Empty length requested\n", __func__);
 		return -EINVAL;
 	}
 
-    //dev_err(rpmsg_sdb_dev, "(%s) lenght: %d\n", __func__,len);
+    dev_err(rpmsg_sdb_dev, "(%s) length: %d\n", __func__,len);
 
 	memcpy(rpmsg_RxBuf, data, len);
 
