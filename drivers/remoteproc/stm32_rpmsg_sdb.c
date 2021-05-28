@@ -39,13 +39,18 @@ struct rpmsg_sdb_ioctl_get_phys_addr {
 	uint32_t paddr;
 };
 
+struct rpmsg_sdb_ioctl_set_sync {
+	int bufferId;
+};
+
 /* ioctl numbers */
 /* _IOW means userland is writing and kernel is reading */
 /* _IOR means userland is reading and kernel is writing */
 /* _IOWR means userland and kernel can both read and write */
-#define RPMSG_SDB_IOCTL_SET_EFD _IOW('R', 0x00, struct rpmsg_sdb_ioctl_set_efd *)
-#define RPMSG_SDB_IOCTL_GET_DATA_SIZE _IOWR('R', 0x01, struct rpmsg_sdb_ioctl_get_data_size *)
-#define RPMSG_SDB_IOCTL_GET_PHYS_ADDR _IOWR('R', 0x02, struct rpmsg_sdb_ioctl_get_phys_addr *)
+#define RPMSG_SDB_IOCTL_SET_EFD			_IOW('R', 0x00, struct rpmsg_sdb_ioctl_set_efd *)
+#define RPMSG_SDB_IOCTL_GET_DATA_SIZE	_IOWR('R', 0x01, struct rpmsg_sdb_ioctl_get_data_size *)
+#define RPMSG_SDB_IOCTL_GET_PHYS_ADDR	_IOWR('R', 0x02, struct rpmsg_sdb_ioctl_get_phys_addr *)
+#define RPMSG_SDB_IOCTL_SET_SYNC		_IOW('R', 0x03, struct rpmsg_sdb_ioctl_set_sync *)
 
 struct sdb_buf_t {
 	int index; /* index of buffer */
@@ -107,42 +112,48 @@ out:
 	return ret;
 }
 
-static int rpmsg_sdb_send_buf_info(struct rpmsg_sdb_t *rpmsg_sdb, struct sdb_buf_t *buffer)
-{
-	int count = 0, ret = 0;
-	const unsigned char *tbuf;
-	char mybuf[32];
-	int msg_size;
-	struct rpmsg_device *_rpdev;
+//  Datum - for now disable the internal message channel.   We may want this back when DMA is working
+// static int rpmsg_sdb_send_buf_info(struct rpmsg_sdb_t *rpmsg_sdb, struct sdb_buf_t *buffer)
+// {
+// 	int count = 0, ret = 0;
+// 	const unsigned char *tbuf;
+// 	char mybuf[32];
+// 	int msg_size;
+// 	struct rpmsg_device *_rpdev;
 
-	_rpdev = rpmsg_sdb->rpdev;
-	msg_size = rpmsg_get_buffer_size(_rpdev->ept);
+// 	_rpdev = rpmsg_sdb->rpdev;
+// 	msg_size = rpmsg_get_buffer_size(_rpdev->ept);
 
-	if (msg_size < 0)
-		return msg_size;
+// 	if (msg_size < 0)
+// 		return msg_size;
 
-	count = rpmsg_sdb_format_txbuf_string(buffer, mybuf, 32);
-	tbuf = &mybuf[0];
+// 	count = rpmsg_sdb_format_txbuf_string(buffer, mybuf, 32);
+// 	tbuf = &mybuf[0];
 
-	do {
-		/* send a message to our remote processor */
-		ret = rpmsg_send(_rpdev->ept, (void *)tbuf,
-				 count > msg_size ? msg_size : count);
-		if (ret) {
-			dev_err(&_rpdev->dev, "rpmsg_send failed: %d\n", ret);
-			return ret;
-		}
+// 	do {
+// 		/* send a message to our remote processor */
+// 		ret = rpmsg_send(_rpdev->ept, (void *)tbuf,
+// 				 count > msg_size ? msg_size : count);
+// 		if (ret) {
+// 			dev_err(&_rpdev->dev, "rpmsg_send failed: %d\n", ret);
+// 			return ret;
+// 		}
 
-		if (count > msg_size) {
-			count -= msg_size;
-			tbuf += msg_size;
-		} else {
-			count = 0;
-		}
-	} while (count > 0);
+// 		if (count > msg_size) {
+// 			count -= msg_size;
+// 			tbuf += msg_size;
+// 		} else {
+// 			count = 0;
+// 		}
+// 	} while (count > 0);
 
-	return count;
-}
+// 	return count;
+// }
+ static int rpmsg_sdb_send_buf_info(struct rpmsg_sdb_t *rpmsg_sdb, struct sdb_buf_t *buffer)
+ {
+	 return 0;
+ }
+
 
 static int rpmsg_sdb_mmap(struct file *file, struct vm_area_struct *vma)
 {
@@ -174,7 +185,12 @@ static int rpmsg_sdb_mmap(struct file *file, struct vm_area_struct *vma)
 		_buffer->uaddr = NULL;
 		_buffer->size = NumPages * PAGE_SIZE;
 		_buffer->writing_size = -1;
-		_buffer->vaddr = dma_alloc_wc(rpmsg_sdb_dev,
+		//_buffer->vaddr = dma_alloc_wc(rpmsg_sdb_dev,
+		//										_buffer->size,
+		//										&_buffer->paddr,
+		//										GFP_KERNEL);
+
+		_buffer->vaddr = dma_alloc_coherent(rpmsg_sdb_dev,
 												_buffer->size,
 												&_buffer->paddr,
 												GFP_KERNEL);
@@ -184,7 +200,8 @@ static int rpmsg_sdb_mmap(struct file *file, struct vm_area_struct *vma)
 			return -ENOMEM;
 		}
 
-		pr_debug("%s - dma_alloc_wc done - paddr[%d]:%x - vaddr[%d]:%p\n", __func__, _buffer->index, _buffer->paddr, _buffer->index, _buffer->vaddr);
+		//pr_debug("%s - dma_alloc_wc done - paddr[%d]:%x - vaddr[%d]:%p\n", __func__, _buffer->index, _buffer->paddr, _buffer->index, _buffer->vaddr);
+		pr_debug("%s - dma_alloc_coherent done - paddr[%d]:%x - vaddr[%d]:%p\n", __func__, _buffer->index, _buffer->paddr, _buffer->index, _buffer->vaddr);
 
 		/* Get address for userland */
 		if (remap_pfn_range(vma, vma->vm_start,
@@ -252,7 +269,11 @@ static int rpmsg_sdb_close(struct inode *inode, struct file *file)
 
 	list_for_each_entry_safe(pos, next, &_rpmsg_sdb->buffer_list, buflist) {
 		/* Free the CMA allocation */
-		dma_free_wc(rpmsg_sdb_dev, pos->size, pos->vaddr,
+		// Use for DMA transfers
+		//dma_free_wc(rpmsg_sdb_dev, pos->size, pos->vaddr,
+		//			pos->paddr);
+		// Use for non-DMA (memcpy) transfers
+		dma_free_coherent(rpmsg_sdb_dev, pos->size, pos->vaddr,
 					pos->paddr);
 		/* Remove the buffer from the list */
 		list_del(&pos->buflist);
@@ -290,8 +311,12 @@ static long rpmsg_sdb_ioctl(struct file *file, unsigned int cmd, unsigned long a
 	struct rpmsg_sdb_ioctl_set_efd q_set_efd;
 	struct rpmsg_sdb_ioctl_get_data_size q_get_dat_size;
 	struct rpmsg_sdb_ioctl_get_phys_addr q_get_phys_addr;
+	struct rpmsg_sdb_ioctl_set_sync q_set_sync;
 
 	void __user *argp = (void __user *)arg;
+
+	if (rpmsg_sdb_dev == NULL)
+		return -ENOMEM;
 
 	_rpmsg_sdb = container_of(file->private_data, struct rpmsg_sdb_t, mdev);
 
@@ -380,6 +405,32 @@ static long rpmsg_sdb_ioctl(struct file *file, unsigned int cmd, unsigned long a
 		}
 		break;
 
+	case RPMSG_SDB_IOCTL_SET_SYNC:
+		mutex_lock(&_rpmsg_sdb->mutex);
+		if(copy_from_user(&q_set_sync, (struct rpmsg_sdb_ioctl_set_sync *)argp,
+					sizeof(struct rpmsg_sdb_ioctl_set_sync))) {
+			pr_warn("rpmsg_sdb: RPMSG_SDB_IOCTL_SYNC_BUF: copy from user failed.\n");
+			mutex_unlock(&_rpmsg_sdb->mutex);
+			return -EFAULT;
+		}
+
+		/* Get the index of the requested buffer and then look-up in the buffer list*/
+		idx = q_set_sync.bufferId;
+
+		list_for_each(pos, &_rpmsg_sdb->buffer_list)
+		{
+			datastructureptr = list_entry(pos, struct sdb_buf_t, buflist);
+			if (datastructureptr->index == idx) {
+				/* force dcache sync */
+				pr_debug("dma_sync: idx:%d, paddr:%x, vaddr:%p, writing_size:%d\n", idx, datastructureptr->paddr, datastructureptr->vaddr, datastructureptr->writing_size);
+				dma_sync_single_for_device(rpmsg_sdb_dev, datastructureptr->paddr, 
+							datastructureptr->size, DMA_BIDIRECTIONAL);
+				break;
+			}
+		}
+		mutex_unlock(&_rpmsg_sdb->mutex);
+		break;
+
 	default:
 		return -EINVAL;
 		break;
@@ -396,59 +447,65 @@ static const struct file_operations rpmsg_sdb_fops = {
 	.release        = rpmsg_sdb_close,
 };
 
+//  Datum - for now disable the internal message channel.   We may want this back when DMA is working
+// static int rpmsg_sdb_drv_cb(struct rpmsg_device *rpdev, void *data, int len,
+// 			void *priv, u32 src)
+// {
+// 	int ret = 0;
+// 	int buffer_id = 0;
+// 	size_t buffer_size;
+// 	char rpmsg_RxBuf[len+1];
+// 	struct list_head *pos;
+// 	struct sdb_buf_t *datastructureptr = NULL;
+
+// 	struct rpmsg_sdb_t *drv = dev_get_drvdata(&rpdev->dev);
+
+// 	if (len == 0) {
+// 		dev_err(rpmsg_sdb_dev, "(%s) Empty length requested\n", __func__);
+// 		return -EINVAL;
+// 	}
+
+//     dev_err(rpmsg_sdb_dev, "(%s) length: %d\n", __func__,len);
+
+// 	memcpy(rpmsg_RxBuf, data, len);
+
+//     rpmsg_RxBuf[len] = 0;
+
+// 	ret = rpmsg_sdb_decode_rxbuf_string(rpmsg_RxBuf, &buffer_id, &buffer_size);
+// 	if (ret < 0)
+// 		goto out;
+
+// 	if (buffer_id > LastBufferId) {
+// 		ret = -EINVAL;
+// 		goto out;
+// 	}
+
+// 	/* Signal to User space application */
+// 	list_for_each(pos, &drv->buffer_list)
+// 	{
+// 		datastructureptr = list_entry(pos, struct sdb_buf_t, buflist);
+// 		if (datastructureptr->index == buffer_id) {
+// 			datastructureptr->writing_size = buffer_size;
+
+// 			if (datastructureptr->writing_size > datastructureptr->size) {
+// 				dev_err(rpmsg_sdb_dev, "(%s) Writing size is bigger than buffer size\n", __func__);
+// 				ret = -EINVAL;
+// 				goto out;
+// 			}
+
+// 			eventfd_signal(datastructureptr->efd_ctx, 1);
+// 			break;
+// 		}
+// 		/* TODO: quid if nothing find during the loop ? */
+// 	}
+
+// out:
+// 	return ret;
+// }
 static int rpmsg_sdb_drv_cb(struct rpmsg_device *rpdev, void *data, int len,
 			void *priv, u32 src)
 {
-	int ret = 0;
-	int buffer_id = 0;
-	size_t buffer_size;
-	char rpmsg_RxBuf[len+1];
-	struct list_head *pos;
-	struct sdb_buf_t *datastructureptr = NULL;
-
-	struct rpmsg_sdb_t *drv = dev_get_drvdata(&rpdev->dev);
-
-	if (len == 0) {
-		dev_err(rpmsg_sdb_dev, "(%s) Empty length requested\n", __func__);
-		return -EINVAL;
-	}
-
-    dev_err(rpmsg_sdb_dev, "(%s) length: %d\n", __func__,len);
-
-	memcpy(rpmsg_RxBuf, data, len);
-
-    rpmsg_RxBuf[len] = 0;
-
-	ret = rpmsg_sdb_decode_rxbuf_string(rpmsg_RxBuf, &buffer_id, &buffer_size);
-	if (ret < 0)
-		goto out;
-
-	if (buffer_id > LastBufferId) {
-		ret = -EINVAL;
-		goto out;
-	}
-
-	/* Signal to User space application */
-	list_for_each(pos, &drv->buffer_list)
-	{
-		datastructureptr = list_entry(pos, struct sdb_buf_t, buflist);
-		if (datastructureptr->index == buffer_id) {
-			datastructureptr->writing_size = buffer_size;
-
-			if (datastructureptr->writing_size > datastructureptr->size) {
-				dev_err(rpmsg_sdb_dev, "(%s) Writing size is bigger than buffer size\n", __func__);
-				ret = -EINVAL;
-				goto out;
-			}
-
-			eventfd_signal(datastructureptr->efd_ctx, 1);
-			break;
-		}
-		/* TODO: quid if nothing find during the loop ? */
-	}
-
-out:
-	return ret;
+	return 0;
 }
 
 static int rpmsg_sdb_drv_probe(struct rpmsg_device *rpdev)
