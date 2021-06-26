@@ -50,7 +50,8 @@ struct rpmsg_sdb_ioctl_set_sync {
 #define RPMSG_SDB_IOCTL_SET_EFD			_IOW('R', 0x00, struct rpmsg_sdb_ioctl_set_efd *)
 #define RPMSG_SDB_IOCTL_GET_DATA_SIZE	_IOWR('R', 0x01, struct rpmsg_sdb_ioctl_get_data_size *)
 #define RPMSG_SDB_IOCTL_GET_PHYS_ADDR	_IOWR('R', 0x02, struct rpmsg_sdb_ioctl_get_phys_addr *)
-#define RPMSG_SDB_IOCTL_SET_SYNC		_IOW('R', 0x03, struct rpmsg_sdb_ioctl_set_sync *)
+#define RPMSG_SDB_IOCTL_SET_SYNC_CPU	_IOW('R', 0x03, struct rpmsg_sdb_ioctl_set_sync *)
+#define RPMSG_SDB_IOCTL_SET_SYNC_DEV	_IOW('R', 0x04, struct rpmsg_sdb_ioctl_set_sync *)
 
 struct sdb_buf_t {
 	int index; /* index of buffer */
@@ -71,48 +72,50 @@ struct rpmsg_sdb_t {
 };
 
 struct device *rpmsg_sdb_dev;
-
-static int rpmsg_sdb_format_txbuf_string(struct sdb_buf_t *buffer, char *bufinfo_str, size_t bufinfo_str_size)
-{
-	return snprintf(bufinfo_str, bufinfo_str_size, "B%dA%08xL%08x", buffer->index, buffer->paddr, buffer->size);
-}
-
-static long rpmsg_sdb_decode_rxbuf_string(char *rxbuf_str, int *buffer_id, size_t *size)
-{
-	int ret = 0;
-	char *sub_str;
-	long bsize;
-	long bufid;
-	const char delimiter[1] = {'L'};
-
-	//pr_err("%s: rxbuf_str:%s\n", __func__, rxbuf_str);
-
-	/* Get first part containing the buffer id */
-	sub_str = strsep(&rxbuf_str, delimiter);
-
-	//pr_err("%s: sub_str:%s\n", __func__, sub_str);
-
-	/* Save Buffer id and size: template BxLyyyyyyyy*/
-	ret = kstrtol(&sub_str[1], 10, &bufid);
-	if (ret < 0) {
-		pr_err("%s: extract of buffer id failed(%d)", __func__, ret);
-		goto out;
-	}
-
-	ret = kstrtol(&rxbuf_str[2], 16, &bsize);
-	if (ret < 0) {
-		pr_err("%s: extract of buffer size failed(%d)", __func__, ret);
-		goto out;
-	}
-
-	*size = (size_t)bsize;
-	*buffer_id = (int)bufid;
-
-out:
-	return ret;
-}
-
+//---------------------------------------------------------------------------------------------------
 //  Datum - for now disable the internal message channel.   We may want this back when DMA is working
+//---------------------------------------------------------------------------------------------------
+
+// static int rpmsg_sdb_format_txbuf_string(struct sdb_buf_t *buffer, char *bufinfo_str, size_t bufinfo_str_size)
+// {
+// 	return snprintf(bufinfo_str, bufinfo_str_size, "B%dA%08xL%08x", buffer->index, buffer->paddr, buffer->size);
+// }
+
+// static long rpmsg_sdb_decode_rxbuf_string(char *rxbuf_str, int *buffer_id, size_t *size)
+// {
+// 	int ret = 0;
+// 	char *sub_str;
+// 	long bsize;
+// 	long bufid;
+// 	const char delimiter[1] = {'L'};
+
+// 	//pr_err("%s: rxbuf_str:%s\n", __func__, rxbuf_str);
+
+// 	/* Get first part containing the buffer id */
+// 	sub_str = strsep(&rxbuf_str, delimiter);
+
+// 	//pr_err("%s: sub_str:%s\n", __func__, sub_str);
+
+// 	/* Save Buffer id and size: template BxLyyyyyyyy*/
+// 	ret = kstrtol(&sub_str[1], 10, &bufid);
+// 	if (ret < 0) {
+// 		pr_err("%s: extract of buffer id failed(%d)", __func__, ret);
+// 		goto out;
+// 	}
+
+// 	ret = kstrtol(&rxbuf_str[2], 16, &bsize);
+// 	if (ret < 0) {
+// 		pr_err("%s: extract of buffer size failed(%d)", __func__, ret);
+// 		goto out;
+// 	}
+
+// 	*size = (size_t)bsize;
+// 	*buffer_id = (int)bufid;
+
+// out:
+// 	return ret;
+// }
+
 // static int rpmsg_sdb_send_buf_info(struct rpmsg_sdb_t *rpmsg_sdb, struct sdb_buf_t *buffer)
 // {
 // 	int count = 0, ret = 0;
@@ -405,11 +408,11 @@ static long rpmsg_sdb_ioctl(struct file *file, unsigned int cmd, unsigned long a
 		}
 		break;
 
-	case RPMSG_SDB_IOCTL_SET_SYNC:
+	case RPMSG_SDB_IOCTL_SET_SYNC_CPU:
 		mutex_lock(&_rpmsg_sdb->mutex);
 		if(copy_from_user(&q_set_sync, (struct rpmsg_sdb_ioctl_set_sync *)argp,
 					sizeof(struct rpmsg_sdb_ioctl_set_sync))) {
-			pr_warn("rpmsg_sdb: RPMSG_SDB_IOCTL_SYNC_BUF: copy from user failed.\n");
+			pr_warn("rpmsg_sdb: RPMSG_SDB_IOCTL_SYNC_CPU: copy from user failed.\n");
 			mutex_unlock(&_rpmsg_sdb->mutex);
 			return -EFAULT;
 		}
@@ -422,7 +425,33 @@ static long rpmsg_sdb_ioctl(struct file *file, unsigned int cmd, unsigned long a
 			datastructureptr = list_entry(pos, struct sdb_buf_t, buflist);
 			if (datastructureptr->index == idx) {
 				/* force dcache sync */
-				pr_debug("dma_sync: idx:%d, paddr:%x, vaddr:%p, writing_size:%d\n", idx, datastructureptr->paddr, datastructureptr->vaddr, datastructureptr->writing_size);
+				pr_debug("dma_sync_cpu: idx:%d, paddr:%x, vaddr:%p, writing_size:%d\n", idx, datastructureptr->paddr, datastructureptr->vaddr, datastructureptr->writing_size);
+				dma_sync_single_for_cpu(rpmsg_sdb_dev, datastructureptr->paddr, 
+							datastructureptr->size, DMA_BIDIRECTIONAL);
+				break;
+			}
+		}
+		mutex_unlock(&_rpmsg_sdb->mutex);
+		break;
+
+	case RPMSG_SDB_IOCTL_SET_SYNC_DEV:
+		mutex_lock(&_rpmsg_sdb->mutex);
+		if(copy_from_user(&q_set_sync, (struct rpmsg_sdb_ioctl_set_sync *)argp,
+					sizeof(struct rpmsg_sdb_ioctl_set_sync))) {
+			pr_warn("rpmsg_sdb: RPMSG_SDB_IOCTL_SYNC_DEV: copy from user failed.\n");
+			mutex_unlock(&_rpmsg_sdb->mutex);
+			return -EFAULT;
+		}
+
+		/* Get the index of the requested buffer and then look-up in the buffer list*/
+		idx = q_set_sync.bufferId;
+
+		list_for_each(pos, &_rpmsg_sdb->buffer_list)
+		{
+			datastructureptr = list_entry(pos, struct sdb_buf_t, buflist);
+			if (datastructureptr->index == idx) {
+				/* force dcache sync */
+				pr_debug("dma_sync_dev: idx:%d, paddr:%x, vaddr:%p, writing_size:%d\n", idx, datastructureptr->paddr, datastructureptr->vaddr, datastructureptr->writing_size);
 				dma_sync_single_for_device(rpmsg_sdb_dev, datastructureptr->paddr, 
 							datastructureptr->size, DMA_BIDIRECTIONAL);
 				break;
