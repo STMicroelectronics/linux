@@ -1451,7 +1451,7 @@ static irqreturn_t stm32f7_i2c_slave_isr_event(struct stm32f7_i2c_dev *i2c_dev, 
 	int ret;
 
 	/* Slave transmitter mode */
-	if (status & STM32F7_I2C_ISR_TXIS) {
+	if (i2c_dev->slave_running && (status & STM32F7_I2C_ISR_TXIS)) {
 		i2c_slave_event(i2c_dev->slave_running,
 				I2C_SLAVE_READ_PROCESSED,
 				&val);
@@ -1461,7 +1461,8 @@ static irqreturn_t stm32f7_i2c_slave_isr_event(struct stm32f7_i2c_dev *i2c_dev, 
 	}
 
 	/* Transfer Complete Reload for Slave receiver mode */
-	if (status & STM32F7_I2C_ISR_TCR || status & STM32F7_I2C_ISR_RXNE) {
+	if (i2c_dev->slave_running &&
+	    (status & STM32F7_I2C_ISR_TCR || status & STM32F7_I2C_ISR_RXNE)) {
 		/*
 		 * Read data byte then set NBYTES to receive next byte or NACK
 		 * the current received byte
@@ -1487,7 +1488,7 @@ static irqreturn_t stm32f7_i2c_slave_isr_event(struct stm32f7_i2c_dev *i2c_dev, 
 	}
 
 	/* STOP received */
-	if (status & STM32F7_I2C_ISR_STOPF) {
+	if (i2c_dev->slave_running && (status & STM32F7_I2C_ISR_STOPF)) {
 		/* Disable interrupts */
 		stm32f7_i2c_disable_irq(i2c_dev, STM32F7_I2C_XFER_IRQ_MASK);
 
