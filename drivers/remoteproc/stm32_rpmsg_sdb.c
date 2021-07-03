@@ -15,6 +15,7 @@
 #include <linux/eventfd.h>
 #include <linux/of_platform.h>
 #include <linux/list.h>
+#include <asm/cacheflush.h>
 
 #define RPMSG_SDB_DRIVER_VERSION "1.0"
 
@@ -52,6 +53,7 @@ struct rpmsg_sdb_ioctl_set_sync {
 #define RPMSG_SDB_IOCTL_GET_PHYS_ADDR	_IOWR('R', 0x02, struct rpmsg_sdb_ioctl_get_phys_addr *)
 #define RPMSG_SDB_IOCTL_SET_SYNC_CPU	_IOW('R', 0x03, struct rpmsg_sdb_ioctl_set_sync *)
 #define RPMSG_SDB_IOCTL_SET_SYNC_DEV	_IOW('R', 0x04, struct rpmsg_sdb_ioctl_set_sync *)
+#define RPMSG_SDB_IOCTL_SET_CACHE_FLUSH	_IOW('R', 0x05, struct rpmsg_sdb_ioctl_set_sync *)
 
 struct sdb_buf_t {
 	int index; /* index of buffer */
@@ -59,9 +61,11 @@ struct sdb_buf_t {
 	size_t writing_size; /* size of data written by copro */
 	dma_addr_t paddr; /* physical address*/
 	void *vaddr; /* virtual address */
-	void *uaddr; /* mapped address for userland */
+	void *uaddr_start; /* mapped address start for userland */
+	void *uaddr_end;  /* mapped address end for userland */
 	struct eventfd_ctx *efd_ctx; /* eventfd context */
 	struct list_head buflist; /* reference in the buffers list */
+	struct vm_area_struct *vma;
 };
 
 struct rpmsg_sdb_t {
@@ -185,7 +189,7 @@ static int rpmsg_sdb_mmap(struct file *file, struct vm_area_struct *vma)
 		_buffer = list_last_entry(&_rpmsg_sdb->buffer_list,
 									struct sdb_buf_t, buflist);
 
-		_buffer->uaddr = NULL;
+		_buffer->uaddr_start = NULL;
 		_buffer->size = NumPages * PAGE_SIZE;
 		_buffer->writing_size = -1;
 		//_buffer->vaddr = dma_alloc_wc(rpmsg_sdb_dev,
@@ -212,7 +216,9 @@ static int rpmsg_sdb_mmap(struct file *file, struct vm_area_struct *vma)
 							size, prot))
 			return -EAGAIN;
 
-		_buffer->uaddr = (void *)vma->vm_start;
+		_buffer->uaddr_start = (void *)vma->vm_start;
+		_buffer->uaddr_end = (void *)vma->vm_end;
+		_buffer->vma = vma;
 
 		/* Send information to remote proc */
 		rpmsg_sdb_send_buf_info(_rpmsg_sdb, _buffer);
@@ -328,15 +334,16 @@ static long rpmsg_sdb_ioctl(struct file *file, unsigned int cmd, unsigned long a
 		mutex_lock(&_rpmsg_sdb->mutex);
 
 		/* Get index from the last buffer in the list */
-		if (!list_empty(&_rpmsg_sdb->buffer_list)) {
+		if (!list_empty(&_rpmsg_sdb->buffer_list))
+		{
 			lastbuffer = list_last_entry(&_rpmsg_sdb->buffer_list, struct sdb_buf_t, buflist);
 			idx = lastbuffer->index;
 			/* increment this index for the next buffer creation*/
 			idx++;
 		}
 
-		if (copy_from_user(&q_set_efd, (struct rpmsg_sdb_ioctl_set_efd *)argp,
-					sizeof(struct rpmsg_sdb_ioctl_set_efd))) {
+		if (copy_from_user(&q_set_efd, (struct rpmsg_sdb_ioctl_set_efd *)argp, sizeof(struct rpmsg_sdb_ioctl_set_efd)))
+		{
 			pr_warn("rpmsg_sdb: RPMSG_SDB_IOCTL_GET_DATA_SIZE: copy to user failed.\n");
 			mutex_unlock(&_rpmsg_sdb->mutex);
 			return -EFAULT;
@@ -353,8 +360,8 @@ static long rpmsg_sdb_ioctl(struct file *file, unsigned int cmd, unsigned long a
 		break;
 
 	case RPMSG_SDB_IOCTL_GET_DATA_SIZE:
-		if (copy_from_user(&q_get_dat_size, (struct rpmsg_sdb_ioctl_get_data_size *)argp,
-					sizeof(struct rpmsg_sdb_ioctl_get_data_size))) {
+		if (copy_from_user(&q_get_dat_size, (struct rpmsg_sdb_ioctl_get_data_size *)argp, sizeof(struct rpmsg_sdb_ioctl_get_data_size)))
+		{
 			pr_warn("rpmsg_sdb: RPMSG_SDB_IOCTL_GET_DATA_SIZE: copy from user failed.\n");
 			return -EFAULT;
 		}
@@ -365,15 +372,16 @@ static long rpmsg_sdb_ioctl(struct file *file, unsigned int cmd, unsigned long a
 		list_for_each(pos, &_rpmsg_sdb->buffer_list)
 		{
 			datastructureptr = list_entry(pos, struct sdb_buf_t, buflist);
-			if (datastructureptr->index == idx) {
+			if (datastructureptr->index == idx)
+			{
 				/* Get the writing size*/
 				q_get_dat_size.size = datastructureptr->writing_size;
 				break;
 			}
 		}
 
-		if (copy_to_user((struct rpmsg_sdb_ioctl_get_data_size *)argp, &q_get_dat_size,
-					 sizeof(struct rpmsg_sdb_ioctl_get_data_size))) {
+		if (copy_to_user((struct rpmsg_sdb_ioctl_get_data_size *)argp, &q_get_dat_size, sizeof(struct rpmsg_sdb_ioctl_get_data_size)))
+		{
 			pr_warn("rpmsg_sdb: RPMSG_SDB_IOCTL_GET_DATA_SIZE: copy to user failed.\n");
 			return -EFAULT;
 		}
@@ -383,8 +391,8 @@ static long rpmsg_sdb_ioctl(struct file *file, unsigned int cmd, unsigned long a
 		break;
 
 	case RPMSG_SDB_IOCTL_GET_PHYS_ADDR:
-		if (copy_from_user(&q_get_phys_addr, (struct rpmsg_sdb_ioctl_get_phys_addr *)argp,
-					sizeof(struct rpmsg_sdb_ioctl_get_phys_addr))) {
+		if (copy_from_user(&q_get_phys_addr, (struct rpmsg_sdb_ioctl_get_phys_addr *)argp, sizeof(struct rpmsg_sdb_ioctl_get_phys_addr)))
+		{
 			pr_warn("rpmsg_sdb: RPMSG_SDB_IOCTL_GET_PHYS_ADDR: copy from user failed.\n");
 			return -EFAULT;
 		}
@@ -395,25 +403,24 @@ static long rpmsg_sdb_ioctl(struct file *file, unsigned int cmd, unsigned long a
 		list_for_each(pos, &_rpmsg_sdb->buffer_list)
 		{
 			datastructureptr = list_entry(pos, struct sdb_buf_t, buflist);
-			if (datastructureptr->index == idx) {
+			if (datastructureptr->index == idx)
+			{
 				/* Get the physical address*/
 				q_get_phys_addr.paddr = (uint32_t)(datastructureptr->paddr);
 				break;
 			}
 		}
-		if (copy_to_user((struct rpmsg_sdb_ioctl_get_phys_addr *)argp, &q_get_phys_addr,
-					 sizeof(struct rpmsg_sdb_ioctl_get_phys_addr))) {
+		if (copy_to_user((struct rpmsg_sdb_ioctl_get_phys_addr *)argp, &q_get_phys_addr, sizeof(struct rpmsg_sdb_ioctl_get_phys_addr)))
+		{
 			pr_warn("rpmsg_sdb: RPMSG_SDB_IOCTL_GET_PHYS_ADDR: copy to user failed.\n");
 			return -EFAULT;
 		}
 		break;
 
 	case RPMSG_SDB_IOCTL_SET_SYNC_CPU:
-		mutex_lock(&_rpmsg_sdb->mutex);
-		if(copy_from_user(&q_set_sync, (struct rpmsg_sdb_ioctl_set_sync *)argp,
-					sizeof(struct rpmsg_sdb_ioctl_set_sync))) {
+		if(copy_from_user(&q_set_sync, (struct rpmsg_sdb_ioctl_set_sync *)argp, sizeof(struct rpmsg_sdb_ioctl_set_sync)))
+		{
 			pr_warn("rpmsg_sdb: RPMSG_SDB_IOCTL_SYNC_CPU: copy from user failed.\n");
-			mutex_unlock(&_rpmsg_sdb->mutex);
 			return -EFAULT;
 		}
 
@@ -423,23 +430,20 @@ static long rpmsg_sdb_ioctl(struct file *file, unsigned int cmd, unsigned long a
 		list_for_each(pos, &_rpmsg_sdb->buffer_list)
 		{
 			datastructureptr = list_entry(pos, struct sdb_buf_t, buflist);
-			if (datastructureptr->index == idx) {
-				/* force dcache sync */
+			if (datastructureptr->index == idx)
+			{
+				/* sync dcache for cpu access */
 				pr_debug("dma_sync_cpu: idx:%d, paddr:%x, vaddr:%p, writing_size:%d\n", idx, datastructureptr->paddr, datastructureptr->vaddr, datastructureptr->writing_size);
-				dma_sync_single_for_cpu(rpmsg_sdb_dev, datastructureptr->paddr, 
-							datastructureptr->size, DMA_BIDIRECTIONAL);
+				dma_sync_single_for_cpu(rpmsg_sdb_dev, datastructureptr->paddr, datastructureptr->size, DMA_BIDIRECTIONAL);
 				break;
 			}
 		}
-		mutex_unlock(&_rpmsg_sdb->mutex);
 		break;
 
 	case RPMSG_SDB_IOCTL_SET_SYNC_DEV:
-		mutex_lock(&_rpmsg_sdb->mutex);
-		if(copy_from_user(&q_set_sync, (struct rpmsg_sdb_ioctl_set_sync *)argp,
-					sizeof(struct rpmsg_sdb_ioctl_set_sync))) {
+		if(copy_from_user(&q_set_sync, (struct rpmsg_sdb_ioctl_set_sync *)argp, sizeof(struct rpmsg_sdb_ioctl_set_sync)))
+		{
 			pr_warn("rpmsg_sdb: RPMSG_SDB_IOCTL_SYNC_DEV: copy from user failed.\n");
-			mutex_unlock(&_rpmsg_sdb->mutex);
 			return -EFAULT;
 		}
 
@@ -449,15 +453,37 @@ static long rpmsg_sdb_ioctl(struct file *file, unsigned int cmd, unsigned long a
 		list_for_each(pos, &_rpmsg_sdb->buffer_list)
 		{
 			datastructureptr = list_entry(pos, struct sdb_buf_t, buflist);
-			if (datastructureptr->index == idx) {
-				/* force dcache sync */
+			if (datastructureptr->index == idx)
+			{
+				/* sync dcache for device access */
 				pr_debug("dma_sync_dev: idx:%d, paddr:%x, vaddr:%p, writing_size:%d\n", idx, datastructureptr->paddr, datastructureptr->vaddr, datastructureptr->writing_size);
-				dma_sync_single_for_device(rpmsg_sdb_dev, datastructureptr->paddr, 
-							datastructureptr->size, DMA_BIDIRECTIONAL);
+				dma_sync_single_for_device(rpmsg_sdb_dev, datastructureptr->paddr, datastructureptr->size, DMA_BIDIRECTIONAL);
 				break;
 			}
 		}
-		mutex_unlock(&_rpmsg_sdb->mutex);
+		break;
+
+	case RPMSG_SDB_IOCTL_SET_CACHE_FLUSH:
+		if(copy_from_user(&q_set_sync, (struct rpmsg_sdb_ioctl_set_sync *)argp, sizeof(struct rpmsg_sdb_ioctl_set_sync)))
+		{
+			pr_warn("rpmsg_sdb: RPMSG_SDB_IOCTL_SYNC_CPU: copy from user failed.\n");
+			return -EFAULT;
+		}
+
+		/* Get the index of the requested buffer and then look-up in the buffer list*/
+		idx = q_set_sync.bufferId;
+
+		list_for_each(pos, &_rpmsg_sdb->buffer_list)
+		{
+			datastructureptr = list_entry(pos, struct sdb_buf_t, buflist);
+			if (datastructureptr->index == idx)
+			{
+				/* force dcache sync */
+				pr_debug("flush_cache_range: idx:%d, paddr:%x, vaddr:%p, writing_size:%d\n", idx, datastructureptr->paddr, datastructureptr->vaddr, datastructureptr->writing_size);
+				flush_cache_range(datastructureptr->vma, (unsigned long)datastructureptr->uaddr_start, (unsigned long)datastructureptr->uaddr_end);
+				break;
+			}
+		}
 		break;
 
 	default:
