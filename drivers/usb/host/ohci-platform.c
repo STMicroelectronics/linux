@@ -214,7 +214,8 @@ static int ohci_platform_probe(struct platform_device *dev)
 	if (err)
 		goto err_power;
 
-	device_wakeup_enable(hcd->self.controller);
+	if (of_property_read_bool(dev->dev.of_node, "wakeup-source"))
+		device_set_wakeup_capable(hcd->self.controller, true);
 
 	platform_set_drvdata(dev, hcd);
 
@@ -245,6 +246,9 @@ static void ohci_platform_remove(struct platform_device *dev)
 	struct ohci_platform_priv *priv = hcd_to_ohci_priv(hcd);
 	int clk;
 
+	if (of_property_read_bool(dev->dev.of_node, "wakeup-source"))
+		device_set_wakeup_capable(hcd->self.controller, false);
+
 	pm_runtime_get_sync(&dev->dev);
 	usb_remove_hcd(hcd);
 
@@ -271,7 +275,7 @@ static int ohci_platform_suspend(struct device *dev)
 	struct usb_hcd *hcd = dev_get_drvdata(dev);
 	struct usb_ohci_pdata *pdata = dev->platform_data;
 	struct platform_device *pdev = to_platform_device(dev);
-	bool do_wakeup = device_may_wakeup(dev);
+	bool do_wakeup = device_may_wakeup(dev) || device_wakeup_path(dev);
 	int ret;
 
 	ret = ohci_suspend(hcd, do_wakeup);
@@ -281,6 +285,9 @@ static int ohci_platform_suspend(struct device *dev)
 	if (pdata->power_suspend)
 		pdata->power_suspend(pdev);
 
+	if (do_wakeup)
+		enable_irq_wake(hcd->irq);
+
 	return ret;
 }
 
@@ -289,6 +296,9 @@ static int ohci_platform_resume_common(struct device *dev, bool hibernated)
 	struct usb_hcd *hcd = dev_get_drvdata(dev);
 	struct usb_ohci_pdata *pdata = dev_get_platdata(dev);
 	struct platform_device *pdev = to_platform_device(dev);
+
+	if (device_may_wakeup(dev) || device_wakeup_path(dev))
+		disable_irq_wake(hcd->irq);
 
 	if (pdata->power_on) {
 		int err = pdata->power_on(pdev);
