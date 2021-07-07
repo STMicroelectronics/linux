@@ -1267,6 +1267,7 @@
 			clocks = <&usbphyc>, <&rcc USBH>;
 			resets = <&rcc USBH_R>;
 			interrupts = <GIC_SPI 75 IRQ_TYPE_LEVEL_HIGH>;
+			wakeup-source;
 			status = "disabled";
 		};
 
@@ -1277,6 +1278,7 @@
 			resets = <&rcc USBH_R>;
 			interrupts = <GIC_SPI 76 IRQ_TYPE_LEVEL_HIGH>;
 			companion = <&usbh_ohci>;
+			wakeup-source;
 			status = "disabled";
 		};
 
