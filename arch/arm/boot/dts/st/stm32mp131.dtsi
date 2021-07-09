@@ -1946,11 +1946,13 @@
 				usbphyc_port0: usb-phy@0 {
 					#phy-cells = <0>;
 					reg = <0>;
+					interrupts-extended = <&exti 42 IRQ_TYPE_LEVEL_HIGH>;
 				};
 
 				usbphyc_port1: usb-phy@1 {
 					#phy-cells = <1>;
 					reg = <1>;
+					interrupts-extended = <&exti 43 IRQ_TYPE_LEVEL_HIGH>;
 				};
 			};
 		};
