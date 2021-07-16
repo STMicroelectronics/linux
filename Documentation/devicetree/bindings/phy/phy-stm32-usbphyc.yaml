@@ -78,6 +78,10 @@ patternProperties:
       "#phy-cells":
         enum: [ 0x0, 0x1 ]
 
+      interrupts:
+        maxItems: 1
+        description: interrupt used for wakeup when port is used by USBH controller
+
       connector:
         type: object
         $ref: /schemas/connector/usb-connector.yaml
