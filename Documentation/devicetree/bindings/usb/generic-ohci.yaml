@@ -135,6 +135,11 @@ properties:
       The associated ISP1301 device. Necessary for the UDC controller for
       connecting to the USB physical layer.
 
+  wakeup-source:
+    $ref: /schemas/types.yaml#/definitions/flag
+    description:
+      Indicate this device has wakeup capabilities.
+
 required:
   - compatible
   - reg
