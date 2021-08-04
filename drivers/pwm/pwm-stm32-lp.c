@@ -164,7 +164,7 @@ static int stm32_pwm_lp_apply(struct pwm_chip *chip, struct pwm_device *pwm,
 
 	/* Calculate the period and prescaler value */
 	div = (unsigned long long)clk_get_rate(priv->clk) * state->period;
-	do_div(div, NSEC_PER_SEC);
+	div = DIV_ROUND_CLOSEST_ULL(div, NSEC_PER_SEC);
 	if (!div) {
 		/* Clock is too slow to achieve requested period. */
 		dev_dbg(pwmchip_parent(chip), "Can't reach %llu ns\n", state->period);
@@ -184,7 +184,7 @@ static int stm32_pwm_lp_apply(struct pwm_chip *chip, struct pwm_device *pwm,
 
 	/* Calculate the duty cycle */
 	dty = prd * state->duty_cycle;
-	do_div(dty, state->period);
+	dty = DIV_ROUND_CLOSEST_ULL(dty, state->period);
 
 	ret = regmap_read(priv->regmap, STM32_LPTIM_CFGR, &cfgr);
 	if (ret)
