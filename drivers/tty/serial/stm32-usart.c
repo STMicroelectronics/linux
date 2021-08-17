@@ -291,6 +291,160 @@ static int stm32_usart_init_rs485(struct uart_port *port,
 	return uart_get_rs485_mode(port);
 }
 
+static int stm32_usart_config_iso7816(struct uart_port *port, struct serial_iso7816 *iso7816)
+{
+	struct stm32_port *stm32_port = to_stm32_port(port);
+	const struct stm32_usart_offsets *ofs = &stm32_port->info->ofs;
+	const struct stm32_usart_config *cfg = &stm32_port->info->cfg;
+	struct stm32_backup_regs *bkp_regs = &stm32_port->bkp_regs;
+	struct stm32_backup_regs regs;
+	u32 isr, max_sclk, sclk, baud, usartdiv;
+	u8 psc;
+	int ret = 0;
+
+	ret = readl_relaxed_poll_timeout_atomic(port->membase + ofs->isr, isr, (isr & USART_SR_TC),
+						10, 100000);
+	if (ret)
+		dev_err(port->dev, "Transmission is not complete\n");
+
+	stm32_usart_clr_bits(port, ofs->cr1, BIT(cfg->uart_enable_bit));
+
+	regs.cr1 = readl_relaxed(port->membase + ofs->cr1);
+	regs.cr2 = readl_relaxed(port->membase + ofs->cr2);
+	regs.cr3 = readl_relaxed(port->membase + ofs->cr3);
+	regs.gtpr = readl_relaxed(port->membase + ofs->gtpr);
+	regs.brr = readl_relaxed(port->membase + ofs->brr);
+
+	if (!(port->iso7816.flags & SER_ISO7816_ENABLED)) {
+		memcpy(bkp_regs, &regs, sizeof(struct stm32_backup_regs));
+		goto deinit_iso7816_config;
+	}
+
+	if (stm32_port->tx_ch || stm32_port->rx_ch) {
+		dev_err(port->dev, "DMA should be disabled before enabling smart-card.\n");
+		ret = -EACCES;
+		goto deinit_iso7816_config;
+	}
+
+	/* Configure USART in smartcard mode */
+	regs.cr3 |= USART_CR3_SCEN;
+	regs.cr3 &= ~USART_CR3_HDSEL;
+	regs.cr3 &= ~USART_CR3_IREN;
+	regs.cr2 &= ~USART_CR2_LINEN;
+
+	/* 8 bit word and 1.5 stop bits */
+	regs.cr1 &= ~USART_CR1_M1;
+	regs.cr1 |= USART_CR1_M0;
+	regs.cr1 |= USART_CR1_PCE;
+	regs.cr1 &= ~USART_CR1_OVER8;
+	regs.cr2 |= USART_CR2_STOP_MASK;
+
+	/* Auto-retry count = 3 */
+	regs.cr3 &= ~USART_CR3_SCARCNT_MASK;
+	regs.cr3 |= FIELD_PREP(USART_CR3_SCARCNT_MASK, 3);
+
+	/* Guard time set-up */
+	if (FIELD_FIT(USART_GTPR_GT_MASK, iso7816->tg)) {
+		regs.gtpr &= ~USART_GTPR_GT_MASK;
+		regs.gtpr |= FIELD_PREP(USART_GTPR_GT_MASK, iso7816->tg);
+		dev_dbg(port->dev, "iso7816: gtpr=0x%X\n", regs.gtpr);
+	} else {
+		dev_err(port->dev, "Guard time value is too high.\n");
+		ret = -ERANGE;
+		goto deinit_iso7816_config;
+	}
+
+	/* Smartcard clock setup */
+	if (iso7816->clk == 0) {
+		dev_err(port->dev, "iso7816: invalid clock.\n");
+		ret = -EINVAL;
+		goto deinit_iso7816_config;
+	}
+	max_sclk = DIV_ROUND_CLOSEST(port->uartclk, 2);
+	if (iso7816->clk > max_sclk)
+		sclk = max_sclk;
+	else
+		sclk = iso7816->clk;
+
+	psc = DIV_ROUND_CLOSEST(port->uartclk, (sclk * 2));
+	if (psc > USART_GTPR_PSC_SMART_MASK) {
+		psc = USART_GTPR_PSC_SMART_MASK;
+		sclk = DIV_ROUND_CLOSEST(port->uartclk, (psc * 2));
+	}
+	sclk = DIV_ROUND_CLOSEST(port->uartclk, (psc * 2));
+	if (sclk > iso7816->clk)
+		psc += 1;
+	sclk = DIV_ROUND_CLOSEST(port->uartclk, (psc * 2));
+	iso7816->clk = sclk;
+	regs.gtpr |= FIELD_PREP(USART_GTPR_PSC_SMART_MASK, psc);
+	regs.cr2 |= USART_CR2_CLKEN;
+
+	dev_dbg(port->dev, "iso7816: psc=0x%X\n", psc);
+	dev_dbg(port->dev, "iso7816: sclk=%u\n", sclk);
+
+	/* Uart baudrate setup */
+	if (iso7816->sc_fi == 0) {
+		dev_err(port->dev, "iso7816: invalid Fi.\n");
+		ret = -ERANGE;
+		goto deinit_iso7816_config;
+	}
+	baud = DIV_ROUND_CLOSEST(iso7816->clk * iso7816->sc_di, iso7816->sc_fi);
+	usartdiv = DIV_ROUND_CLOSEST(port->uartclk, baud);
+	if (FIELD_FIT(USART_BRR_MASK, usartdiv)) {
+		regs.brr = FIELD_PREP(USART_BRR_MASK, usartdiv);
+	} else {
+		dev_err(port->dev, "iso7816: Di Fi ratio value is too low.\n");
+		ret = -ERANGE;
+		goto deinit_iso7816_config;
+	}
+
+	dev_dbg(port->dev, "iso7816: baud=%u\n", baud);
+	dev_dbg(port->dev, "iso7816: brr=0x%X\n", regs.brr);
+
+	if ((iso7816->flags & SER_ISO7816_T_PARAM) == SER_ISO7816_T(0)) {
+		/* Enable NACK */
+		regs.cr3 |= USART_CR3_NACK;
+	} else if ((iso7816->flags & SER_ISO7816_T_PARAM) == SER_ISO7816_T(1)) {
+		/* Disable NACK */
+		regs.cr3 &= ~USART_CR3_SCARCNT_MASK;
+		regs.cr3 &= ~USART_CR3_NACK;
+	} else {
+		dev_err(port->dev, "iso7816: invalid T.\n");
+		ret = -EINVAL;
+		goto deinit_iso7816_config;
+	}
+
+	writel_relaxed(regs.gtpr, port->membase + ofs->gtpr);
+	writel_relaxed(regs.brr, port->membase + ofs->brr);
+	writel_relaxed(regs.cr3, port->membase + ofs->cr3);
+	writel_relaxed(regs.cr2, port->membase + ofs->cr2);
+	writel_relaxed(regs.cr1, port->membase + ofs->cr1);
+
+deinit_iso7816_config:
+	if ((!(iso7816->flags & SER_ISO7816_ENABLED) || ret) &&
+	    (port->iso7816.flags & SER_ISO7816_ENABLED)) {
+		writel_relaxed(bkp_regs->cr1, port->membase + ofs->cr1);
+		writel_relaxed(bkp_regs->cr2, port->membase + ofs->cr2);
+		writel_relaxed(bkp_regs->cr3, port->membase + ofs->cr3);
+		writel_relaxed(bkp_regs->gtpr, port->membase + ofs->gtpr);
+		writel_relaxed(bkp_regs->brr, port->membase + ofs->brr);
+		memset(bkp_regs, 0, sizeof(struct stm32_backup_regs));
+		memset(iso7816, 0, sizeof(struct serial_iso7816));
+		stm32_usart_clr_bits(port, ofs->cr3, USART_CR3_TCBGTIE);
+	}
+
+	port->iso7816 = *iso7816;
+	stm32_usart_set_bits(port, ofs->cr1, BIT(cfg->uart_enable_bit));
+
+	return ret;
+}
+
+static bool stm32_usart_iso7816_enabled(struct stm32_port *stm32_port)
+{
+	return stm32_port->port.iso7816.flags &&
+		(stm32_port->port.iso7816.flags & SER_ISO7816_ENABLED);
+}
+
 static bool stm32_usart_rx_dma_started(struct stm32_port *stm32_port)
 {
 	return stm32_port->rx_ch ? stm32_port->rx_dma_busy : false;
@@ -698,6 +852,9 @@ static void stm32_usart_transmit_chars_pio(struct uart_port *port)
 	const struct stm32_usart_offsets *ofs = &stm32_port->info->ofs;
 	struct tty_port *tport = &port->state->port;
 
+	if (!kfifo_is_empty(&tport->xmit_fifo) && stm32_usart_iso7816_enabled(stm32_port))
+		stm32_usart_set_bits(port, ofs->cr3, USART_CR3_TCBGTIE);
+
 	while (1) {
 		unsigned char ch;
 
@@ -847,11 +1004,12 @@ static irqreturn_t stm32_usart_interrupt(int irq, void *ptr)
 	struct tty_port *tport = &port->state->port;
 	struct stm32_port *stm32_port = to_stm32_port(port);
 	const struct stm32_usart_offsets *ofs = &stm32_port->info->ofs;
-	u32 sr;
+	u32 sr, cr3;
 	unsigned int size;
 	irqreturn_t ret = IRQ_NONE;
 
 	sr = readl_relaxed(port->membase + ofs->isr);
+	cr3 = readl_relaxed(port->membase + ofs->cr3);
 
 	if (!stm32_port->hw_flow_control &&
 	    port->rs485.flags & SER_RS485_ENABLED &&
@@ -877,19 +1035,30 @@ static irqreturn_t stm32_usart_interrupt(int irq, void *ptr)
 		ret = IRQ_HANDLED;
 	}
 
-	/*
-	 * rx errors in dma mode has to be handled ASAP to avoid overrun as the DMA request
-	 * line has been masked by HW and rx data are stacking in FIFO.
-	 */
-	if (!stm32_port->throttled) {
-		if (((sr & USART_SR_RXNE) && !stm32_usart_rx_dma_started(stm32_port)) ||
-		    ((sr & USART_SR_ERR_MASK) && stm32_usart_rx_dma_started(stm32_port))) {
-			uart_port_lock(port);
-			size = stm32_usart_receive_chars(port, false);
-			uart_unlock_and_check_sysrq(port);
-			if (size)
-				tty_flip_buffer_push(tport);
-			ret = IRQ_HANDLED;
+	/* Don't process rx in iso7816 mode while tx is in progress */
+	if (stm32_usart_iso7816_enabled(stm32_port) && (cr3 & USART_CR3_TCBGTIE)) {
+		if ((sr & USART_SR_TCBGT) && ofs->icr != UNDEF_REG) {
+			writel_relaxed(USART_ICR_TCBGTCF, port->membase + ofs->icr);
+			stm32_usart_clr_bits(port, ofs->cr3, USART_CR3_TCBGTIE);
+		}
+		/* Discard rx which contains tx echo */
+		stm32_usart_set_bits(port, ofs->rqr, USART_RQR_RXFRQ);
+		ret = IRQ_HANDLED;
+	} else {
+		/*
+		 * rx errors in dma mode has to be handled ASAP to avoid overrun as the DMA request
+		 * line has been masked by HW and rx data are stacking in FIFO.
+		 */
+		if (!stm32_port->throttled) {
+			if (((sr & USART_SR_RXNE) && !stm32_usart_rx_dma_started(stm32_port)) ||
+			    ((sr & USART_SR_ERR_MASK) && stm32_usart_rx_dma_started(stm32_port))) {
+				uart_port_lock(port);
+				size = stm32_usart_receive_chars(port, false);
+				uart_unlock_and_check_sysrq(port);
+				if (size)
+					tty_flip_buffer_push(tport);
+				ret = IRQ_HANDLED;
+			}
 		}
 	}
 
@@ -1579,6 +1748,7 @@ static int stm32_usart_init_port(struct stm32_port *stm32port,
 	port->irq = irq;
 	port->rs485_config = stm32_usart_config_rs485;
 	port->rs485_supported = stm32_rs485_supported;
+	port->iso7816_config = stm32_usart_config_iso7816;
 
 	ret = stm32_usart_init_rs485(port, pdev);
 	if (ret)

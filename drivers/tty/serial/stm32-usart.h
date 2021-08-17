@@ -24,6 +24,14 @@ struct stm32_usart_offsets {
 	u16 hwcfgr1;
 };
 
+struct stm32_backup_regs {
+	u32 cr1;
+	u32 cr2;
+	u32 cr3;
+	u32 gtpr;
+	u32 brr;
+};
+
 struct stm32_usart_config {
 	u8 uart_enable_bit; /* USART_CR1_UE */
 	bool has_7bits_data;
@@ -61,6 +69,7 @@ struct stm32_usart_info {
 #define USART_SR_TEACK		BIT(21)		/* F7 */
 #define USART_SR_ERR_MASK	(USART_SR_ORE | USART_SR_NE | USART_SR_FE |\
 				 USART_SR_PE)
+#define USART_SR_TCBGT		BIT(25)		/* F7 */
 /* Dummy bits */
 #define USART_SR_DUMMY_RX	BIT(16)
 
@@ -152,6 +161,7 @@ struct stm32_usart_info {
 #define USART_CR3_TXFTCFG_SHIFT	29		/* H7 */
 
 /* USART_GTPR */
+#define USART_GTPR_PSC_SMART_MASK	GENMASK(4, 0)
 #define USART_GTPR_PSC_MASK	GENMASK(7, 0)
 #define USART_GTPR_GT_MASK	GENMASK(15, 8)
 
@@ -172,6 +182,7 @@ struct stm32_usart_info {
 #define USART_ICR_ORECF		BIT(3)		/* F7 */
 #define USART_ICR_IDLECF	BIT(4)		/* F7 */
 #define USART_ICR_TCCF		BIT(6)		/* F7 */
+#define USART_ICR_TCBGTCF	BIT(7)		/* F7 */
 #define USART_ICR_CTSCF		BIT(9)		/* F7 */
 #define USART_ICR_RTOCF		BIT(11)		/* F7 */
 #define USART_ICR_EOBCF		BIT(12)		/* F7 */
@@ -220,6 +231,7 @@ struct stm32_port {
 	int rdr_mask;		/* receive data register mask */
 	struct mctrl_gpios *gpios; /* modem control gpios */
 	struct dma_tx_state rx_dma_state;
+	struct stm32_backup_regs bkp_regs;
 };
 
 static struct stm32_port stm32_ports[STM32_MAX_PORTS];
