@@ -41,7 +41,7 @@
 
 /* common register definitions */
 #define INA2XX_CONFIG			0x00
-#define INA2XX_SHUNT_VOLTAGE		0x01 /* readonly */
+#define INA2XX_SHUNT_VOLTAGE	0x01 /* readonly */
 #define INA2XX_BUS_VOLTAGE		0x02 /* readonly */
 #define INA2XX_POWER			0x03 /* readonly */
 #define INA2XX_CURRENT			0x04 /* readonly */
@@ -259,7 +259,8 @@ static int ina2xx_get_value(struct ina2xx_data *data, u8 reg,
 	switch (reg) {
 	case INA2XX_SHUNT_VOLTAGE:
 		/* signed register */
-		val = DIV_ROUND_CLOSEST((s16)regval, data->config->shunt_div);
+		val = (s16)regval * 1000;
+		val = DIV_ROUND_CLOSEST(val, data->config->shunt_div);
 		break;
 	case INA2XX_BUS_VOLTAGE:
 		val = (regval >> data->config->bus_voltage_shift)
