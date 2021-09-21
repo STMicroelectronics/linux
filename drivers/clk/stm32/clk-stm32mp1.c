@@ -1904,7 +1904,7 @@ static const struct clock_config stm32mp1_clock_cfg[] = {
 	PLL(PLL4, "pll4", ref4_parents, 0, RCC_PLL4CR, RCC_RCK4SELR),
 
 	/* ODF */
-	COMPOSITE(PLL1_P, "pll1_p", PARENT("pll1"), 0,
+	COMPOSITE(PLL1_P, "pll1_p", PARENT("pll1"), CLK_SET_RATE_PARENT,
 		  _GATE(RCC_PLL1CR, 4, 0),
 		  _NO_MUX,
 		  _DIV(RCC_PLL1CFGR2, 0, 7, 0, NULL)),
@@ -1959,7 +1959,7 @@ static const struct clock_config stm32mp1_clock_cfg[] = {
 	    RCC_CPERCKSELR, 0, 2, 0),
 
 	MUX(CK_MPU, "ck_mpu", cpu_src, CLK_OPS_PARENT_ENABLE |
-	     CLK_IS_CRITICAL, RCC_MPCKSELR, 0, 2, 0),
+	    CLK_SET_RATE_PARENT | CLK_IS_CRITICAL, RCC_MPCKSELR, 0, 2, 0),
 
 	COMPOSITE(CK_AXI, "ck_axi", axi_src, CLK_IS_CRITICAL |
 		   CLK_OPS_PARENT_ENABLE,
