@@ -1417,7 +1417,7 @@ _clk_stm32_register_composite(struct device *dev,
 		    NULL, &mp1_gate_clk_ops)\
 
 #define _MGATE_MP1(_mgate)\
-	.gate = &per_gate_cfg[_mgate]
+	&per_gate_cfg[_mgate]
 
 #define GATE_MP1(_id, _name, _parent, _flags, _offset, _bit_idx, _gate_flags)\
 	STM32_GATE(_id, _name, _parent, _flags,\
@@ -1433,7 +1433,7 @@ _clk_stm32_register_composite(struct device *dev,
 
 #define _STM32_DIV(_div_offset, _div_shift, _div_width,\
 		   _div_flags, _div_table, _ops)\
-	.div = &(struct stm32_div_cfg) {\
+	(&(struct stm32_div_cfg) {\
 		&(struct div_cfg) {\
 			.reg_off	= _div_offset,\
 			.shift		= _div_shift,\
@@ -1442,11 +1442,11 @@ _clk_stm32_register_composite(struct device *dev,
 			.table		= _div_table,\
 		},\
 		.ops		= _ops,\
-	}
+	})
 
 #define _DIV(_div_offset, _div_shift, _div_width, _div_flags, _div_table)\
 	_STM32_DIV(_div_offset, _div_shift, _div_width,\
-		   _div_flags, _div_table, NULL)\
+		   _div_flags, _div_table, NULL)
 
 #define _DIV_DUTY_CYCLE(_div_offset, _div_shift, _div_width, _div_flags,\
 			_div_table)\
@@ -1458,7 +1458,7 @@ _clk_stm32_register_composite(struct device *dev,
 		   _div_flags, _div_table, &rtc_div_clk_ops)
 
 #define _STM32_MUX(_offset, _shift, _width, _mux_flags, _mmux, _ops)\
-	.mux = &(struct stm32_mux_cfg) {\
+	(&(struct stm32_mux_cfg) {\
 		&(struct mux_cfg) {\
 			.reg_off	= _offset,\
 			.shift		= _shift,\
@@ -1468,18 +1468,18 @@ _clk_stm32_register_composite(struct device *dev,
 		},\
 		.mmux		= _mmux,\
 		.ops		= _ops,\
-	}
+	})
 
 #define _MUX(_offset, _shift, _width, _mux_flags)\
-	_STM32_MUX(_offset, _shift, _width, _mux_flags, NULL, NULL)\
+	_STM32_MUX(_offset, _shift, _width, _mux_flags, NULL, NULL)
 
-#define _MMUX(_mmux) .mux = &ker_mux_cfg[_mmux]
+#define _MMUX(_mmux)		&ker_mux_cfg[_mmux]
 
-#define PARENT(_parent) ((const char *[]) { _parent})
+#define PARENT(_parent)		((const char *[]) { _parent})
 
-#define _NO_MUX .mux = NULL
-#define _NO_DIV .div = NULL
-#define _NO_GATE .gate = NULL
+#define _NO_MUX			NULL
+#define _NO_DIV			NULL
+#define _NO_GATE		NULL
 
 #define COMPOSITE(_id, _name, _parents, _flags, _gate, _mux, _div)\
 {\
@@ -1489,9 +1489,9 @@ _clk_stm32_register_composite(struct device *dev,
 	.num_parents	= ARRAY_SIZE(_parents),\
 	.flags		= _flags,\
 	.cfg		= &(struct stm32_composite_cfg) {\
-		_gate,\
-		_mux,\
-		_div,\
+		.gate = (_gate),\
+		.mux = (_mux),\
+		.div = (_div),\
 	},\
 	.func		= _clk_stm32_register_composite,\
 }
@@ -1962,16 +1962,16 @@ static const struct clock_config stm32mp1_clock_cfg[] = {
 	    CLK_SET_RATE_PARENT | CLK_IS_CRITICAL, RCC_MPCKSELR, 0, 2, 0),
 
 	COMPOSITE(CK_AXI, "ck_axi", axi_src, CLK_IS_CRITICAL |
-		   CLK_OPS_PARENT_ENABLE,
-		   _NO_GATE,
-		   _MUX(RCC_ASSCKSELR, 0, 2, 0),
-		   _DIV(RCC_AXIDIVR, 0, 3, 0, axi_div_table)),
+		  CLK_OPS_PARENT_ENABLE,
+		  _NO_GATE,
+		  _MUX(RCC_ASSCKSELR, 0, 2, 0),
+		  _DIV(RCC_AXIDIVR, 0, 3, 0, axi_div_table)),
 
 	COMPOSITE(CK_MCU, "ck_mcu", mcu_src, CLK_IS_CRITICAL |
-		   CLK_OPS_PARENT_ENABLE,
-		   _NO_GATE,
-		   _MUX(RCC_MSSCKSELR, 0, 2, 0),
-		   _DIV(RCC_MCUDIVR, 0, 4, 0, mcu_div_table)),
+		  CLK_OPS_PARENT_ENABLE,
+		  _NO_GATE,
+		  _MUX(RCC_MSSCKSELR, 0, 2, 0),
+		  _DIV(RCC_MCUDIVR, 0, 4, 0, mcu_div_table)),
 
 	DIV_TABLE(PCLK1, "pclk1", "ck_mcu", CLK_IGNORE_UNUSED, RCC_APB1DIVR, 0,
 		  3, CLK_DIVIDER_READ_ONLY, apb_div_table),
@@ -2067,8 +2067,7 @@ static const struct clock_config stm32mp1_clock_cfg[] = {
 	PCLK(I2C4, "i2c4", "pclk5", 0, G_I2C4),
 	PCLK(I2C6, "i2c6", "pclk5", 0, G_I2C6),
 	PCLK(USART1, "usart1", "pclk5", 0, G_USART1),
-	PCLK(RTCAPB, "rtcapb", "pclk5", CLK_IGNORE_UNUSED |
-	     CLK_IS_CRITICAL, G_RTCAPB),
+	PCLK(RTCAPB, "rtcapb", "pclk5", CLK_IS_CRITICAL, G_RTCAPB),
 	PCLK(TZC1, "tzc1", "ck_axi", CLK_IGNORE_UNUSED, G_TZC1),
 	PCLK(TZC2, "tzc2", "ck_axi", CLK_IGNORE_UNUSED, G_TZC2),
 	PCLK(TZPC, "tzpc", "pclk5", CLK_IGNORE_UNUSED, G_TZPC),
