@@ -732,7 +732,7 @@ static int clk_mmux_set_parent(struct clk_hw *hw, u8 index)
 
 	for (n = 0; n < clk_mmux->mmux->nbr_clk; n++)
 		if (clk_mmux->mmux->hws[n] != hw)
-			clk_hw_reparent(clk_mmux->mmux->hws[n], hwp);
+			clk_hw_set_parent(clk_mmux->mmux->hws[n], hwp);
 
 	return 0;
 }
