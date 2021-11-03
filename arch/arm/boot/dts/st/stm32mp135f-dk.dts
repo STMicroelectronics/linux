@@ -29,6 +29,16 @@
 
 	chosen {
 		stdout-path = "serial0:115200n8";
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges;
+
+		framebuffer {
+			compatible = "simple-framebuffer";
+			clocks = <&rcc LTDC_PX>, <&rcc TIM1_K>;
+			lcd-supply =  <&scmi_v3v3_sw>;
+			status = "disabled";
+		};
 	};
 
 	clocks {
