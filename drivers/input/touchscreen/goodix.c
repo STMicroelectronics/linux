@@ -191,7 +191,7 @@ int goodix_i2c_read(struct i2c_client *client, u16 reg, u8 *buf, int len)
 		ret = (ret == ARRAY_SIZE(msgs) ? 0 : -EIO);
 
 	if (ret)
-		dev_err(&client->dev, "Error reading %d bytes from 0x%04x: %d\n",
+		dev_dbg(&client->dev, "Error reading %d bytes from 0x%04x: %d\n",
 			len, reg, ret);
 	return ret;
 }
@@ -230,7 +230,7 @@ int goodix_i2c_write(struct i2c_client *client, u16 reg, const u8 *buf, int len)
 	kfree(addr_buf);
 
 	if (ret)
-		dev_err(&client->dev, "Error writing %d bytes to 0x%04x: %d\n",
+		dev_dbg(&client->dev, "Error writing %d bytes to 0x%04x: %d\n",
 			len, reg, ret);
 	return ret;
 }
