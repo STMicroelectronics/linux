@@ -4459,6 +4459,12 @@ static int _dwc2_hcd_resume(struct usb_hcd *hcd)
 		break;
 	case DWC2_POWER_DOWN_PARAM_NONE:
 		/*
+		 * Set HW accessible bit before powering on the controller
+		 * since an interrupt may rise.
+		 */
+		set_bit(HCD_FLAG_HW_ACCESSIBLE, &hcd->flags);
+
+		/*
 		 * If not hibernation nor partial power down are supported,
 		 * port resume is done using the clock gating programming flow.
 		 */
@@ -4474,11 +4480,6 @@ static int _dwc2_hcd_resume(struct usb_hcd *hcd)
 		dwc2_hcd_reinit(hsotg);
 		spin_lock_irqsave(&hsotg->lock, flags);
 
-		/*
-		 * Set HW accessible bit before powering on the controller
-		 * since an interrupt may rise.
-		 */
-		set_bit(HCD_FLAG_HW_ACCESSIBLE, &hcd->flags);
 		break;
 	default:
 		hsotg->lx_state = DWC2_L0;
