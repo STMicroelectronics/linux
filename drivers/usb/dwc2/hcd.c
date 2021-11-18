@@ -4266,9 +4266,11 @@ static int _dwc2_hcd_start(struct usb_hcd *hcd)
 		return 0;	/* why 0 ?? */
 	}
 
+	hprt0 = dwc2_read_hprt0(hsotg);
+
 	dwc2_hcd_reinit(hsotg);
 
-	hprt0 = dwc2_read_hprt0(hsotg);
+	hprt0 ^= dwc2_read_hprt0(hsotg);
 	/* Has vbus power been turned on in dwc2_core_host_init ? */
 	if (hprt0 & HPRT0_PWR) {
 		/* Enable external vbus supply before resuming root hub */
