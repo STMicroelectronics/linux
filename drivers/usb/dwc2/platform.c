@@ -722,8 +722,25 @@ static int __maybe_unused dwc2_suspend(struct device *dev)
 		return 0;
 
 	is_device_mode = dwc2_is_device_mode(dwc2);
-	if (is_device_mode)
+	if (is_device_mode) {
+		/*
+		 * Handle the case when bus has been suspended prior to platform suspend.
+		 * As the lx_state is DWC2_L2, dwc2_hsotg_suspend() is then a no-op.
+		 * So need to exit clock gating first, so the gadget can be suspended and
+		 * resumed later on.
+		 */
+		if (dwc2->in_ppd) {
+			ret = dwc2_exit_partial_power_down(dwc2, 0, true);
+			if (ret)
+				dev_err(dwc2->dev, "exit power_down failed\n");
+		}
+
+		if (dwc2->params.power_down == DWC2_POWER_DOWN_PARAM_NONE &&
+		    dwc2->bus_suspended && !dwc2->params.no_clock_gating)
+			dwc2_gadget_exit_clock_gating(dwc2, 0);
+
 		dwc2_hsotg_suspend(dwc2);
+	}
 
 	dwc2_drd_suspend(dwc2);
 
