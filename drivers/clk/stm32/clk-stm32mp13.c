@@ -1546,6 +1546,7 @@ static struct clk_stm32_clock_data stm32mp13_clock_data = {
 static struct clk_stm32_reset_data stm32mp13_reset_data = {
 	.nr_lines	= STM32MP1_RESET_ID_MASK,
 	.clear_offset	= RCC_CLR_OFFSET,
+	.reset_us	= 2,
 };
 
 static const struct stm32_rcc_match_data stm32mp13_data = {
