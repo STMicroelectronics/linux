@@ -5,5 +5,25 @@
  */
 #include "stm32mp255.dtsi"
 
-/ {
+&rifsc {
+	switch0: ttt-sw@4c000000 {
+		#address-cells  = <1>;
+		#size-cells     = <1>;
+		compatible = "st,stm32-deip";
+		clock-names = "ethsw-bus-clk", "ethsw-clk", "ethsw-ref-clk";
+		clocks = <&rcc CK_BUS_ETHSW>,
+			 <&rcc CK_KER_ETHSW>,
+			 <&rcc CK_KER_ETHSWREF>;
+		st,syscon = <&syscfg 0x3800>;
+		ranges = <0x4c000000 0x4c000000 0x2000000>;
+		access-controllers = <&rifsc 70>;
+		power-domains = <&d1_pd>;
+		status = "disabled";
+
+		deip_sw0: deip-sw@4c000000 {
+			compatible =  "ttt,deip-sw";
+			reg = <0x4c000000 0x2000000>;
+			interrupts = <GIC_SPI 250 IRQ_TYPE_LEVEL_HIGH>;
+		};
+	};
 };
