@@ -583,7 +583,7 @@ static const char * const qspi_src[] = {
 };
 
 static const char * const rng1_src[] = {
-	"ck_csi", "pll4_r", "ck_lse", "ck_lsi"
+	"ck_csi", "pll4_r", "reserved", "ck_lsi"
 };
 
 static const char * const saes_src[] = {
