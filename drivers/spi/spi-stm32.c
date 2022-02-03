@@ -45,6 +45,7 @@
 #define STM32_SPI_IFCR		0x18
 #define STM32_SPI_TXDR		0x20
 #define STM32_SPI_RXDR		0x30
+#define STM32_SPI_UDRDR		0x4C
 #define STM32_SPI_I2SCFGR	0x50
 
 /* STM32_SPI_CR1 bit fields */
@@ -62,6 +63,8 @@
 /* STM32_SPI_CFG1 bit fields */
 #define SPI_CFG1_DSIZE		GENMASK(4, 0)
 #define SPI_CFG1_FTHLV		GENMASK(8, 5)
+#define SPI_CFG1_UDRDET		GENMASK(12, 11)
+#define SPI_CFG1_UDRCFG		GENMASK(10, 9)
 #define SPI_CFG1_RXDMAEN	BIT(14)
 #define SPI_CFG1_TXDMAEN	BIT(15)
 #define SPI_CFG1_MBR		GENMASK(30, 28)
@@ -77,6 +80,7 @@
 #define SPI_CFG2_CPHA		BIT(24)
 #define SPI_CFG2_CPOL		BIT(25)
 #define SPI_CFG2_SSM		BIT(26)
+#define SPI_CFG2_SSOE		BIT(29)
 #define SPI_CFG2_AFCNTR		BIT(31)
 
 /* STM32_SPI_IER bit fields */
@@ -85,6 +89,7 @@
 #define SPI_IER_DXPIE		BIT(2)
 #define SPI_IER_EOTIE		BIT(3)
 #define SPI_IER_TXTFIE		BIT(4)
+#define SPI_IER_UDRIE		BIT(5)
 #define SPI_IER_OVRIE		BIT(6)
 #define SPI_IER_ALL		GENMASK(10, 0)
 
@@ -94,6 +99,7 @@
 #define SPI_SR_EOT		BIT(3)
 #define SPI_SR_TXTF		BIT(4)
 #define SPI_SR_OVR		BIT(6)
+#define SPI_SR_UDR		BIT(5)
 #define SPI_SR_SUSP		BIT(11)
 #define SPI_SR_RXPLVL		GENMASK(14, 13)
 #define SPI_SR_RXWNE		BIT(15)
@@ -113,6 +119,7 @@
 #define SPI_SIMPLEX_TX		1
 #define SPI_SIMPLEX_RX		2
 #define SPI_HALF_DUPLEX		3
+#define SPI_UDRDET_MODE		2
 
 /**
  * struct stm32_spi - private data of the SPI controller
@@ -169,6 +176,10 @@ struct stm32_spi {
 	dma_addr_t phys_addr;
 	struct completion xfer_completion;
 	int xfer_status;
+
+	/* Slave mode */
+	bool slave_mode;
+	bool slave_aborted;
 };
 
 static inline void stm32_spi_set_bits(struct stm32_spi *spi,
@@ -532,6 +543,14 @@ static irqreturn_t stm32_spi_irq(int irq, void *dev_id)
 		ifcr |= SPI_SR_OVR;
 	}
 
+	if (mask & SPI_SR_UDR) {
+		dev_err(spi->dev, "Underrun: TX data empty\n");
+		spi->xfer_status = -EIO;
+		end = true;
+		if(spi->slave_mode)
+			ifcr |= SPI_SR_UDR;
+	}
+
 	if (mask & SPI_SR_TXTF)
 		ifcr |= SPI_SR_TXTF;
 
@@ -570,6 +589,10 @@ static irqreturn_t stm32_spi_irq(int irq, void *dev_id)
 static int stm32_spi_setup(struct spi_device *spi_dev)
 {
 	int ret = 0;
+	struct stm32_spi *spi = spi_master_get_devdata(spi_dev->master);
+
+	if(spi->slave_mode)
+		return 0;
 
 	if (!gpio_is_valid(spi_dev->cs_gpio))
 		return 0;
@@ -726,15 +749,23 @@ static void stm32_spi_transfer_one_irq(struct stm32_spi *spi)
 	/* Enable the interrupts relative to the end of transfer */
 	ier |= SPI_IER_EOTIE | SPI_IER_TXTFIE |	SPI_IER_OVRIE;
 
+	if(spi->slave_mode)
+		ier |= SPI_IER_UDRIE;
+
 	spin_lock_irqsave(&spi->lock, flags);
 
 	stm32_spi_enable(spi);
 
-	/* Be sure to have data in fifo before starting data transfer */
-	if (spi->tx_buf)
-		stm32_spi_write_txfifo(spi);
+	if(!spi->slave_mode){
+		/* Be sure to have data in fifo before starting data transfer */
+		if (spi->tx_buf)
+			stm32_spi_write_txfifo(spi);
 
-	stm32_spi_set_bits(spi, STM32_SPI_CR1, SPI_CR1_CSTART);
+		stm32_spi_set_bits(spi, STM32_SPI_CR1, SPI_CR1_CSTART);
+	} else {
+		writeb_relaxed(0xee, spi->base + STM32_SPI_UDRDR);
+		spi->slave_aborted = false;
+	}
 
 	writel_relaxed(ier, spi->base + STM32_SPI_IER);
 
@@ -877,17 +908,22 @@ static int stm32_spi_transfer_one_setup(struct stm32_spi *spi,
 	cfg1_clrb |= SPI_CFG1_FTHLV;
 	cfg1_setb |= FIELD_PREP(SPI_CFG1_FTHLV, fthlv);
 
-	/* Update spi->cur_speed with real clock speed */
-	mbr = stm32_spi_prepare_mbr(spi, transfer->speed_hz);
-	if (mbr < 0) {
-		ret = mbr;
-		goto out;
+	if(!spi->slave_mode){
+		/* Update spi->cur_speed with real clock speed */
+		mbr = stm32_spi_prepare_mbr(spi, transfer->speed_hz);
+		if (mbr < 0) {
+			ret = mbr;
+			goto out;
+		}
+
+		transfer->speed_hz = spi->cur_speed;
+
+		cfg1_clrb |= SPI_CFG1_MBR;
+		cfg1_setb |= FIELD_PREP(SPI_CFG1_MBR, (u32)mbr);
+	} else {
+		cfg1_clrb |= SPI_CFG1_UDRDET;
+		cfg1_setb |= FIELD_PREP(SPI_CFG1_UDRDET, (u32)SPI_UDRDET_MODE);
 	}
-
-	transfer->speed_hz = spi->cur_speed;
-
-	cfg1_clrb |= SPI_CFG1_MBR;
-	cfg1_setb |= FIELD_PREP(SPI_CFG1_MBR, (u32)mbr);
 
 	writel_relaxed((readl_relaxed(spi->base + STM32_SPI_CFG1) &
 			~cfg1_clrb) | cfg1_setb,
@@ -1011,23 +1047,37 @@ static int stm32_spi_transfer_one(struct spi_master *master,
 	else
 		stm32_spi_transfer_one_irq(spi);
 
-	/* Wait for transfer to complete */
-	xfer_time = spi->cur_xferlen * 8 * MSEC_PER_SEC / spi->cur_speed;
-	midi_delay_ns = spi->cur_xferlen * 8 / spi->cur_bpw * spi->cur_midi;
-	xfer_time += DIV_ROUND_UP(midi_delay_ns, NSEC_PER_MSEC);
-	xfer_time = max(2 * xfer_time, 100U);
-	timeout = msecs_to_jiffies(xfer_time);
+	if (!spi->slave_mode){
+		/* Wait for transfer to complete */
+		xfer_time = spi->cur_xferlen * 8 * MSEC_PER_SEC / spi->cur_speed;
+		midi_delay_ns = spi->cur_xferlen * 8 / spi->cur_bpw * spi->cur_midi;
+		xfer_time += DIV_ROUND_UP(midi_delay_ns, NSEC_PER_MSEC);
+		xfer_time = max(2 * xfer_time, 100U);
+		timeout = msecs_to_jiffies(xfer_time);
 
-	timeout = wait_for_completion_timeout(&spi->xfer_completion, timeout);
-	if (timeout && spi->cur_usedma)
-		timeout = wait_for_completion_timeout(&spi->dma_completion,
-						      timeout);
+		timeout = wait_for_completion_timeout(&spi->xfer_completion, timeout);
+		if (timeout && spi->cur_usedma)
+			timeout = wait_for_completion_timeout(&spi->dma_completion,
+								timeout);
 
-	if (!timeout) {
-		dev_err(spi->dev, "SPI transfer timeout (%u ms)\n", xfer_time);
-		spi->xfer_status = -ETIMEDOUT;
+		if (!timeout) {
+			dev_err(spi->dev, "SPI transfer timeout (%u ms)\n", xfer_time);
+			spi->xfer_status = -ETIMEDOUT;
+		}
+	} else {
+		if (wait_for_completion_interruptible(&spi->xfer_completion)
+			|| spi->slave_aborted) {
+			dev_err(spi->dev, "xfer interrupted\n");
+			spi->xfer_status = -EINTR;
+		} else {
+			if (spi->cur_usedma){
+				if(wait_for_completion_interruptible(&spi->dma_completion)){
+					dev_err(spi->dev, "dma interrupted\n");
+					spi->xfer_status = -EINTR;
+				}
+			}
+		}
 	}
-
 	stm32_spi_disable(spi);
 
 finalize:
@@ -1066,26 +1116,50 @@ static int stm32_spi_config(struct stm32_spi *spi)
 	/* Ensure I2SMOD bit is kept cleared */
 	stm32_spi_clr_bits(spi, STM32_SPI_I2SCFGR, SPI_I2SCFGR_I2SMOD);
 
-	/*
-	 * - SS input value high
-	 * - transmitter half duplex direction
-	 * - automatic communication suspend when RX-Fifo is full
-	 */
-	stm32_spi_set_bits(spi, STM32_SPI_CR1, SPI_CR1_SSI |
-					       SPI_CR1_HDDIR |
-					       SPI_CR1_MASRX);
+	if(spi->slave_mode){
+		/*
+		* - SS input value high
+		*/
+		stm32_spi_set_bits(spi, STM32_SPI_CR1, SPI_CR1_SSI);
 
-	/*
-	 * - Set the master mode (default Motorola mode)
-	 * - Consider 1 master/n slaves configuration and
-	 *   SS input value is determined by the SSI bit
-	 * - keep control of all associated GPIOs
-	 */
-	stm32_spi_set_bits(spi, STM32_SPI_CFG2, SPI_CFG2_MASTER |
-						SPI_CFG2_SSM |
-						SPI_CFG2_AFCNTR);
+		/*
+		* - Set the slave mode (default Motorola mode)
+		* - Consider 1 master/n slaves configuration and
+		*   SS input value is determined by the NSS pin
+		* - keep control of all associated GPIOs
+		*/
+		stm32_spi_set_bits(spi, STM32_SPI_CFG2,
+							SPI_CFG2_AFCNTR);
+	} else {
+		/*
+		* - SS input value high
+		* - transmitter half duplex direction
+		* - automatic communication suspend when RX-Fifo is full
+		*/
+		stm32_spi_set_bits(spi, STM32_SPI_CR1, SPI_CR1_SSI |
+							SPI_CR1_HDDIR |
+							SPI_CR1_MASRX);
 
+		/*
+		* - Set the master mode (default Motorola mode)
+		* - Consider 1 master/n slaves configuration and
+		*   SS input value is determined by the SSI bit
+		* - keep control of all associated GPIOs
+		*/
+		stm32_spi_set_bits(spi, STM32_SPI_CFG2, SPI_CFG2_MASTER |
+							SPI_CFG2_SSM | SPI_CFG2_SSOE |
+							SPI_CFG2_AFCNTR);
+	}
 	spin_unlock_irqrestore(&spi->lock, flags);
+
+	return 0;
+}
+
+static int stm32_spi_slave_abort(struct spi_master *master)
+{
+	struct stm32_spi *spi = spi_master_get_devdata(master);
+	spi->slave_aborted = true;
+	complete(&spi->xfer_completion);
 
 	return 0;
 }
@@ -1098,12 +1172,24 @@ MODULE_DEVICE_TABLE(of, stm32_spi_of_match);
 
 static int stm32_spi_probe(struct platform_device *pdev)
 {
+	struct device_node *np = pdev->dev.of_node;
 	struct spi_master *master;
 	struct stm32_spi *spi;
 	struct resource *res;
 	int i, ret, num_cs, cs_gpio;
+	bool slave_mode;
 
-	master = spi_alloc_master(&pdev->dev, sizeof(struct stm32_spi));
+	if (!np) {
+		dev_err(&pdev->dev, "can't get the platform data\n");
+		return -EINVAL;
+	}
+
+	slave_mode = of_property_read_bool(np, "spi-slave");
+	dev_info(&pdev->dev, slave_mode ? "spi slave mode .\n" : "spi master mode.\n");
+	if (slave_mode)
+		master = spi_alloc_slave(&pdev->dev, sizeof(struct stm32_spi));
+	else
+		master = spi_alloc_master(&pdev->dev, sizeof(struct stm32_spi));
 	if (!master) {
 		dev_err(&pdev->dev, "spi master allocation failed\n");
 		return -ENOMEM;
@@ -1113,6 +1199,7 @@ static int stm32_spi_probe(struct platform_device *pdev)
 	spi = spi_master_get_devdata(master);
 	spi->dev = &pdev->dev;
 	spi->master = master;
+	spi->slave_mode = slave_mode;
 	spin_lock_init(&spi->lock);
 	init_completion(&spi->xfer_completion);
 	init_completion(&spi->dma_completion);
@@ -1188,6 +1275,7 @@ static int stm32_spi_probe(struct platform_device *pdev)
 	master->prepare_message = stm32_spi_prepare_msg;
 	master->transfer_one = stm32_spi_transfer_one;
 	master->unprepare_message = stm32_spi_unprepare_msg;
+	master->slave_abort = stm32_spi_slave_abort;
 
 	spi->dma_tx = dma_request_slave_channel(spi->dev, "tx");
 	if (!spi->dma_tx)
@@ -1208,21 +1296,22 @@ static int stm32_spi_probe(struct platform_device *pdev)
 	pm_runtime_enable(&pdev->dev);
 
 	num_cs = of_gpio_named_count(pdev->dev.of_node, "cs-gpios");
-
-	for (i = 0; i < num_cs; i++) {
-		cs_gpio = of_get_named_gpio(pdev->dev.of_node, "cs-gpios", i);
-		if (cs_gpio == -EPROBE_DEFER) {
-			ret = -EPROBE_DEFER;
-			goto err_dma_release;
-		}
-
-		if (gpio_is_valid(cs_gpio)) {
-			ret = devm_gpio_request(&pdev->dev, cs_gpio,
-						DRIVER_NAME);
-			if (ret) {
-				dev_err(&pdev->dev, "can't get CS gpio %i\n",
-					cs_gpio);
+	if(!spi->slave_mode){
+		for (i = 0; i < num_cs; i++) {
+			cs_gpio = of_get_named_gpio(pdev->dev.of_node, "cs-gpios", i);
+			if (cs_gpio == -EPROBE_DEFER) {
+				ret = -EPROBE_DEFER;
 				goto err_dma_release;
+			}
+
+			if (gpio_is_valid(cs_gpio)) {
+				ret = devm_gpio_request(&pdev->dev, cs_gpio,
+							DRIVER_NAME);
+				if (ret) {
+					dev_err(&pdev->dev, "can't get CS gpio %i\n",
+						cs_gpio);
+					goto err_dma_release;
+				}
 			}
 		}
 	}

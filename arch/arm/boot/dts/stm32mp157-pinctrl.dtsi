@@ -1236,6 +1236,26 @@
 				};
 			};
 
+			spi5_slave_pins_a: spi5-slave-0 {
+				pins1 {
+					pinmux = <STM32_PINMUX('F', 7, AF5)>, /* SPI5_SCK */
+						 <STM32_PINMUX('F', 9, AF5)>; /* SPI5_MOSI */
+					bias-disable;
+					drive-push-pull;
+					slew-rate = <1>;
+				};
+
+				pins2 {
+					pinmux = <STM32_PINMUX('F', 8, AF5)>; /* SPI5_MISO */
+					bias-disable;
+				};
+
+				pins3 {
+					pinmux = <STM32_PINMUX('F', 6, AF5)>; /* SPI5_SS */
+					bias-disable;
+				};
+			};
+
 			stusb1600_pins_a: stusb1600-0 {
 				pins {
 					pinmux = <STM32_PINMUX('I', 11, ANALOG)>;
