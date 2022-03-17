@@ -44,8 +44,8 @@ static int dwc2_ovr_avalid(struct dwc2_hsotg *hsotg, bool valid)
 	u32 gotgctl = dwc2_readl(hsotg, GOTGCTL);
 
 	/* Check if A-Session is already in the right state */
-	if ((valid && (gotgctl & GOTGCTL_ASESVLD)) ||
-	    (!valid && !(gotgctl & GOTGCTL_ASESVLD)))
+	if ((valid && (gotgctl & GOTGCTL_AVALOVAL) && (gotgctl & GOTGCTL_VBVALOVAL)) ||
+	    (!valid && !(gotgctl & (GOTGCTL_AVALOVAL | GOTGCTL_VBVALOVAL))))
 		return -EALREADY;
 
 	/* Always enable overrides to handle the resume case */
@@ -66,8 +66,8 @@ static int dwc2_ovr_bvalid(struct dwc2_hsotg *hsotg, bool valid)
 	u32 gotgctl = dwc2_readl(hsotg, GOTGCTL);
 
 	/* Check if B-Session is already in the right state */
-	if ((valid && (gotgctl & GOTGCTL_BSESVLD)) ||
-	    (!valid && !(gotgctl & GOTGCTL_BSESVLD)))
+	if ((valid && (gotgctl & GOTGCTL_BVALOVAL) && (gotgctl & GOTGCTL_VBVALOVAL)) ||
+	    (!valid && !(gotgctl & (GOTGCTL_BVALOVAL | GOTGCTL_VBVALOVAL))))
 		return -EALREADY;
 
 	/* Always enable overrides to handle the resume case */
