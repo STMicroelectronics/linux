@@ -88,14 +88,11 @@
 		};
 	};
 
-	ethernet0_rgmii_pins: rgmii-0 {
+	ethernet0_rmii_pins: rmii-0 {
 		pins1 {
-			pinmux = <STM32_PINMUX('G', 4, AF11)>, /* ETH_RGMII_GTX_CLK */
-				 <STM32_PINMUX('B', 12, AF11)>, /* ETH_RGMII_TXD0 */
-				 <STM32_PINMUX('G', 14, AF11)>, /* ETH_RGMII_TXD1 */
-				 <STM32_PINMUX('C', 2, AF11)>, /* ETH_RGMII_TXD2 */
-				 <STM32_PINMUX('E', 2, AF11)>, /* ETH_RGMII_TXD3 */
-				 <STM32_PINMUX('G', 11, AF11)>, /* ETH_RGMII_TX_CTL */
+			pinmux = <STM32_PINMUX('B', 12, AF11)>, /* ETH_RMII_TXD0 */
+				 <STM32_PINMUX('G', 14, AF11)>, /* ETH_RMII_TXD1 */
+				 <STM32_PINMUX('G', 11, AF11)>, /* ETH_RMII_TX_EN */
 				 <STM32_PINMUX('C', 1, AF11)>; /* ETH_MDC */
 			bias-disable;
 			drive-push-pull;
@@ -110,12 +107,10 @@
 		};
 
 		pins3 {
-			pinmux = <STM32_PINMUX('C', 4, AF11)>, /* ETH_RGMII_RXD0 */
-				 <STM32_PINMUX('C', 5, AF11)>, /* ETH_RGMII_RXD1 */
-				 <STM32_PINMUX('H', 6, AF11)>, /* ETH_RGMII_RXD2 */
-				 <STM32_PINMUX('H', 7, AF11)>, /* ETH_RGMII_RXD3 */
-				 <STM32_PINMUX('A', 1, AF11)>, /* ETH_RGMII_RX_CLK */
-				 <STM32_PINMUX('A', 7, AF11)>; /* ETH_RGMII_RX_CTL */
+			pinmux = <STM32_PINMUX('C', 4, AF11)>, /* ETH_RMII_RXD0 */
+				 <STM32_PINMUX('C', 5, AF11)>, /* ETH_RMII_RXD1 */
+				 <STM32_PINMUX('A', 1, AF11)>, /* ETH_RMII_REF_CLK */
+				 <STM32_PINMUX('A', 7, AF11)>; /* ETH_RMII_CRS_DV */
 			bias-disable;
 		};
 	};
@@ -156,14 +151,11 @@
 
 &ethernet0 {
 	status = "okay";
-	pinctrl-0 = <&ethernet0_rgmii_pins>;
+	pinctrl-0 = <&ethernet0_rmii_pins>;
 	pinctrl-names = "default";
-	phy-mode = "rgmii-id";
+	phy-mode = "rmii";
 	phy-handle = <&phy0>;
-	st,eth-clk-sel = <1>;
-	max-speed = <1000>;
-	clock-names = "stmmaceth", "mac-clk-tx", "mac-clk-rx", "eth-ck", "syscfg-clk", "ethstp";
-	clocks = <&rcc ETHMAC>, <&rcc ETHTX>, <&rcc ETHRX>, <&rcc ETHCK_K>, <&rcc SYSCFG>, <&rcc ETHSTP>;
+	max-speed = <100>;
 
 	mdio0 {
 		#address-cells = <1>;
@@ -171,10 +163,6 @@
 		compatible = "snps,dwmac-mdio";
 		phy0: ethernet-phy@0 {
 			reg = <0>;
-			ti,rx-internal-delay = <DP83867_RGMIIDCTL_3_00_NS>;
-			ti,tx-internal-delay = <DP83867_RGMIIDCTL_2_75_NS>;
-			ti,fifo-depth = <DP83867_PHYCR_FIFO_DEPTH_4_B_NIB>;
-			ti,dp83867-rxctrl-strap-quirk;
 		};
 	};
 };
