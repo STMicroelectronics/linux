@@ -283,7 +283,7 @@
 				<0>,
 				<0>,
 				<&intc GIC_SPI 143 IRQ_TYPE_LEVEL_HIGH>,
-				<0>,
+				<&intc GIC_SPI 94  IRQ_TYPE_LEVEL_HIGH>,
 				<&intc GIC_SPI 62  IRQ_TYPE_LEVEL_HIGH>,	/* EXTI_70 */
 				<0>,
 				<0>,
