@@ -425,12 +425,21 @@ static int stm32_qspi_send(struct spi_mem *mem, const struct spi_mem_op *op)
 	 */
 	if (err || err_poll_status || qspi->fmode == CCR_FMODE_MM)
 		goto abort;
+	
+	if (qspi->fmode != CCR_FMODE_APM) {
+		/* For CCR_FMODE_APM command and data transfer is triggered in stm32_qspi_wait_poll_status().
+		 * All recieved data (polled data) is then located in fifo and read out in stm32_qspi_tx().
+		 * stm32_qspi_wait_cmd() requires TCF/TEF to be set to finish. Because APM mode doesn't
+		 * provide TCF/TEF this call will timeout
+		 */
+		/* wait end of tx in indirect mode */
+		err = stm32_qspi_wait_cmd(qspi, op);
+		if (err)
+			goto abort;
+	}
 
-	/* wait end of tx in indirect mode */
-	err = stm32_qspi_wait_cmd(qspi, op);
-	if (err)
-		goto abort;
-
+	/* Clear TCF/TEF flags. Otherwise these flags may trigger wrong code paths in the next op */
+	writel_relaxed(FCR_CTCF | FCR_CTEF, qspi->io_base + QSPI_FCR);
 	return 0;
 
 abort:
