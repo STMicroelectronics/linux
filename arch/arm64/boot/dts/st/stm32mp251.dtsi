@@ -261,6 +261,28 @@
 		arm,no-tick-in-suspend;
 	};
 
+	usb2_phy1: usb2-phy1 {
+		compatible      = "st,stm32mp25-usb2phy";
+		#phy-cells      = <0>;
+		#clock-cells    = <1>;
+		st,syscfg       = <&syscfg 0x2400>;
+		clocks          = <&rcc CK_KER_USB2PHY1>, <&rcc CK_KER_USB2PHY1STP>;
+		clock-names     = "core", "stp";
+		resets          = <&rcc USB2PHY1_R>;
+		status          = "disabled";
+	};
+
+	usb2_phy2: usb2-phy2 {
+		compatible      = "st,stm32mp25-usb2phy";
+		#phy-cells      = <0>;
+		#clock-cells    = <1>;
+		st,syscfg       = <&syscfg 0x2800>;
+		clocks          = <&rcc CK_KER_USB2PHY2EN>;
+		clock-names     = "core";
+		resets          = <&rcc USB2PHY2_R>;
+		status          = "disabled";
+	};
+
 	soc@0 {
 		compatible = "simple-bus";
 		#address-cells = <1>;
