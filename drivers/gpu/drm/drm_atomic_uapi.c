@@ -750,6 +750,8 @@ static int drm_atomic_connector_set_property(struct drm_connector *connector,
 		state->content_type = val;
 	} else if (property == connector->scaling_mode_property) {
 		state->scaling_mode = val;
+	} else if (property == connector->dithering_property) {
+		state->dithering = val;
 	} else if (property == config->content_protection_property) {
 		if (val == DRM_MODE_CONTENT_PROTECTION_ENABLED) {
 			drm_dbg_kms(dev, "only drivers can set CP Enabled\n");
@@ -847,6 +849,8 @@ drm_atomic_connector_get_property(struct drm_connector *connector,
 		*val = state->colorspace;
 	} else if (property == connector->scaling_mode_property) {
 		*val = state->scaling_mode;
+	} else if (property == connector->dithering_property) {
+		*val = state->dithering;
 	} else if (property == config->hdr_output_metadata_property) {
 		*val = state->hdr_output_metadata ?
 			state->hdr_output_metadata->base.id : 0;

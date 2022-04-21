@@ -1095,6 +1095,12 @@ struct drm_connector_state {
 	unsigned int scaling_mode;
 
 	/**
+	 * @dithering: Connector property to control the
+	 * dithering.
+	 */
+	unsigned int dithering;
+
+	/**
 	 * @content_protection: Connector property to request content
 	 * protection. This is most commonly used for HDCP.
 	 */
@@ -2044,6 +2050,12 @@ struct drm_connector {
 	struct drm_property *scaling_mode_property;
 
 	/**
+	 * @dithering_property: Optional atomic property to control the
+	 * dithering.
+	 */
+	struct drm_property *dithering_property;
+
+	/**
 	 * @vrr_capable_property: Optional property to help userspace
 	 * query hardware support for variable refresh rate on a connector.
 	 * connector. Drivers can add the property to a connector by
@@ -2446,6 +2458,8 @@ int drm_mode_create_scaling_mode_property(struct drm_device *dev);
 int drm_connector_attach_content_type_property(struct drm_connector *dev);
 int drm_connector_attach_scaling_mode_property(struct drm_connector *connector,
 					       u32 scaling_mode_mask);
+int drm_connector_attach_dithering_property(struct drm_connector *connector,
+					    u32 dithering_mask);
 int drm_connector_attach_vrr_capable_property(
 		struct drm_connector *connector);
 int drm_connector_attach_broadcast_rgb_property(struct drm_connector *connector);
