@@ -951,8 +951,11 @@ static void ltdc_crtc_atomic_enable(struct drm_crtc *crtc,
 	if (bus_flags & DRM_BUS_FLAG_PIXDATA_DRIVE_NEGEDGE)
 		val |= GCR_PCPOL;
 
+	if (connector && connector->state->dithering == DRM_MODE_DITHERING_ON)
+		val |= GCR_DEN;
+
 	regmap_update_bits(ldev->regmap, LTDC_GCR,
-			   GCR_HSPOL | GCR_VSPOL | GCR_DEPOL | GCR_PCPOL, val);
+			   GCR_HSPOL | GCR_VSPOL | GCR_DEPOL | GCR_PCPOL | GCR_DEN, val);
 
 	/* Set Synchronization size */
 	val = (hsync << 16) | vsync;
@@ -1979,6 +1982,16 @@ static int ltdc_crtc_init(struct drm_device *ddev, struct drm_crtc *crtc)
 	struct drm_plane *primary, *overlay;
 	unsigned int i;
 	int ret;
+	struct drm_connector *connector = NULL;
+	struct drm_connector_list_iter iter;
+
+	/* Add the dithering property to all connectors */
+	drm_connector_list_iter_begin(ddev, &iter);
+	drm_for_each_connector_iter(connector, &iter)
+		drm_connector_attach_dithering_property(connector,
+							BIT(DRM_MODE_DITHERING_OFF) |
+							BIT(DRM_MODE_DITHERING_ON));
+	drm_connector_list_iter_end(&iter);
 
 	primary = ltdc_plane_create(ddev, DRM_PLANE_TYPE_PRIMARY, 0);
 	if (!primary) {
