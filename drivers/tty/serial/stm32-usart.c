@@ -1017,11 +1017,12 @@ static irqreturn_t stm32_usart_interrupt(int irq, void *ptr)
 	struct tty_port *tport = &port->state->port;
 	struct stm32_port *stm32_port = to_stm32_port(port);
 	const struct stm32_usart_offsets *ofs = &stm32_port->info->ofs;
-	u32 sr, cr3;
+	u32 sr, cr1, cr3;
 	unsigned int size;
 	irqreturn_t ret = IRQ_NONE;
 
 	sr = readl_relaxed(port->membase + ofs->isr);
+	cr1 = readl_relaxed(port->membase + ofs->cr1);
 	cr3 = readl_relaxed(port->membase + ofs->cr3);
 
 	if (!stm32_port->hw_flow_control &&
@@ -1038,13 +1039,10 @@ static irqreturn_t stm32_usart_interrupt(int irq, void *ptr)
 		ret = IRQ_HANDLED;
 	}
 
-	if ((sr & USART_SR_WUF) && ofs->icr != UNDEF_REG) {
-		/* Clear wake up flag and disable wake up interrupt */
-		writel_relaxed(USART_ICR_WUCF,
-			       port->membase + ofs->icr);
-		stm32_usart_clr_bits(port, ofs->cr3, USART_CR3_WUFIE);
-		if (irqd_is_wakeup_set(irq_get_irq_data(port->irq)))
-			pm_wakeup_event(tport->tty->dev, 0);
+	if (irqd_is_wakeup_set(irq_get_irq_data(port->irq)) &&
+	    (cr1 & USART_CR1_RXNEIE) && (sr & USART_SR_RXNE)) {
+		stm32_usart_clr_bits(port, ofs->cr1, USART_CR1_RXNEIE);
+		pm_wakeup_event(tport->tty->dev, 0);
 		ret = IRQ_HANDLED;
 	}
 
@@ -1563,12 +1561,6 @@ static void stm32_usart_set_termios(struct uart_port *port,
 	} else {
 		cr3 &= ~(USART_CR3_DEM | USART_CR3_DEP);
 		cr1 &= ~(USART_CR1_DEDT_MASK | USART_CR1_DEAT_MASK);
-	}
-
-	/* Configure wake up from low power on start bit detection */
-	if (stm32_port->wakeup_src) {
-		cr3 &= ~USART_CR3_WUS_MASK;
-		cr3 |= USART_CR3_WUS_START_BIT;
 	}
 
 	writel_relaxed(cr3, port->membase + ofs->cr3);
@@ -2302,12 +2294,14 @@ static int __maybe_unused stm32_usart_serial_en_wakeup(struct uart_port *port,
 		return 0;
 
 	/*
-	 * Enable low-power wake-up and wake-up irq if argument is set to
-	 * "enable", disable low-power wake-up and wake-up irq otherwise
+	 * Enable low-power wake-up and irq on any character received if argument
+	 * is set to "enable", disable low-power wake-up and irq otherwise.
 	 */
 	if (enable) {
-		stm32_usart_set_bits(port, ofs->cr1, USART_CR1_UESM);
-		stm32_usart_set_bits(port, ofs->cr3, USART_CR3_WUFIE);
+		stm32_usart_clr_bits(port, ofs->cr1, stm32_port->cr1_irq);
+		if (stm32_port->cr3_irq)
+			stm32_usart_clr_bits(port, ofs->cr3, stm32_port->cr3_irq);
+		stm32_usart_set_bits(port, ofs->cr1, USART_CR1_UESM | USART_CR1_RXNEIE);
 		mctrl_gpio_enable_irq_wake(stm32_port->gpios);
 
 		/*
@@ -2335,8 +2329,10 @@ static int __maybe_unused stm32_usart_serial_en_wakeup(struct uart_port *port,
 				return ret;
 		}
 		mctrl_gpio_disable_irq_wake(stm32_port->gpios);
-		stm32_usart_clr_bits(port, ofs->cr1, USART_CR1_UESM);
-		stm32_usart_clr_bits(port, ofs->cr3, USART_CR3_WUFIE);
+		stm32_usart_clr_bits(port, ofs->cr1, USART_CR1_UESM | USART_CR1_RXNEIE);
+		stm32_usart_set_bits(port, ofs->cr1, stm32_port->cr1_irq);
+		if (stm32_port->cr3_irq)
+			stm32_usart_set_bits(port, ofs->cr3, stm32_port->cr3_irq);
 	}
 
 	return 0;
