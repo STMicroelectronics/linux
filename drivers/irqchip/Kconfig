@@ -823,4 +823,11 @@ config SUNPLUS_SP7021_INTC
 	  chained controller, routing all interrupt source in P-Chip to
 	  the primary controller on C-Chip.
 
+config RPMSG_IRQ
+	tristate "RPMSG irq driver"
+	depends on RPMSG
+	select IRQ_DOMAIN
+	help
+	  Support for the RPMSG Interrupt Controller.
+
 endmenu
