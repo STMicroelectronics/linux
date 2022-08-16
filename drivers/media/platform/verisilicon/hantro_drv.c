@@ -185,6 +185,9 @@ static void device_run(void *priv)
 
 	v4l2_m2m_buf_copy_metadata(src, dst, true);
 
+	if (ctx->codec_ops->reset)
+		ctx->codec_ops->reset(ctx);
+
 	if (ctx->codec_ops->run(ctx))
 		goto err_cancel_job;
 
