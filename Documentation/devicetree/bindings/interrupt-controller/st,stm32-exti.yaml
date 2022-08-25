@@ -42,6 +42,8 @@ properties:
     description:
       Interrupts references to primary interrupt controller
 
+  wakeup-parent: true
+
 required:
   - "#interrupt-cells"
   - compatible
@@ -97,9 +99,11 @@ examples:
         interrupt-controller;
         #interrupt-cells = <2>;
         reg = <0x5000d000 0x400>;
+        wakeup-parent = <&pwr_irq>;
         interrupts-extended =
             <&intc GIC_SPI 6 IRQ_TYPE_LEVEL_HIGH>,
             <0>,
+            <&pwr_irq 0 IRQ_TYPE_EDGE_FALLING 0>,
             <&intc GIC_SPI 9 IRQ_TYPE_LEVEL_HIGH>;
     };
 
