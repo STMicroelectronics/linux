@@ -390,7 +390,7 @@ static __maybe_unused int mdio_bus_phy_resume(struct device *dev)
 	 * MAC managed PM, but we are not.
 	 */
 	WARN_ON(phydev->state != PHY_HALTED && phydev->state != PHY_READY &&
-		phydev->state != PHY_UP);
+		phydev->state != PHY_UP && phydev->state != PHY_NOLINK);
 
 	ret = phy_init_hw(phydev);
 	if (ret < 0)
