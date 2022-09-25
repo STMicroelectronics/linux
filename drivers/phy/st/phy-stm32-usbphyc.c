@@ -442,7 +442,6 @@ static int stm32_usbphyc_clk48_register(struct stm32_usbphyc *usbphyc)
 
 	init.name = "ck_usbo_48m";
 	init.ops = &usbphyc_clk48_ops;
-	init.flags = CLK_IGNORE_UNUSED | CLK_IS_CRITICAL;
 
 	usbphyc->clk48_hw.init = &init;
 

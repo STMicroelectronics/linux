@@ -82,7 +82,7 @@ static const struct drm_display_mode default_mode = {
 	.vsync_end = 800 + 15 + 10,
 	.vtotal = 800 + 15 + 10 + 14,
 	.vrefresh = 50,
-	.flags = 0,
+	.flags = DRM_MODE_FLAG_NHSYNC | DRM_MODE_FLAG_NVSYNC,
 	.width_mm = 52,
 	.height_mm = 86,
 };
@@ -354,6 +354,8 @@ static int otm8009a_get_modes(struct drm_panel *panel)
 
 	panel->connector->display_info.width_mm = mode->width_mm;
 	panel->connector->display_info.height_mm = mode->height_mm;
+	panel->connector->display_info.bus_flags = DRM_BUS_FLAG_DE_HIGH |
+						   DRM_BUS_FLAG_PIXDATA_DRIVE_POSEDGE;
 
 	return 1;
 }

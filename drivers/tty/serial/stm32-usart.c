@@ -834,11 +834,9 @@ static void stm32_usart_stop_rx(struct uart_port *port)
 	struct stm32_port *stm32_port = to_stm32_port(port);
 	struct stm32_usart_offsets *ofs = &stm32_port->info->ofs;
 
-	/* Disable DMA request line and RX DMA. */
-	if (stm32_port->rx_ch) {
+	/* Disable DMA request line. */
+	if (stm32_port->rx_ch)
 		stm32_usart_clr_bits(port, ofs->cr3, USART_CR3_DMAR);
-		dmaengine_terminate_async(stm32_port->rx_ch);
-	}
 
 	stm32_usart_clr_bits(port, ofs->cr1, stm32_port->cr1_irq);
 	if (stm32_port->cr3_irq)
@@ -955,6 +953,10 @@ static void stm32_usart_shutdown(struct uart_port *port)
 	/* Send the TC error message only when ISR_TC is not set */
 	if (ret)
 		dev_err(port->dev, "Transmission is not complete\n");
+
+	/* Disable RX DMA. */
+	if (stm32_port->rx_ch)
+		dmaengine_terminate_async(stm32_port->rx_ch);
 
 	/* flush RX & TX FIFO */
 	if (ofs->rqr != UNDEF_REG)

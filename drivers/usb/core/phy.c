@@ -212,34 +212,36 @@ void usb_phy_roothub_power_off(struct usb_phy_roothub *phy_roothub)
 EXPORT_SYMBOL_GPL(usb_phy_roothub_power_off);
 
 int usb_phy_roothub_suspend(struct device *controller_dev,
-			    struct usb_phy_roothub *phy_roothub)
+			    struct usb_phy_roothub *phy_roothub,
+			    unsigned wakeup_enabled_descendants)
 {
-	usb_phy_roothub_power_off(phy_roothub);
-
 	/* keep the PHYs initialized so the device can wake up the system */
-	if (device_may_wakeup(controller_dev))
+	if (device_may_wakeup(controller_dev) || wakeup_enabled_descendants)
 		return 0;
+
+	usb_phy_roothub_power_off(phy_roothub);
 
 	return usb_phy_roothub_exit(phy_roothub);
 }
 EXPORT_SYMBOL_GPL(usb_phy_roothub_suspend);
 
 int usb_phy_roothub_resume(struct device *controller_dev,
-			   struct usb_phy_roothub *phy_roothub)
+			   struct usb_phy_roothub *phy_roothub,
+			   unsigned wakeup_enabled_descendants)
 {
-	int err;
+	int err = 0;
 
 	/* if the device can't wake up the system _exit was called */
-	if (!device_may_wakeup(controller_dev)) {
+	if (!device_may_wakeup(controller_dev) && !wakeup_enabled_descendants) {
 		err = usb_phy_roothub_init(phy_roothub);
 		if (err)
 			return err;
+
+		err = usb_phy_roothub_power_on(phy_roothub);
 	}
 
-	err = usb_phy_roothub_power_on(phy_roothub);
-
 	/* undo _init if _power_on failed */
-	if (err && !device_may_wakeup(controller_dev))
+	if (err && !device_may_wakeup(controller_dev) && !wakeup_enabled_descendants)
 		usb_phy_roothub_exit(phy_roothub);
 
 	return err;

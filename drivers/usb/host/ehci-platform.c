@@ -287,6 +287,12 @@ static int ehci_platform_probe(struct platform_device *dev)
 					  "has-transaction-translator"))
 			hcd->has_tt = 1;
 
+		if (of_device_is_compatible(dev->dev.of_node,
+					    "aspeed,ast2500-ehci") ||
+		    of_device_is_compatible(dev->dev.of_node,
+					    "aspeed,ast2600-ehci"))
+			ehci->is_aspeed = 1;
+
 		if (soc_device_match(quirk_poll_match))
 			priv->quirk_poll = true;
 
@@ -357,7 +363,9 @@ static int ehci_platform_probe(struct platform_device *dev)
 	if (err)
 		goto err_power;
 
-	device_wakeup_enable(hcd->self.controller);
+	if (of_property_read_bool(dev->dev.of_node, "wakeup-source"))
+		device_set_wakeup_capable(hcd->self.controller, true);
+
 	device_enable_async_suspend(hcd->self.controller);
 	platform_set_drvdata(dev, hcd);
 
@@ -393,6 +401,9 @@ static int ehci_platform_remove(struct platform_device *dev)
 	if (priv->quirk_poll)
 		quirk_poll_end(priv);
 
+	if (of_property_read_bool(dev->dev.of_node, "wakeup-source"))
+		device_set_wakeup_capable(hcd->self.controller, false);
+
 	usb_remove_hcd(hcd);
 
 	if (pdata->power_off)
@@ -418,7 +429,7 @@ static int ehci_platform_suspend(struct device *dev)
 	struct usb_ehci_pdata *pdata = dev_get_platdata(dev);
 	struct platform_device *pdev = to_platform_device(dev);
 	struct ehci_platform_priv *priv = hcd_to_ehci_priv(hcd);
-	bool do_wakeup = device_may_wakeup(dev);
+	bool do_wakeup = device_may_wakeup(dev) || device_wakeup_path(dev);
 	int ret;
 
 	if (priv->quirk_poll)
@@ -431,7 +442,7 @@ static int ehci_platform_suspend(struct device *dev)
 	if (pdata->power_suspend)
 		pdata->power_suspend(pdev);
 
-	if (device_may_wakeup(dev) || device_wakeup_path(dev))
+	if (do_wakeup)
 		enable_irq_wake(hcd->irq);
 
 	return ret;

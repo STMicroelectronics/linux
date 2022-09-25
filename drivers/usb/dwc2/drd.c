@@ -24,6 +24,10 @@ static void dwc2_ovr_init(struct dwc2_hsotg *hsotg)
 	gotgctl |= GOTGCTL_BVALOEN | GOTGCTL_AVALOEN | GOTGCTL_VBVALOEN;
 	gotgctl |= GOTGCTL_DBNCE_FLTR_BYPASS;
 	gotgctl &= ~(GOTGCTL_BVALOVAL | GOTGCTL_AVALOVAL | GOTGCTL_VBVALOVAL);
+	if (hsotg->role_sw_default_mode == USB_DR_MODE_HOST)
+		gotgctl |= GOTGCTL_AVALOVAL | GOTGCTL_VBVALOVAL;
+	else if (hsotg->role_sw_default_mode == USB_DR_MODE_PERIPHERAL)
+		gotgctl |= GOTGCTL_BVALOVAL | GOTGCTL_VBVALOVAL;
 	dwc2_writel(hsotg, gotgctl, GOTGCTL);
 
 	spin_unlock_irqrestore(&hsotg->lock, flags);
@@ -141,6 +145,16 @@ int dwc2_drd_init(struct dwc2_hsotg *hsotg)
 	if (device_property_read_bool(hsotg->dev, "usb-role-switch")) {
 		struct usb_role_switch_desc role_sw_desc = {0};
 		struct usb_role_switch *role_sw;
+		const char *str;
+
+		hsotg->role_sw_default_mode = USB_DR_MODE_UNKNOWN;
+		ret = device_property_read_string(hsotg->dev, "role-switch-default-mode", &str);
+		if (!ret) {
+			if (!strncmp(str, "host", strlen("host")))
+				hsotg->role_sw_default_mode = USB_DR_MODE_HOST;
+			else if (!strncmp(str, "peripheral", strlen("peripheral")))
+				hsotg->role_sw_default_mode = USB_DR_MODE_PERIPHERAL;
+		}
 
 		role_sw_desc.fwnode = dev_fwnode(hsotg->dev);
 		role_sw_desc.set = dwc2_drd_role_sw_set;

@@ -299,11 +299,10 @@ static int stm32_dma_get_width(struct stm32_dma_chan *chan,
 }
 
 static enum dma_slave_buswidth stm32_dma_get_max_width(u32 buf_len,
-						       dma_addr_t buf_addr,
+						       u64 buf_addr,
 						       u32 threshold)
 {
 	enum dma_slave_buswidth max_width;
-	u64 addr = buf_addr;
 
 	if (threshold == STM32_DMA_FIFO_THRESHOLD_FULL)
 		max_width = DMA_SLAVE_BUSWIDTH_4_BYTES;
@@ -314,7 +313,7 @@ static enum dma_slave_buswidth stm32_dma_get_max_width(u32 buf_len,
 	       max_width > DMA_SLAVE_BUSWIDTH_1_BYTE)
 		max_width = max_width >> 1;
 
-	if (do_div(addr, max_width))
+	if (do_div(buf_addr, max_width))
 		max_width = DMA_SLAVE_BUSWIDTH_1_BYTE;
 
 	return max_width;
@@ -1116,7 +1115,7 @@ static void stm32_dma_issue_pending(struct dma_chan *c)
 static int stm32_dma_set_xfer_param(struct stm32_dma_chan *chan,
 				    enum dma_transfer_direction direction,
 				    enum dma_slave_buswidth *buswidth,
-				    u32 buf_len, dma_addr_t buf_addr)
+				    u32 buf_len, u64 buf_addr)
 {
 	enum dma_slave_buswidth src_addr_width, dst_addr_width;
 	int src_bus_width, dst_bus_width;
@@ -1155,8 +1154,14 @@ static int stm32_dma_set_xfer_param(struct stm32_dma_chan *chan,
 		if (src_bus_width < 0)
 			return src_bus_width;
 
-		/* Set memory burst size */
-		src_maxburst = STM32_DMA_MAX_BURST;
+		/*
+		 * Set memory burst size - burst not possible if address is not aligned on
+		 * the address boundary equal to the size of the transfer
+		 */
+		if (do_div(buf_addr, buf_len))
+			src_maxburst = 1;
+		else
+			src_maxburst = STM32_DMA_MAX_BURST;
 		src_best_burst = stm32_dma_get_best_burst(buf_len,
 							  src_maxburst,
 							  fifoth,
@@ -1205,8 +1210,14 @@ static int stm32_dma_set_xfer_param(struct stm32_dma_chan *chan,
 		if (dst_bus_width < 0)
 			return dst_bus_width;
 
-		/* Set memory burst size */
-		dst_maxburst = STM32_DMA_MAX_BURST;
+		/*
+		 * Set memory burst size - burst not possible if address is not aligned on
+		 * the address boundary equal to the size of the transfer
+		 */
+		if (do_div(buf_addr, buf_len))
+			dst_maxburst = 1;
+		else
+			dst_maxburst = STM32_DMA_MAX_BURST;
 		dst_best_burst = stm32_dma_get_best_burst(buf_len,
 							  dst_maxburst,
 							  fifoth,
@@ -1382,7 +1393,7 @@ static int stm32_dma_setup_sg_requests(struct stm32_dma_chan *chan,
 	for_each_sg(sgl, sg, sg_len, i) {
 		ret = stm32_dma_set_xfer_param(chan, direction, &buswidth,
 					       sg_dma_len(sg),
-					       sg_dma_address(sg));
+					       (u64)sg_dma_address(sg));
 		if (ret < 0)
 			return ret;
 
@@ -1600,8 +1611,7 @@ static struct dma_async_tx_descriptor *stm32_dma_prep_dma_cyclic(
 		return NULL;
 	}
 
-	ret = stm32_dma_set_xfer_param(chan, direction, &buswidth, period_len,
-				       buf_addr);
+	ret = stm32_dma_set_xfer_param(chan, direction, &buswidth, period_len, (u64)buf_addr);
 	if (ret < 0)
 		return NULL;
 

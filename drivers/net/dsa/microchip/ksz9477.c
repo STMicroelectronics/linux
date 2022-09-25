@@ -515,9 +515,6 @@ static int ksz9477_port_vlan_filtering(struct dsa_switch *ds, int port,
 			     PORT_VLAN_LOOKUP_VID_0, false);
 	}
 
-	/* set the real number of ports */
-	dev->ds->num_ports = dev->port_cnt;
-
 	return 0;
 }
 
@@ -1523,6 +1520,7 @@ static const struct ksz_chip_data ksz9477_switch_chips[] = {
 		.num_statics = 16,
 		.cpu_ports = 0x7F,	/* can be configured as cpu port */
 		.port_cnt = 7,		/* total physical port count */
+		.phy_errata_9477 = true,
 	},
 };
 

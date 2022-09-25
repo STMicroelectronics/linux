@@ -130,7 +130,7 @@ struct serial_rs485 {
 	__u32	delay_rts_after_send;	/* Delay after send (milliseconds) */
 	__u32	delay_rts_before_send_ns;	/* Delay (nanoseconds) */
 	__u32	delay_rts_after_send_ns;	/* Delay (nanoseconds) */
-	__u32	padding[5];		/* Memory is cheap, new structs
+	__u32	padding[3];		/* Memory is cheap, new structs
 					   are a royal PITA .. */
 };
 

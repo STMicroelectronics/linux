@@ -53,6 +53,8 @@ Refer to phy/phy-bindings.txt for generic phy consumer properties
   perform OTG operation, used on STM32MP1 SoCs.
 - usb-role-switch: use USB Role Switch to support dynamic dual role switch.
   Refer to usb/generic.txt
+- role-switch-default-mode: indicating if usb-role-switch is enabled, the default
+  operation mode of controller at init [host, peripheral].
 - wakeup-source: bool flag to indicate this device has wakeup capabilities
 
 Deprecated properties:

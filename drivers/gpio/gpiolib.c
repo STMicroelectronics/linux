@@ -3128,6 +3128,13 @@ int gpiod_direction_output(struct gpio_desc *desc, int value)
 	}
 
 set_output_value:
+	if (test_bit(FLAG_PULL_UP, &desc->flags))
+		gpio_set_config(gc, gpio_chip_hwgpio(desc),
+				PIN_CONFIG_BIAS_PULL_UP);
+	else if (test_bit(FLAG_PULL_DOWN, &desc->flags))
+		gpio_set_config(gc, gpio_chip_hwgpio(desc),
+				PIN_CONFIG_BIAS_PULL_DOWN);
+
 	return gpiod_direction_output_raw_commit(desc, value);
 
 set_output_flag:

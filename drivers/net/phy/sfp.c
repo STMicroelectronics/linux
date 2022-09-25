@@ -115,7 +115,7 @@ static const char * const sm_state_strings[] = {
 	[SFP_S_LINK_UP] = "link_up",
 	[SFP_S_TX_FAULT] = "tx_fault",
 	[SFP_S_REINIT] = "reinit",
-	[SFP_S_TX_DISABLE] = "rx_disable",
+	[SFP_S_TX_DISABLE] = "tx_disable",
 };
 
 static const char *sm_state_to_str(unsigned short sm_state)
@@ -1970,7 +1970,8 @@ static int sfp_probe(struct platform_device *pdev)
 			continue;
 
 		sfp->gpio_irq[i] = gpiod_to_irq(sfp->gpio[i]);
-		if (!sfp->gpio_irq[i]) {
+		if (sfp->gpio_irq[i] < 0) {
+			sfp->gpio_irq[i] = 0;
 			poll = true;
 			continue;
 		}
