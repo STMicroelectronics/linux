@@ -19,6 +19,9 @@
 
 static DEFINE_SPINLOCK(rlock);
 
+static void stm32_clk_summary_debugfs_create(struct device *dev,
+					     const struct stm32_rcc_match_data *data);
+
 static int stm32_rcc_clock_init(struct device *dev,
 				const struct of_device_id *match,
 				void __iomem *base)
@@ -27,12 +30,15 @@ static int stm32_rcc_clock_init(struct device *dev,
 	struct clk_hw_onecell_data *clk_data = data->hw_clks;
 	struct clk_hw **hws;
 	int n, max_binding;
+	int ret;
 
 	max_binding =  data->maxbinding;
 
 	clk_data = devm_kzalloc(dev, struct_size(clk_data, hws, max_binding), GFP_KERNEL);
 	if (!clk_data)
 		return -ENOMEM;
+
+	data->clock_data->base = base;
 
 	clk_data->num = max_binding;
 
@@ -63,7 +69,14 @@ static int stm32_rcc_clock_init(struct device *dev,
 			hws[cfg_clock->id] = hw;
 	}
 
-	return devm_of_clk_add_hw_provider(dev, of_clk_hw_onecell_get, clk_data);
+	ret = devm_of_clk_add_hw_provider(dev, of_clk_hw_onecell_get, clk_data);
+	if (ret)
+		return ret;
+
+	if (data->clock_summary)
+		stm32_clk_summary_debugfs_create(dev, data);
+
+	return ret;
 }
 
 int stm32_rcc_init(struct device *dev, const struct of_device_id *match_data,
@@ -98,9 +111,9 @@ int stm32_rcc_init(struct device *dev, const struct of_device_id *match_data,
 	return 0;
 }
 
-static u8 stm32_mux_get_parent(void __iomem *base,
-			       struct clk_stm32_clock_data *data,
-			       u16 mux_id)
+u8 stm32_mux_get_parent(void __iomem *base,
+			struct clk_stm32_clock_data *data,
+			u16 mux_id)
 {
 	const struct stm32_mux_cfg *mux = &data->muxes[mux_id];
 	u32 mask = BIT(mux->width) - 1;
@@ -195,9 +208,9 @@ static void stm32_gate_disable_unused(void __iomem *base,
 		writel(readl(addr) & ~BIT(gate->bit_idx), addr);
 }
 
-static int stm32_gate_is_enabled(void __iomem *base,
-				 struct clk_stm32_clock_data *data,
-				 u16 gate_id)
+int stm32_gate_is_enabled(void __iomem *base,
+			  struct clk_stm32_clock_data *data,
+			  u16 gate_id)
 {
 	const struct stm32_gate_cfg *gate = &data->gates[gate_id];
 
@@ -227,10 +240,10 @@ static unsigned int _get_div(const struct clk_div_table *table,
 	return val + 1;
 }
 
-static unsigned long stm32_divider_get_rate(void __iomem *base,
-					    struct clk_stm32_clock_data *data,
-					    u16 div_id,
-					    unsigned long parent_rate)
+unsigned long stm32_divider_get_rate(void __iomem *base,
+				     struct clk_stm32_clock_data *data,
+				     u16 div_id,
+				     unsigned long parent_rate)
 {
 	const struct stm32_div_cfg *divider = &data->dividers[div_id];
 	unsigned int val;
@@ -752,3 +765,137 @@ struct clk_hw *clk_stm32_composite_register(struct device *dev,
 
 	return hw;
 }
+
+#ifdef CONFIG_DEBUG_FS
+
+#include <linux/debugfs.h>
+
+static void rcc_summary_show_one(struct seq_file *s, const char *name,
+				 unsigned long rate,
+				 bool is_enabled,
+				 int level)
+{
+	seq_printf(s, "%*s%-*s %11lu  %9c\n",
+		   level * 3 + 1, "",
+		   40 - level * 3,
+		   name,
+		   rate,
+		   is_enabled ? 'Y' : 'N'
+		);
+}
+
+static struct clk_summary *stm32_cs_get_parent(struct clk_stm32_clock_data *data,
+					       struct clk_summary *c)
+{
+	struct clk_summary *parent = NULL;
+
+	switch (c->nb_parents) {
+	case 0:
+		parent = NULL;
+		break;
+	case 1:
+		parent = c->clks[0];
+		break;
+	default:
+		if (c->get_parent)
+			parent = c->clks[c->get_parent(data, c)];
+	}
+
+	return parent;
+}
+
+static bool stm32_cs_is_enabled(struct clk_stm32_clock_data *data, struct clk_summary *c)
+{
+	if (c->is_enabled) {
+		return c->is_enabled(data, c);
+
+	} else if (c->nb_parents > 0) {
+		struct clk_summary *cs_parent = stm32_cs_get_parent(data, c);
+
+		return stm32_cs_is_enabled(data, cs_parent);
+	}
+
+	return true;
+}
+
+static unsigned long stm32_cs_get_rate(struct clk_stm32_clock_data *data,
+				       struct clk_summary *c,
+				       unsigned long parent_rate)
+{
+	unsigned long rate = 0;
+
+	if (c->get_rate)
+		rate = c->get_rate(data, c, parent_rate);
+	else
+		rate = parent_rate;
+
+	return rate;
+}
+
+static void rcc_summary_show_subtree(struct seq_file *s, struct clk_summary *c,
+				     unsigned long parent_rate, int level)
+{
+	struct stm32_rcc_match_data *match_data = (struct stm32_rcc_match_data *)s->private;
+	struct clk_stm32_clock_data *data = match_data->clock_data;
+	struct clock_summary *cs = match_data->clock_summary;
+	unsigned long rate;
+	int is_enabled;
+	int i;
+
+	rate = stm32_cs_get_rate(data, c, parent_rate);
+	is_enabled = stm32_cs_is_enabled(data, c);
+
+	rcc_summary_show_one(s, c->name, rate, is_enabled, level);
+
+	for (i = 0; i < cs->nb_clocks; i++) {
+		struct clk_summary *child = cs->clocks[i];
+		struct clk_summary *parent;
+
+		parent = stm32_cs_get_parent(data, child);
+		if (!parent)
+			continue;
+
+		if (c == parent)
+			rcc_summary_show_subtree(s, child, rate, level + 1);
+	}
+}
+
+static int rcc_summary_show(struct seq_file *s, void *data)
+{
+	struct stm32_rcc_match_data *match_data = (struct stm32_rcc_match_data *)s->private;
+	struct clock_summary *cs = match_data->clock_summary;
+
+	int i;
+
+	seq_puts(s, "                                                        hardware\n");
+	seq_puts(s, "   clock                                         rate     enable\n");
+	seq_puts(s, "----------------------------------------------------------------\n");
+
+	for (i = 0; i < cs->nb_clocks; i++) {
+		struct clk_summary *c = cs->clocks[i];
+
+		if (c->nb_parents == 0)
+			rcc_summary_show_subtree(s, c, 0, 0);
+	}
+
+	return 0;
+}
+
+DEFINE_SHOW_ATTRIBUTE(rcc_summary);
+
+static void stm32_clk_summary_debugfs_create(struct device *dev,
+					     const struct stm32_rcc_match_data *data)
+{
+	struct dentry *rootdir = debugfs_lookup("clk", NULL);
+
+	debugfs_create_file("stm32_clk_summary", 0444, rootdir, (void *)data, &rcc_summary_fops);
+}
+
+#else
+
+static void stm32_clk_summary_debugfs_create(struct device *dev,
+					     const struct stm32_rcc_match_data *data)
+
+{
+}
+#endif
