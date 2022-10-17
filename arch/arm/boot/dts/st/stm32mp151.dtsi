@@ -257,7 +257,7 @@
 				<0>,						/* EXTI_40 */
 				<0>,
 				<0>,
-				<0>,
+				<&intc GIC_SPI 75  IRQ_TYPE_LEVEL_HIGH>,
 				<0>,
 				<0>,
 				<&intc GIC_SPI 151 IRQ_TYPE_LEVEL_HIGH>,
