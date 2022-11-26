@@ -445,8 +445,7 @@ static int ucsi_stm32g0_register(struct ucsi *ucsi)
 {
 	struct ucsi_stm32g0 *g0 = ucsi_get_drvdata(ucsi);
 	struct i2c_client *client = g0->client;
-	struct power_supply *psy;
-	int i, ret;
+	int ret;
 
 	/* Request alert interrupt */
 	ret = request_threaded_irq(client->irq, NULL, ucsi_stm32g0_irq_handler, IRQF_ONESHOT,
@@ -461,27 +460,6 @@ static int ucsi_stm32g0_register(struct ucsi *ucsi)
 		dev_err_probe(g0->dev, ret, "ucsi_register failed\n");
 		free_irq(client->irq, g0);
 		return ret;
-	}
-
-	/*
-	 * Below hack disables psy wakeup (enabled by default) to avoid limiting the low power
-	 * mode that can be achieved on the platform. Another way is to let the userland
-	 * enable or disable it with power/wakeup entries.
-	 * So, unless stm32g0 wakeup has been explicitly enabled, also disable the power supply
-	 * wakeup. Else, we're done here, so simply return.
-	 */
-	if (device_may_wakeup(g0->dev))
-		return 0;
-
-	/*
-	 * ucsi_init() runs on system_long_wq, wait for it to complete. Then num_connectors is
-	 * known and psy have been registered.
-	 */
-	flush_workqueue(system_long_wq);
-
-	for (i = 0; i < ucsi->cap.num_connectors; i++) {
-		psy = ucsi->connector[i].psy;
-		device_wakeup_disable(&psy->dev);
 	}
 
 	return 0;
@@ -649,15 +627,6 @@ static int ucsi_stm32g0_probe(struct i2c_client *client, const struct i2c_device
 		return PTR_ERR(g0->ucsi);
 
 	ucsi_set_drvdata(g0->ucsi, g0);
-
-	/*
-	 * When the "wakeup-source" flag is found, I2C core marks the device as wakeup capable
-	 * and enables the wakeup by default.
-	 * Only stick with wakeup capable here (disable wakeup), to avoid limiting the low power
-	 * mode that can be achived by default (depending on the selected power domain).
-	 */
-	if (client->flags & I2C_CLIENT_WAKE)
-		device_wakeup_disable(dev);
 
 	/* STM32G0 in bootloader mode communicates at reserved address 0x51 */
 	g0->i2c_bl = i2c_new_dummy_device(client->adapter, STM32G0_I2C_BL_ADDR);

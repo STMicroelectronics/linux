@@ -566,10 +566,16 @@ struct drm_display_info {
 	bool rgb_quant_range_selectable;
 
 	/**
-	 * @edid_hdmi_dc_modes: Mask of supported hdmi deep color modes. Even
-	 * more stuff redundant with @bus_formats.
+	 * @edid_hdmi_rgb444_dc_modes: Mask of supported hdmi deep color modes
+	 * in RGB 4:4:4. Even more stuff redundant with @bus_formats.
 	 */
-	u8 edid_hdmi_dc_modes;
+	u8 edid_hdmi_rgb444_dc_modes;
+
+	/**
+	 * @edid_hdmi_ycbcr444_dc_modes: Mask of supported hdmi deep color
+	 * modes in YCbCr 4:4:4. Even more stuff redundant with @bus_formats.
+	 */
+	u8 edid_hdmi_ycbcr444_dc_modes;
 
 	/**
 	 * @cea_rev: CEA revision of the HDMI sink.
@@ -742,6 +748,12 @@ struct drm_connector_state {
 	 * upscaling, mostly used for built-in panels.
 	 */
 	unsigned int scaling_mode;
+
+	/**
+	 * @dithering: Connector property to control the
+	 * dithering.
+	 */
+	unsigned int dithering;
 
 	/**
 	 * @content_protection: Connector property to request content
@@ -1355,6 +1367,12 @@ struct drm_connector {
 	struct drm_property *scaling_mode_property;
 
 	/**
+	 * @dithering_property: Optional atomic property to control the
+	 * dithering.
+	 */
+	struct drm_property *dithering_property;
+
+	/**
 	 * @vrr_capable_property: Optional property to help userspace
 	 * query hardware support for variable refresh rate on a connector.
 	 * connector. Drivers can add the property to a connector by
@@ -1674,6 +1692,8 @@ int drm_mode_create_scaling_mode_property(struct drm_device *dev);
 int drm_connector_attach_content_type_property(struct drm_connector *dev);
 int drm_connector_attach_scaling_mode_property(struct drm_connector *connector,
 					       u32 scaling_mode_mask);
+int drm_connector_attach_dithering_property(struct drm_connector *connector,
+					    u32 dithering_mask);
 int drm_connector_attach_vrr_capable_property(
 		struct drm_connector *connector);
 int drm_connector_attach_colorspace_property(struct drm_connector *connector);

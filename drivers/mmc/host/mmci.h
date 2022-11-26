@@ -361,7 +361,6 @@ struct variant_data {
 	u32			opendrain;
 	u8			dma_lli:1;
 	u32			stm32_idmabsize_mask;
-	u8			disable_keep_power:1;
 	void (*init)(struct mmci_host *host);
 };
 

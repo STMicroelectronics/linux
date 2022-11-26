@@ -13,25 +13,53 @@
 	compatible = "st,stm32mp157c-dk2-a7-examples", "st,stm32mp157c-dk2", "st,stm32mp157";
 };
 
-&i2c5 {
-	status = "okay";
-};
-
 &adc {
 	pinctrl-0 = <&adc12_ain_pins_a>, <&adc12_usb_cc_pins_a>;
 
 	adc1: adc@0 {
-		st,min-sample-time-nsecs = <5000>;
-		st,adc-channels = <0 1 6 13 18 19>;
+		channel@0 {
+			reg = <0>;
+			st,min-sample-time-ns = <5000>;
+		};
+		channel@1 {
+			reg = <1>;
+			st,min-sample-time-ns = <5000>;
+		};
+		channel@6 {
+			reg = <6>;
+			st,min-sample-time-ns = <5000>;
+		};
+		channel@13 {
+			reg = <13>;
+			st,min-sample-time-ns = <5000>;
+		};
 	};
 
 	adc2: adc@100 {
 		/* Set IRQ mode as example. DMA is the preferred mode, yet. */
 		/delete-property/dmas;
 		/delete-property/dma-names;
-		st,min-sample-time-nsecs = <5000>;
-		st,adc-channels = <0 1 2 6 18 19>;
+		channel@0 {
+			reg = <0>;
+			st,min-sample-time-ns = <5000>;
+		};
+		channel@1 {
+			reg = <1>;
+			st,min-sample-time-ns = <5000>;
+		};
+		channel@2 {
+			reg = <2>;
+			st,min-sample-time-ns = <5000>;
+		};
+		channel@6 {
+			reg = <6>;
+			st,min-sample-time-ns = <5000>;
+		};
 	};
+};
+
+&i2c5 {
+	status = "okay";
 };
 
 &timers1 {

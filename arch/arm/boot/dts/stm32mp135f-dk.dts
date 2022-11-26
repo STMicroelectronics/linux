@@ -151,6 +151,18 @@
 		compatible = "mmc-pwrseq-simple";
 		reset-gpios = <&mcp23017 11 GPIO_ACTIVE_LOW>;
 	};
+
+	wake_up {
+		compatible = "gpio-keys";
+		status = "okay";
+
+		button {
+			label = "wake-up";
+			linux,code = <KEY_WAKEUP>;
+			interrupts-extended = <&optee 0>;
+			status = "okay";
+		};
+	};
 };
 
 &adc_1 {
@@ -160,16 +172,21 @@
 	vref-supply = <&scmi_vdd_adc>;
 	status = "okay";
 	adc1: adc@0 {
+		status = "okay";
 		/*
 		 * Type-C USB_PWR_CC1 & USB_PWR_CC2 on in6 & in12.
 		 * Use at least 5 * RC time, e.g. 5 * (Rp + Rd) * C:
 		 * 5 * (5.1 + 47kOhms) * 5pF => 1.3us.
 		 * Use arbitrary margin here (e.g. 5us).
 		 */
-		st,min-sample-time-nsecs = <5000>;
-		/* USB Type-C CC1 & CC2 */
-		st,adc-channels = <6 12>;
-		status = "okay";
+		channel@6 {
+			reg = <6>;
+			st,min-sample-time-ns = <5000>;
+		};
+		channel@12 {
+			reg = <12>;
+			st,min-sample-time-ns = <5000>;
+		};
 	};
 };
 
@@ -230,6 +247,7 @@
 			compatible = "ethernet-phy-id0007.c131";
 			reset-gpios =  <&mcp23017 9 GPIO_ACTIVE_LOW>;
 			reg = <0>;
+			wakeup-source;
 		};
 	};
 };
@@ -288,14 +306,9 @@
 	stm32g0@53 {
 		compatible = "st,stm32g0-typec";
 		reg = <0x53>;
-		/* Alert pin on PI2 */
-		interrupts = <2 IRQ_TYPE_EDGE_FALLING>;
-		interrupt-parent = <&gpioi>;
-		/* Internal pull-up on PI2 */
-		pinctrl-names = "default";
-		pinctrl-0 = <&stm32g0_intn_pins_a>;
+		/* Alert pin on PI2 (PWR wakeup pin), managed by optee */
+		interrupts-extended = <&optee 1>;
 		firmware-name = "stm32g0-ucsi.mp135f-dk.fw";
-		power-domains = <&pd_core>;
 		wakeup-source;
 		connector {
 			compatible = "usb-c-connector";
@@ -354,7 +367,7 @@
 		VDDIO-supply = <&scmi_v3v3_sw>;
 		touchscreen-size-x = <480>;
 		touchscreen-size-y = <272>;
-		status = "okay" ;
+		status = "okay";
 	};
 
 	ov5640: camera@3c {
@@ -491,7 +504,6 @@
 
 /* Wifi */
 &sdmmc2 {
-	arm,primecell-periphid = <0x10153180>;
 	pinctrl-names = "default", "opendrain", "sleep";
 	pinctrl-0 = <&sdmmc2_b4_pins_a &sdmmc2_clk_pins_a>;
 	pinctrl-1 = <&sdmmc2_b4_od_pins_a &sdmmc2_clk_pins_a>;

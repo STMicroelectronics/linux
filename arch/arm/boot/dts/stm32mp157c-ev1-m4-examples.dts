@@ -81,6 +81,10 @@
 	status = "okay";
 };
 
+&m4_rng2 {
+	status = "okay";
+};
+
 &m4_rproc {
 	m4_system_resources {
 		status = "okay";
@@ -101,10 +105,6 @@
 			status = "okay";
 		};
 	};
-};
-
-&m4_rng2 {
-	status = "okay";
 };
 
 &m4_spi1 {

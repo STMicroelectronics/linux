@@ -35,6 +35,11 @@
 #define DCMIPP_FRAME_INDEX(lin, col, width, bpp) \
 	(((lin) * (width) + (col)) * (bpp))
 
+#define DCMIPP_COLORSPACE_DEFAULT	V4L2_COLORSPACE_REC709
+#define DCMIPP_YCBCR_ENC_DEFAULT	V4L2_YCBCR_ENC_DEFAULT
+#define DCMIPP_QUANTIZATION_DEFAULT	V4L2_QUANTIZATION_DEFAULT
+#define DCMIPP_XFER_FUNC_DEFAULT	V4L2_XFER_FUNC_DEFAULT
+
 /**
  * struct dcmipp_colorimetry_clamp - Adjust colorimetry parameters
  *
@@ -48,17 +53,17 @@
 do {									\
 	if ((fmt)->colorspace == V4L2_COLORSPACE_DEFAULT ||		\
 	    (fmt)->colorspace > V4L2_COLORSPACE_DCI_P3) {		\
-		(fmt)->colorspace = V4L2_COLORSPACE_DEFAULT;		\
-		(fmt)->ycbcr_enc = V4L2_YCBCR_ENC_DEFAULT;		\
-		(fmt)->quantization = V4L2_QUANTIZATION_DEFAULT;	\
-		(fmt)->xfer_func = V4L2_XFER_FUNC_DEFAULT;		\
+		(fmt)->colorspace = DCMIPP_COLORSPACE_DEFAULT;		\
+		(fmt)->ycbcr_enc = DCMIPP_YCBCR_ENC_DEFAULT;		\
+		(fmt)->quantization = DCMIPP_QUANTIZATION_DEFAULT;	\
+		(fmt)->xfer_func = DCMIPP_XFER_FUNC_DEFAULT;		\
 	}								\
 	if ((fmt)->ycbcr_enc > V4L2_YCBCR_ENC_SMPTE240M)		\
-		(fmt)->ycbcr_enc = V4L2_YCBCR_ENC_DEFAULT;		\
+		(fmt)->ycbcr_enc = DCMIPP_YCBCR_ENC_DEFAULT;		\
 	if ((fmt)->quantization > V4L2_QUANTIZATION_LIM_RANGE)		\
-		(fmt)->quantization = V4L2_QUANTIZATION_DEFAULT;	\
+		(fmt)->quantization = DCMIPP_QUANTIZATION_DEFAULT;	\
 	if ((fmt)->xfer_func > V4L2_XFER_FUNC_SMPTE2084)		\
-		(fmt)->xfer_func = V4L2_XFER_FUNC_DEFAULT;		\
+		(fmt)->xfer_func = DCMIPP_XFER_FUNC_DEFAULT;		\
 } while (0)
 
 /**

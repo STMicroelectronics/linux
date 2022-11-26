@@ -5,7 +5,10 @@
  */
 
 #include <linux/clk.h>
+#include <linux/debugfs.h>
 #include <linux/delay.h>
+#include <linux/dma-mapping.h>
+#include <linux/dmaengine.h>
 #include <linux/interrupt.h>
 #include <linux/iopoll.h>
 #include <linux/module.h>
@@ -37,6 +40,8 @@
 /* Mode mask = bits [15..0] */
 #define FLG_MODE_MASK           GENMASK(15, 0)
 /* Bit [31..16] status  */
+#define FLG_IN_OUT_DMA          BIT(16)
+#define FLG_HEADER_DMA          BIT(17)
 
 /* Registers */
 #define CRYP_CR                 0x00000000
@@ -61,6 +66,21 @@
 #define CRYP_IV1RR              0x0000004C
 #define CRYP_CSGCMCCM0R         0x00000050
 #define CRYP_CSGCM0R            0x00000070
+
+static const struct debugfs_reg32 stm32_cryp_regs[] = {
+	{
+		.name = "cr",
+		.offset = CRYP_CR
+	},
+	{
+		.name = "sr",
+		.offset = CRYP_SR
+	},
+	{
+		.name = "dmacr",
+		.offset = CRYP_DMACR
+	}
+};
 
 /* Registers values */
 #define CR_DEC_NOT_ENC          0x00000004
@@ -92,8 +112,12 @@
 #define CR_PH_MASK              0x00030000
 #define CR_NBPBL_SHIFT          20
 
-#define SR_BUSY                 0x00000010
-#define SR_OFNE                 0x00000004
+#define SR_IFNF                 BIT(1)
+#define SR_OFNE                 BIT(2)
+#define SR_BUSY                 BIT(8)
+
+#define DMACR_DIEN              BIT(0)
+#define DMACR_DOEN              BIT(1)
 
 #define IMSCR_IN                BIT(0)
 #define IMSCR_OUT               BIT(1)
@@ -104,7 +128,16 @@
 /* Misc */
 #define AES_BLOCK_32            (AES_BLOCK_SIZE / sizeof(u32))
 #define GCM_CTR_INIT            2
-#define CRYP_AUTOSUSPEND_DELAY	50
+#define CRYP_AUTOSUSPEND_DELAY  50
+
+#define CRYP_DMA_BURST_MEM      16
+#define CRYP_DMA_BURST_REG      4
+
+enum stm32_dma_mode {
+	NO_DMA,
+	DMA_PLAIN_SG,
+	DMA_NEED_SG_TRUNC
+};
 
 struct stm32_cryp_caps {
 	bool                    swap_final;
@@ -127,11 +160,13 @@ struct stm32_cryp {
 	struct list_head        list;
 	struct device           *dev;
 	void __iomem            *regs;
+	phys_addr_t             phys_base;
 	struct clk              *clk;
 	unsigned long           flags;
 	u32                     irq_status;
 	const struct stm32_cryp_caps *caps;
 	struct stm32_cryp_ctx   *ctx;
+	struct dentry           *dbgdir;
 
 	struct crypto_engine    *engine;
 
@@ -145,8 +180,19 @@ struct stm32_cryp {
 	size_t                  header_in;
 	size_t                  payload_out;
 
+	/* DMA process fields */
+	struct scatterlist      *in_sg;
+	struct scatterlist      *header_sg;
 	struct scatterlist      *out_sg;
+	size_t                  in_sg_len;
+	size_t                  header_sg_len;
+	size_t                  out_sg_len;
 
+	struct dma_chan         *dma_lch_in;
+	struct dma_chan         *dma_lch_out;
+	enum stm32_dma_mode     dma_mode;
+
+	/* IT process fields */
 	struct scatter_walk     in_walk;
 	struct scatter_walk     out_walk;
 
@@ -245,6 +291,14 @@ static inline int stm32_cryp_wait_enable(struct stm32_cryp *cryp)
 			!(status & CR_CRYPEN), 10, 100000);
 }
 
+static inline int stm32_cryp_wait_input(struct stm32_cryp *cryp)
+{
+	u32 status;
+
+	return readl_relaxed_poll_timeout(cryp->regs + CRYP_SR, status,
+			status & SR_IFNF, 10, 100000);
+}
+
 static inline int stm32_cryp_wait_output(struct stm32_cryp *cryp)
 {
 	u32 status;
@@ -253,8 +307,13 @@ static inline int stm32_cryp_wait_output(struct stm32_cryp *cryp)
 			status & SR_OFNE, 10, 100000);
 }
 
+static void stm32_cryp_irq_read_data(struct stm32_cryp *cryp);
+static void stm32_cryp_irq_write_data(struct stm32_cryp *cryp);
+static void stm32_cryp_irq_write_gcmccm_header(struct stm32_cryp *cryp);
 static int stm32_cryp_read_auth_tag(struct stm32_cryp *cryp);
 static void stm32_cryp_finish_req(struct stm32_cryp *cryp, int err);
+static int stm32_cryp_dma_start(struct stm32_cryp *cryp);
+static int stm32_cryp_it_start(struct stm32_cryp *cryp);
 
 static struct stm32_cryp *stm32_cryp_find_dev(struct stm32_cryp_ctx *ctx)
 {
@@ -642,11 +701,223 @@ static void stm32_cryp_finish_req(struct stm32_cryp *cryp, int err)
 	if (is_gcm(cryp) || is_ccm(cryp))
 		crypto_finalize_aead_request(cryp->engine, cryp->areq, err);
 	else
-		crypto_finalize_skcipher_request(cryp->engine, cryp->req,
-						   err);
+		crypto_finalize_skcipher_request(cryp->engine, cryp->req, err);
 }
 
-static int stm32_cryp_cpu_start(struct stm32_cryp *cryp)
+static void stm32_cryp_header_dma_callback(void *param)
+{
+	struct stm32_cryp *cryp = (struct stm32_cryp *)param;
+	int ret;
+	u32 reg;
+
+	dma_unmap_sg(cryp->dev, cryp->header_sg, cryp->header_sg_len, DMA_TO_DEVICE);
+
+	reg = stm32_cryp_read(cryp, CRYP_DMACR);
+	stm32_cryp_write(cryp, CRYP_DMACR, reg & ~(DMACR_DOEN | DMACR_DIEN));
+
+	kfree(cryp->header_sg);
+
+	reg = stm32_cryp_read(cryp, CRYP_CR);
+
+	if (cryp->header_in) {
+		stm32_cryp_write(cryp, CRYP_CR, reg | CR_CRYPEN);
+
+		ret = stm32_cryp_wait_input(cryp);
+		if (ret) {
+			dev_err(cryp->dev, "input header ready timeout after dma\n");
+			stm32_cryp_finish_req(cryp, ret);
+			return;
+		}
+		stm32_cryp_irq_write_gcmccm_header(cryp);
+		WARN_ON(cryp->header_in);
+	}
+
+	if (stm32_cryp_get_input_text_len(cryp)) {
+		/* Phase 3 : payload */
+		reg = stm32_cryp_read(cryp, CRYP_CR);
+		stm32_cryp_write(cryp, CRYP_CR, reg & ~CR_CRYPEN);
+
+		reg &= ~CR_PH_MASK;
+		reg |= CR_PH_PAYLOAD | CR_CRYPEN;
+		stm32_cryp_write(cryp, CRYP_CR, reg);
+
+		if (cryp->flags & FLG_IN_OUT_DMA) {
+			ret = stm32_cryp_dma_start(cryp);
+			if (ret)
+				stm32_cryp_finish_req(cryp, ret);
+		} else {
+			stm32_cryp_it_start(cryp);
+		}
+	} else {
+		/*
+		 * Phase 4 : tag.
+		 * Nothing to read, nothing to write => end request
+		 */
+		stm32_cryp_finish_req(cryp, 0);
+	}
+}
+static void stm32_cryp_dma_callback(void *param)
+{
+	struct stm32_cryp *cryp = (struct stm32_cryp *)param;
+	int ret;
+	u32 reg;
+
+	dma_sync_sg_for_device(cryp->dev, cryp->out_sg, cryp->out_sg_len, DMA_FROM_DEVICE);
+	dma_unmap_sg(cryp->dev, cryp->in_sg, cryp->in_sg_len, DMA_TO_DEVICE);
+	dma_unmap_sg(cryp->dev, cryp->out_sg, cryp->out_sg_len, DMA_FROM_DEVICE);
+
+	reg = stm32_cryp_read(cryp, CRYP_DMACR);
+	stm32_cryp_write(cryp, CRYP_DMACR, reg & ~(DMACR_DOEN | DMACR_DIEN));
+
+	reg = stm32_cryp_read(cryp, CRYP_CR);
+
+	if (is_gcm(cryp) || is_ccm(cryp)) {
+		kfree(cryp->in_sg);
+		kfree(cryp->out_sg);
+	} else {
+		if (cryp->in_sg != cryp->req->src)
+			kfree(cryp->in_sg);
+		if (cryp->out_sg != cryp->req->dst)
+			kfree(cryp->out_sg);
+	}
+
+	if (cryp->payload_in) {
+		stm32_cryp_write(cryp, CRYP_CR, reg | CR_CRYPEN);
+
+		ret = stm32_cryp_wait_input(cryp);
+		if (ret) {
+			dev_err(cryp->dev, "input ready timeout after dma\n");
+			stm32_cryp_finish_req(cryp, ret);
+			return;
+		}
+		stm32_cryp_irq_write_data(cryp);
+
+		ret = stm32_cryp_wait_output(cryp);
+		if (ret) {
+			dev_err(cryp->dev, "output ready timeout after dma\n");
+			stm32_cryp_finish_req(cryp, ret);
+			return;
+		}
+		stm32_cryp_irq_read_data(cryp);
+	}
+
+	stm32_cryp_finish_req(cryp, 0);
+}
+
+static int stm32_cryp_header_dma_start(struct stm32_cryp *cryp)
+{
+	int err;
+	struct dma_async_tx_descriptor *tx_in;
+	u32 reg;
+	size_t align_size;
+
+	err = dma_map_sg(cryp->dev, cryp->header_sg, cryp->header_sg_len, DMA_TO_DEVICE);
+	if (!err) {
+		dev_err(cryp->dev, "dma_map_sg() error\n");
+		return err;
+	}
+
+	dma_sync_sg_for_device(cryp->dev, cryp->header_sg, cryp->header_sg_len, DMA_TO_DEVICE);
+
+	tx_in = dmaengine_prep_slave_sg(cryp->dma_lch_in, cryp->header_sg, cryp->header_sg_len,
+					DMA_MEM_TO_DEV, DMA_PREP_INTERRUPT | DMA_CTRL_ACK);
+	if (!tx_in) {
+		dev_err(cryp->dev, "IN prep_slave_sg() failed\n");
+		return -EINVAL;
+	}
+
+	tx_in->callback_param = cryp;
+	tx_in->callback = stm32_cryp_header_dma_callback;
+
+	/* Advance scatterwalk to not DMA'ed data */
+	align_size = ALIGN_DOWN(cryp->header_in, cryp->hw_blocksize);
+	scatterwalk_copychunks(NULL, &cryp->in_walk, align_size, 2);
+	cryp->header_in -= align_size;
+
+	err = dma_submit_error(dmaengine_submit(tx_in));
+	if (err < 0) {
+		dev_err(cryp->dev, "DMA in submit failed\n");
+		return err;
+	}
+	dma_async_issue_pending(cryp->dma_lch_in);
+
+	reg = stm32_cryp_read(cryp, CRYP_DMACR);
+	stm32_cryp_write(cryp, CRYP_DMACR, reg | DMACR_DIEN);
+
+	return 0;
+}
+
+static int stm32_cryp_dma_start(struct stm32_cryp *cryp)
+{
+	int err;
+	size_t align_size;
+	struct dma_async_tx_descriptor *tx_in, *tx_out;
+	u32 reg;
+
+	err = dma_map_sg(cryp->dev, cryp->in_sg, cryp->in_sg_len, DMA_TO_DEVICE);
+	if (!err) {
+		dev_err(cryp->dev, "dma_map_sg() error\n");
+		return err;
+	}
+
+	err = dma_map_sg(cryp->dev, cryp->out_sg, cryp->out_sg_len, DMA_FROM_DEVICE);
+	if (!err) {
+		dev_err(cryp->dev, "dma_map_sg() error\n");
+		return err;
+	}
+
+	dma_sync_sg_for_device(cryp->dev, cryp->in_sg, cryp->in_sg_len, DMA_TO_DEVICE);
+
+	tx_in = dmaengine_prep_slave_sg(cryp->dma_lch_in, cryp->in_sg, cryp->in_sg_len,
+					DMA_MEM_TO_DEV, DMA_PREP_INTERRUPT | DMA_CTRL_ACK);
+	if (!tx_in) {
+		dev_err(cryp->dev, "IN prep_slave_sg() failed\n");
+		return -EINVAL;
+	}
+
+	/* No callback necessary */
+	tx_in->callback_param = cryp;
+	tx_in->callback = NULL;
+
+	tx_out = dmaengine_prep_slave_sg(cryp->dma_lch_out, cryp->out_sg, cryp->out_sg_len,
+					 DMA_DEV_TO_MEM, DMA_PREP_INTERRUPT | DMA_CTRL_ACK);
+	if (!tx_out) {
+		dev_err(cryp->dev, "OUT prep_slave_sg() failed\n");
+		return -EINVAL;
+	}
+
+	tx_out->callback = stm32_cryp_dma_callback;
+	tx_out->callback_param = cryp;
+
+	/* Advance scatterwalk to not DMA'ed data */
+	align_size = ALIGN_DOWN(cryp->payload_in, cryp->hw_blocksize);
+	scatterwalk_copychunks(NULL, &cryp->in_walk, align_size, 2);
+	cryp->payload_in -= align_size;
+
+	err = dma_submit_error(dmaengine_submit(tx_in));
+	if (err < 0) {
+		dev_err(cryp->dev, "DMA in submit failed\n");
+		return err;
+	}
+	dma_async_issue_pending(cryp->dma_lch_in);
+
+	/* Advance scatterwalk to not DMA'ed data */
+	scatterwalk_copychunks(NULL, &cryp->out_walk, align_size, 2);
+	cryp->payload_out -= align_size;
+	err = dma_submit_error(dmaengine_submit(tx_out));
+	if (err < 0) {
+		dev_err(cryp->dev, "DMA out submit failed\n");
+		return err;
+	}
+	dma_async_issue_pending(cryp->dma_lch_out);
+
+	reg = stm32_cryp_read(cryp, CRYP_DMACR);
+	stm32_cryp_write(cryp, CRYP_DMACR, reg | DMACR_DOEN | DMACR_DIEN);
+
+	return 0;
+}
+
+static int stm32_cryp_it_start(struct stm32_cryp *cryp)
 {
 	/* Enable interrupt and let the IRQ handler do everything */
 	stm32_cryp_write(cryp, CRYP_IMSCR, IMSCR_IN | IMSCR_OUT);
@@ -993,13 +1264,254 @@ static int stm32_cryp_tdes_cbc_decrypt(struct skcipher_request *req)
 	return stm32_cryp_crypt(req, FLG_TDES | FLG_CBC);
 }
 
+static enum stm32_dma_mode stm32_cryp_dma_check_sg(struct scatterlist *test_sg, size_t len,
+						   size_t block_size)
+{
+	struct scatterlist *sg;
+	int i;
+
+	if (len <= 16)
+		return NO_DMA; /* Faster */
+
+	for_each_sg(test_sg, sg, sg_nents(test_sg), i) {
+		if (!IS_ALIGNED(sg->length, block_size) && !sg_is_last(sg))
+			return NO_DMA;
+
+		if (sg->offset % sizeof(u32))
+			return NO_DMA;
+
+		if (sg_is_last(sg) && !IS_ALIGNED(sg->length, AES_BLOCK_SIZE))
+			return DMA_NEED_SG_TRUNC;
+	}
+
+	return DMA_PLAIN_SG;
+}
+
+static enum stm32_dma_mode stm32_cryp_dma_check(struct stm32_cryp *cryp, struct scatterlist *in_sg,
+						struct scatterlist *out_sg)
+{
+	enum stm32_dma_mode ret = DMA_PLAIN_SG;
+
+	if (!is_aes(cryp))
+		return NO_DMA;
+
+	if (!cryp->dma_lch_in || !cryp->dma_lch_out)
+		return NO_DMA;
+
+	ret = stm32_cryp_dma_check_sg(in_sg, cryp->payload_in, AES_BLOCK_SIZE);
+	if (ret == NO_DMA)
+		return ret;
+
+	ret = stm32_cryp_dma_check_sg(out_sg, cryp->payload_out, AES_BLOCK_SIZE);
+	if (ret == NO_DMA)
+		return ret;
+
+	/* Check CTR counter overflow */
+	if (is_aes(cryp) && is_ctr(cryp)) {
+		u32 c;
+		__be32 iv3;
+
+		memcpy(&iv3, &cryp->req->iv[3*sizeof(u32)], sizeof(iv3));
+		c = be32_to_cpu(iv3);
+		if ((c + cryp->payload_in) < cryp->payload_in)
+			return NO_DMA;
+	}
+
+	/* Workaround */
+	if (is_aes(cryp) && is_ctr(cryp) && ret == DMA_NEED_SG_TRUNC)
+		return NO_DMA;
+
+	return ret;
+}
+
+static int stm32_cryp_truncate_sg(struct scatterlist **new_sg, int *new_sg_len,
+				  struct scatterlist *sg, off_t skip, size_t size)
+{
+	struct scatterlist *cur;
+	size_t alloc_sg_len;
+
+	*new_sg_len = 0;
+
+	if (!sg || !size) {
+		*new_sg = NULL;
+		return 0;
+	}
+
+	alloc_sg_len = sg_nents_for_len(sg, skip + size);
+	if (alloc_sg_len < 0)
+		return alloc_sg_len;
+
+	/* We allocate to much sg entry, but it is easier */
+	*new_sg = kmalloc_array(alloc_sg_len, sizeof(struct scatterlist), GFP_KERNEL);
+	if (!*new_sg)
+		return -ENOMEM;
+
+	sg_init_table(*new_sg, alloc_sg_len);
+
+	cur = *new_sg;
+	while (sg && size) {
+		unsigned int len = sg->length;
+		unsigned int offset = sg->offset;
+
+		if (skip > len) {
+			skip -= len;
+			sg = sg_next(sg);
+			continue;
+		}
+
+		if (skip) {
+			len -= skip;
+			offset += skip;
+			skip = 0;
+		}
+
+		if (size < len)
+			len = size;
+
+		if (len > 0) {
+			(*new_sg_len)++;
+			size -= len;
+			sg_set_page(cur, sg_page(sg), len, offset);
+			if (size == 0)
+				sg_mark_end(cur);
+			cur = sg_next(cur);
+		}
+
+		sg = sg_next(sg);
+	}
+
+	return 0;
+}
+
+static int stm32_cryp_cipher_prepare(struct stm32_cryp *cryp, struct scatterlist *in_sg,
+				     struct scatterlist *out_sg)
+{
+	size_t align_size;
+
+	cryp->dma_mode = stm32_cryp_dma_check(cryp, in_sg, out_sg);
+
+	scatterwalk_start(&cryp->in_walk, in_sg);
+	scatterwalk_start(&cryp->out_walk, out_sg);
+
+	if (cryp->dma_mode == NO_DMA) {
+		cryp->flags &= ~FLG_IN_OUT_DMA;
+
+		if (is_ctr(cryp))
+			memset(cryp->last_ctr, 0, sizeof(cryp->last_ctr));
+
+	} else if (cryp->dma_mode == DMA_NEED_SG_TRUNC) {
+		int ret;
+
+		cryp->flags |= FLG_IN_OUT_DMA;
+
+		align_size = ALIGN_DOWN(cryp->payload_in, cryp->hw_blocksize);
+		ret = stm32_cryp_truncate_sg(&cryp->in_sg, &cryp->in_sg_len, in_sg, 0, align_size);
+		if (ret)
+			return ret;
+
+		ret = stm32_cryp_truncate_sg(&cryp->out_sg, &cryp->out_sg_len, out_sg, 0,
+					     align_size);
+		if (ret) {
+			kfree(cryp->in_sg);
+			return ret;
+		}
+	} else {
+		cryp->flags |= FLG_IN_OUT_DMA;
+
+		cryp->in_sg = in_sg;
+		cryp->out_sg = out_sg;
+
+		cryp->in_sg_len = sg_nents_for_len(cryp->in_sg, cryp->payload_in);
+		if (cryp->in_sg_len < 0)
+			return cryp->in_sg_len;
+
+		cryp->out_sg_len = sg_nents_for_len(out_sg, cryp->payload_out);
+		if (cryp->out_sg_len < 0)
+			return cryp->out_sg_len;
+	}
+
+	return 0;
+}
+
+static int stm32_cryp_aead_prepare(struct stm32_cryp *cryp, struct scatterlist *in_sg,
+				   struct scatterlist *out_sg)
+{
+	size_t align_size;
+	off_t skip;
+	int ret, ret2;
+
+	cryp->header_sg = NULL;
+	cryp->in_sg = NULL;
+	cryp->out_sg = NULL;
+
+	if (!cryp->dma_lch_in || !cryp->dma_lch_out) {
+		cryp->dma_mode = NO_DMA;
+		cryp->flags &= ~(FLG_IN_OUT_DMA | FLG_HEADER_DMA);
+
+		return 0;
+	}
+
+	/* CCM hw_init may have advanced in header */
+	skip = cryp->areq->assoclen - cryp->header_in;
+
+	align_size = ALIGN_DOWN(cryp->header_in, cryp->hw_blocksize);
+	ret = stm32_cryp_truncate_sg(&cryp->header_sg, &cryp->header_sg_len, in_sg, skip,
+				     align_size);
+	if (ret)
+		return ret;
+
+	ret = stm32_cryp_dma_check_sg(cryp->header_sg, align_size, AES_BLOCK_SIZE);
+	if (ret == NO_DMA) {
+		/* We cannot DMA the header */
+		kfree(cryp->header_sg);
+		cryp->header_sg = NULL;
+
+		cryp->flags &= ~FLG_HEADER_DMA;
+	} else {
+		cryp->flags |= FLG_HEADER_DMA;
+	}
+
+	/* Now skip all header to be at payload start */
+	skip = cryp->areq->assoclen;
+	align_size = ALIGN_DOWN(cryp->payload_in, cryp->hw_blocksize);
+	ret = stm32_cryp_truncate_sg(&cryp->in_sg, &cryp->in_sg_len, in_sg, skip, align_size);
+	if (ret) {
+		kfree(cryp->header_sg);
+		return ret;
+	}
+
+	/* For out buffer align_size is same as in buffer */
+	ret = stm32_cryp_truncate_sg(&cryp->out_sg, &cryp->out_sg_len, out_sg, skip, align_size);
+	if (ret) {
+		kfree(cryp->header_sg);
+		kfree(cryp->in_sg);
+		return ret;
+	}
+
+	ret = stm32_cryp_dma_check_sg(cryp->in_sg, align_size, AES_BLOCK_SIZE);
+	ret2 = stm32_cryp_dma_check_sg(cryp->out_sg, align_size, AES_BLOCK_SIZE);
+	if (ret == NO_DMA || ret2 == NO_DMA) {
+		kfree(cryp->in_sg);
+		cryp->in_sg = NULL;
+
+		kfree(cryp->out_sg);
+		cryp->out_sg = NULL;
+
+		cryp->flags &= ~FLG_IN_OUT_DMA;
+	} else {
+		cryp->flags |= FLG_IN_OUT_DMA;
+	}
+
+	return 0;
+}
+
 static int stm32_cryp_prepare_req(struct skcipher_request *req,
 				  struct aead_request *areq)
 {
 	struct stm32_cryp_ctx *ctx;
 	struct stm32_cryp *cryp;
 	struct stm32_cryp_reqctx *rctx;
-	struct scatterlist *in_sg;
+	struct scatterlist *in_sg, *out_sg;
 	int ret;
 
 	if (!req && !areq)
@@ -1029,6 +1541,15 @@ static int stm32_cryp_prepare_req(struct skcipher_request *req,
 		cryp->payload_in = req->cryptlen;
 		cryp->payload_out = req->cryptlen;
 		cryp->authsize = 0;
+
+		in_sg = req->src;
+		out_sg = req->dst;
+
+		ret = stm32_cryp_cipher_prepare(cryp, in_sg, out_sg);
+		if (ret)
+			return ret;
+
+		ret = stm32_cryp_hw_init(cryp);
 	} else {
 		/*
 		 * Length of input and output data:
@@ -1058,23 +1579,22 @@ static int stm32_cryp_prepare_req(struct skcipher_request *req,
 			cryp->header_in = areq->assoclen;
 			cryp->payload_out = cryp->payload_in;
 		}
-	}
 
-	in_sg = req ? req->src : areq->src;
-	scatterwalk_start(&cryp->in_walk, in_sg);
+		in_sg = areq->src;
+		out_sg = areq->dst;
 
-	cryp->out_sg = req ? req->dst : areq->dst;
-	scatterwalk_start(&cryp->out_walk, cryp->out_sg);
-
-	if (is_gcm(cryp) || is_ccm(cryp)) {
+		scatterwalk_start(&cryp->in_walk, in_sg);
+		scatterwalk_start(&cryp->out_walk, out_sg);
 		/* In output, jump after assoc data */
 		scatterwalk_copychunks(NULL, &cryp->out_walk, cryp->areq->assoclen, 2);
+
+		ret = stm32_cryp_hw_init(cryp);
+		if (ret)
+			return ret;
+
+		ret = stm32_cryp_aead_prepare(cryp, in_sg, out_sg);
 	}
 
-	if (is_ctr(cryp))
-		memset(cryp->last_ctr, 0, sizeof(cryp->last_ctr));
-
-	ret = stm32_cryp_hw_init(cryp);
 	return ret;
 }
 
@@ -1100,7 +1620,10 @@ static int stm32_cryp_cipher_one_req(struct crypto_engine *engine, void *areq)
 	if (!cryp)
 		return -ENODEV;
 
-	return stm32_cryp_cpu_start(cryp);
+	if (cryp->flags & FLG_IN_OUT_DMA)
+		return stm32_cryp_dma_start(cryp);
+	else
+		return stm32_cryp_it_start(cryp);
 }
 
 static int stm32_cryp_prepare_aead_req(struct crypto_engine *engine, void *areq)
@@ -1121,13 +1644,20 @@ static int stm32_cryp_aead_one_req(struct crypto_engine *engine, void *areq)
 	if (!cryp)
 		return -ENODEV;
 
-	if (unlikely(!cryp->payload_in && !cryp->header_in)) {
+	if (!stm32_cryp_get_input_text_len(cryp) && !cryp->header_in &&
+	    !(cryp->flags & FLG_HEADER_DMA)) {
 		/* No input data to process: get tag and finish */
 		stm32_cryp_finish_req(cryp, 0);
 		return 0;
 	}
 
-	return stm32_cryp_cpu_start(cryp);
+	if (cryp->flags & FLG_HEADER_DMA)
+		return stm32_cryp_header_dma_start(cryp);
+
+	if (!cryp->header_in && cryp->flags & FLG_IN_OUT_DMA)
+		return stm32_cryp_dma_start(cryp);
+
+	return stm32_cryp_it_start(cryp);
 }
 
 static int stm32_cryp_read_auth_tag(struct stm32_cryp *cryp)
@@ -1553,11 +2083,70 @@ static irqreturn_t stm32_cryp_irq(int irq, void *arg)
 	return IRQ_WAKE_THREAD;
 }
 
+static int stm32_cryp_dma_init(struct stm32_cryp *cryp)
+{
+	struct dma_slave_config dma_conf;
+	struct dma_chan *chan;
+	int err;
+
+	memset(&dma_conf, 0, sizeof(dma_conf));
+
+	dma_conf.direction = DMA_MEM_TO_DEV;
+	dma_conf.dst_addr = cryp->phys_base + CRYP_DIN;
+	dma_conf.dst_addr_width = DMA_SLAVE_BUSWIDTH_4_BYTES;
+	dma_conf.src_maxburst = CRYP_DMA_BURST_MEM;
+	dma_conf.dst_maxburst = CRYP_DMA_BURST_REG;
+	dma_conf.device_fc = false;
+
+	chan = dma_request_chan(cryp->dev, "in");
+	if (IS_ERR(chan))
+		return PTR_ERR(chan);
+
+	cryp->dma_lch_in = chan;
+	err = dmaengine_slave_config(cryp->dma_lch_in, &dma_conf);
+	if (err) {
+		dma_release_channel(cryp->dma_lch_in);
+		cryp->dma_lch_in = NULL;
+		dev_err(cryp->dev, "Couldn't configure DMA in slave.\n");
+		return err;
+	}
+
+	memset(&dma_conf, 0, sizeof(dma_conf));
+
+	dma_conf.direction = DMA_DEV_TO_MEM;
+	dma_conf.src_addr = cryp->phys_base + CRYP_DOUT;
+	dma_conf.src_addr_width = DMA_SLAVE_BUSWIDTH_4_BYTES;
+	dma_conf.src_maxburst = CRYP_DMA_BURST_REG;
+	dma_conf.dst_maxburst = CRYP_DMA_BURST_MEM;
+	dma_conf.device_fc = false;
+
+	chan = dma_request_chan(cryp->dev, "out");
+	if (IS_ERR(chan)) {
+		dma_release_channel(cryp->dma_lch_in);
+		cryp->dma_lch_in = NULL;
+		return PTR_ERR(chan);
+	}
+
+	cryp->dma_lch_out = chan;
+
+	err = dmaengine_slave_config(cryp->dma_lch_out, &dma_conf);
+	if (err) {
+		dma_release_channel(cryp->dma_lch_out);
+		cryp->dma_lch_out = NULL;
+		dev_err(cryp->dev, "Couldn't configure DMA out slave.\n");
+		dma_release_channel(cryp->dma_lch_in);
+		cryp->dma_lch_in = NULL;
+		return err;
+	}
+
+	return 0;
+}
+
 static struct skcipher_alg crypto_algs[] = {
 {
 	.base.cra_name		= "ecb(aes)",
 	.base.cra_driver_name	= "stm32-ecb-aes",
-	.base.cra_priority	= 200,
+	.base.cra_priority	= 1200,
 	.base.cra_flags		= CRYPTO_ALG_ASYNC,
 	.base.cra_blocksize	= AES_BLOCK_SIZE,
 	.base.cra_ctxsize	= sizeof(struct stm32_cryp_ctx),
@@ -1574,7 +2163,7 @@ static struct skcipher_alg crypto_algs[] = {
 {
 	.base.cra_name		= "cbc(aes)",
 	.base.cra_driver_name	= "stm32-cbc-aes",
-	.base.cra_priority	= 200,
+	.base.cra_priority	= 1200,
 	.base.cra_flags		= CRYPTO_ALG_ASYNC,
 	.base.cra_blocksize	= AES_BLOCK_SIZE,
 	.base.cra_ctxsize	= sizeof(struct stm32_cryp_ctx),
@@ -1592,7 +2181,7 @@ static struct skcipher_alg crypto_algs[] = {
 {
 	.base.cra_name		= "ctr(aes)",
 	.base.cra_driver_name	= "stm32-ctr-aes",
-	.base.cra_priority	= 200,
+	.base.cra_priority	= 1200,
 	.base.cra_flags		= CRYPTO_ALG_ASYNC,
 	.base.cra_blocksize	= 1,
 	.base.cra_ctxsize	= sizeof(struct stm32_cryp_ctx),
@@ -1610,7 +2199,7 @@ static struct skcipher_alg crypto_algs[] = {
 {
 	.base.cra_name		= "ecb(des)",
 	.base.cra_driver_name	= "stm32-ecb-des",
-	.base.cra_priority	= 200,
+	.base.cra_priority	= 1200,
 	.base.cra_flags		= CRYPTO_ALG_ASYNC,
 	.base.cra_blocksize	= DES_BLOCK_SIZE,
 	.base.cra_ctxsize	= sizeof(struct stm32_cryp_ctx),
@@ -1627,7 +2216,7 @@ static struct skcipher_alg crypto_algs[] = {
 {
 	.base.cra_name		= "cbc(des)",
 	.base.cra_driver_name	= "stm32-cbc-des",
-	.base.cra_priority	= 200,
+	.base.cra_priority	= 1200,
 	.base.cra_flags		= CRYPTO_ALG_ASYNC,
 	.base.cra_blocksize	= DES_BLOCK_SIZE,
 	.base.cra_ctxsize	= sizeof(struct stm32_cryp_ctx),
@@ -1645,7 +2234,7 @@ static struct skcipher_alg crypto_algs[] = {
 {
 	.base.cra_name		= "ecb(des3_ede)",
 	.base.cra_driver_name	= "stm32-ecb-des3",
-	.base.cra_priority	= 200,
+	.base.cra_priority	= 1200,
 	.base.cra_flags		= CRYPTO_ALG_ASYNC,
 	.base.cra_blocksize	= DES_BLOCK_SIZE,
 	.base.cra_ctxsize	= sizeof(struct stm32_cryp_ctx),
@@ -1662,7 +2251,7 @@ static struct skcipher_alg crypto_algs[] = {
 {
 	.base.cra_name		= "cbc(des3_ede)",
 	.base.cra_driver_name	= "stm32-cbc-des3",
-	.base.cra_priority	= 200,
+	.base.cra_priority	= 1200,
 	.base.cra_flags		= CRYPTO_ALG_ASYNC,
 	.base.cra_blocksize	= DES_BLOCK_SIZE,
 	.base.cra_ctxsize	= sizeof(struct stm32_cryp_ctx),
@@ -1739,6 +2328,25 @@ static const struct of_device_id stm32_dt_ids[] = {
 };
 MODULE_DEVICE_TABLE(of, stm32_dt_ids);
 
+static void cryp_debugfs(struct stm32_cryp *cryp)
+{
+	struct debugfs_regset32 *regset;
+
+	cryp->dbgdir = debugfs_create_dir("stm32_cryp", NULL);
+	if (IS_ERR_OR_NULL(cryp->dbgdir))
+		return;
+
+	regset = devm_kzalloc(cryp->dev, sizeof(*regset), GFP_KERNEL);
+	if (!regset)
+		return;
+
+	regset->regs = stm32_cryp_regs;
+	regset->nregs = ARRAY_SIZE(stm32_cryp_regs);
+	regset->base = cryp->regs;
+
+	debugfs_create_regset32("regset", 0444, cryp->dbgdir, regset);
+}
+
 static int stm32_cryp_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
@@ -1759,6 +2367,8 @@ static int stm32_cryp_probe(struct platform_device *pdev)
 	cryp->regs = devm_platform_ioremap_resource(pdev, 0);
 	if (IS_ERR(cryp->regs))
 		return PTR_ERR(cryp->regs);
+
+	cryp->phys_base = platform_get_resource(pdev, IORESOURCE_MEM, 0)->start;
 
 	irq = platform_get_irq(pdev, 0);
 	if (irq < 0)
@@ -1805,6 +2415,17 @@ static int stm32_cryp_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, cryp);
 
+	ret = stm32_cryp_dma_init(cryp);
+	switch (ret) {
+	case 0:
+		break;
+	case -ENODEV:
+		dev_dbg(dev, "DMA mode not available\n");
+		break;
+	default:
+		goto err_dma;
+	}
+
 	spin_lock(&cryp_list.lock);
 	list_add(&cryp->list, &cryp_list.dev_list);
 	spin_unlock(&cryp_list.lock);
@@ -1833,6 +2454,7 @@ static int stm32_cryp_probe(struct platform_device *pdev)
 	if (ret)
 		goto err_aead_algs;
 
+	cryp_debugfs(cryp);
 	dev_info(dev, "Initialized\n");
 
 	pm_runtime_put_sync(dev);
@@ -1848,6 +2470,12 @@ err_engine1:
 	spin_lock(&cryp_list.lock);
 	list_del(&cryp->list);
 	spin_unlock(&cryp_list.lock);
+
+	if (cryp->dma_lch_in)
+		dma_release_channel(cryp->dma_lch_in);
+	if (cryp->dma_lch_out)
+		dma_release_channel(cryp->dma_lch_out);
+err_dma:
 err_rst:
 	pm_runtime_disable(dev);
 	pm_runtime_put_noidle(dev);
@@ -1869,6 +2497,9 @@ static int stm32_cryp_remove(struct platform_device *pdev)
 	if (ret < 0)
 		return ret;
 
+	debugfs_remove_recursive(cryp->dbgdir);
+	cryp->dbgdir = NULL;
+
 	crypto_unregister_aeads(aead_algs, ARRAY_SIZE(aead_algs));
 	crypto_unregister_skciphers(crypto_algs, ARRAY_SIZE(crypto_algs));
 
@@ -1877,6 +2508,12 @@ static int stm32_cryp_remove(struct platform_device *pdev)
 	spin_lock(&cryp_list.lock);
 	list_del(&cryp->list);
 	spin_unlock(&cryp_list.lock);
+
+	if (cryp->dma_lch_in)
+		dma_release_channel(cryp->dma_lch_in);
+
+	if (cryp->dma_lch_out)
+		dma_release_channel(cryp->dma_lch_out);
 
 	pm_runtime_disable(cryp->dev);
 	pm_runtime_put_noidle(cryp->dev);

@@ -113,7 +113,6 @@
 
 /* Wifi */
 &sdmmc2 {
-	arm,primecell-periphid = <0x10153180>;
 	pinctrl-names = "default", "opendrain", "sleep";
 	pinctrl-0 = <&sdmmc2_b4_pins_a>;
 	pinctrl-1 = <&sdmmc2_b4_od_pins_a>;

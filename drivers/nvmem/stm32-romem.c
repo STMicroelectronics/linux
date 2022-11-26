@@ -32,12 +32,12 @@
  * - Upper: 2K bits, ECC protection, word programming only
  *   => 64 (x 32-bits) = words 32 to 95
  */
-#define STM32MP15_BSEC_NUM_LOWER	32
 
 #define STM32_ROMEM_AUTOSUSPEND_DELAY_MS	50
 
 struct stm32_romem_cfg {
 	int size;
+	u8 lower;
 	bool ta;
 };
 
@@ -46,11 +46,14 @@ struct stm32_romem_priv {
 	struct nvmem_config cfg;
 	struct clk *clk;
 	struct device *ta;
+	u8 lower;
 };
 
 struct device *stm32_bsec_pta_find(struct device *dev);
 static int stm32_bsec_pta_read(void *context, unsigned int offset, void *buf,
 			       size_t bytes);
+static int stm32_bsec_pta_write(void *context, unsigned int offset, void *buf,
+				size_t bytes);
 
 static int stm32_romem_read(void *context, unsigned int offset, void *buf,
 			    size_t bytes)
@@ -128,7 +131,7 @@ static int stm32_bsec_read(void *context, unsigned int offset, void *buf,
 	for (i = roffset; (i < roffset + rbytes); i += 4) {
 		u32 otp = i >> 2;
 
-		if (otp < STM32MP15_BSEC_NUM_LOWER) {
+		if (otp < priv->lower) {
 			/* read lower data from shadow registers */
 			val = readl_relaxed(
 				priv->base + STM32MP15_BSEC_DATA0 + i);
@@ -186,7 +189,7 @@ static int stm32_bsec_write(void *context, unsigned int offset, void *buf,
 		}
 	}
 
-	if (offset + bytes >= STM32MP15_BSEC_NUM_LOWER * 4)
+	if (offset + bytes >= priv->lower * 4)
 		dev_warn(dev, "Update of upper OTPs with ECC protection (word programming, only once)\n");
 
 end_write:
@@ -250,6 +253,8 @@ static int stm32_romem_probe(struct platform_device *pdev)
 	priv->cfg.owner = THIS_MODULE;
 	priv->cfg.type = NVMEM_TYPE_OTP;
 
+	priv->lower = 0;
+
 	cfg = (const struct stm32_romem_cfg *)
 		of_match_device(dev->driver->of_match_table, dev)->data;
 	if (!cfg) {
@@ -258,19 +263,19 @@ static int stm32_romem_probe(struct platform_device *pdev)
 		priv->cfg.reg_read = stm32_romem_read;
 	} else {
 		priv->cfg.size = cfg->size;
+		priv->lower = cfg->lower;
 		if (cfg->ta || optee_presence_check()) {
 			priv->ta = stm32_bsec_pta_find(dev);
 			/* wait for OP-TEE client driver to be up and ready */
 			if (!priv->ta) {
 				/* BSEC PTA is required or SMC not ready */
-				if (cfg->ta || !stm32_bsec_check()) {
+				if (cfg->ta || !stm32_bsec_check())
 					return -EPROBE_DEFER;
-				}
 			}
 		}
 		if (priv->ta) {
-			priv->cfg.read_only = true;
 			priv->cfg.reg_read = stm32_bsec_pta_read;
+			priv->cfg.reg_write = stm32_bsec_pta_write;
 		} else {
 			priv->cfg.reg_read = stm32_bsec_read;
 			priv->cfg.reg_write = stm32_bsec_write;
@@ -289,7 +294,7 @@ static int stm32_romem_probe(struct platform_device *pdev)
 		if (priv->clk) {
 			ret = clk_prepare_enable(priv->clk);
 			if (ret)
-				return dev_err_probe(dev, ret,"failed to enable clock\n");
+				return dev_err_probe(dev, ret, "failed to enable clock\n");
 		}
 
 		pm_runtime_set_autosuspend_delay(dev, STM32_ROMEM_AUTOSUSPEND_DELAY_MS);
@@ -354,11 +359,13 @@ static const struct dev_pm_ops stm32_romem_pm_ops = {
 
 static const struct stm32_romem_cfg stm32mp15_bsec_cfg = {
 	.size = 384, /* 96 x 32-bits data words */
+	.lower = 32, /* 32 word with incremental bit programming */
 	.ta = false,
 };
 
 static const struct stm32_romem_cfg stm32mp13_bsec_cfg = {
-	.size = 384,     /* 96 x 32-bits data words */
+	.size = 384, /* 96 x 32-bits data words */
+	.lower = 32, /* 32 word with incremental bit programming */
 	.ta = true,
 };
 
@@ -386,16 +393,15 @@ static struct platform_driver stm32_romem_driver = {
 /*************************************************************************
  * BSEC PTA : OP-TEE client driver to pseudo trusted application
  *************************************************************************/
+
 /*
  * Read OTP memory
  *
- * [in]	     value            a: OTP start offset in byte
- *                            b: access type
- *                               0 to read from shadow
- *                               1 to read from fuse
- *                               2 to read lock status
- * [out]     memref           buffer: Output buffer to store read values
- *                            size: Size of OTP to be read
+ * [in]		value[0].a		OTP start offset in byte
+ * [in]		value[0].b		Access type (0 : shadow,
+ *					1 : fuse, 2 : lock)
+ * [out]	memref[1].buffer	Output buffer to store read values
+ * [out]	memref[1].size		Size of OTP to be read
  *
  * Return codes:
  * TEE_SUCCESS - Invoke command success
@@ -403,10 +409,28 @@ static struct platform_driver stm32_romem_driver = {
  */
 #define PTA_BSEC_READ_MEM		0x0 /* Read OTP */
 
+/*
+ * Write OTP memory
+ *
+ * [in]		value[0].a		OTP start offset in byte
+ * [in]		value[0].b		Access type (0 : shadow,
+ *					1 : fuse, 2 : lock)
+ * [in]		memref[1].buffer	Input buffer to read values
+ * [in]		memref[1].size		Size of OTP to be written
+ *
+ * Return codes:
+ * TEE_SUCCESS - Invoke command success
+ * TEE_ERROR_BAD_PARAMETERS - Incorrect input param
+ */
+#define PTA_BSEC_WRITE_MEM		0x1	/* Write OTP */
+
 /* value of PTA_BSEC access type = value[in] b */
 #define SHADOW_ACCESS	0
 #define FUSE_ACCESS	1
 #define LOCK_ACCESS	2
+
+/* Bitfield definition for LOCK status */
+#define LOCK_PERM			BIT(30)
 
 /**
  * struct stm32_bsec_pta_priv - OP-TEE BSEC TA private data
@@ -582,6 +606,113 @@ static int stm32_bsec_pta_read(void *context, unsigned int offset, void *buf,
 	return ret;
 }
 
+/**
+ * stm32_bsec_pta_write() - nvmem write access using PTA client driver
+ * @context: nvmem context => romem privdate data
+ * @offset: nvmem offset
+ * @buf: buffer with nvem values
+ * @bytes: number of bytes to write
+ *
+ * Return:
+ *	On success, 0. On failure, -errno.
+ */
+static int stm32_bsec_pta_write(void *context, unsigned int offset, void *buf,
+				size_t bytes)
+{
+	struct stm32_romem_priv *romem_priv = context;
+	struct device *dev;
+	struct stm32_bsec_pta_priv *priv;
+	struct tee_shm *shm;
+	struct tee_ioctl_invoke_arg arg;
+	struct tee_param param[2];
+	u8 *shm_buf;
+	int ret;
+
+	dev = romem_priv->ta;
+	if (!dev) {
+		pr_err("TA_BSEC invoke with driver\n");
+		return -ENXIO;
+	}
+
+	/* Allow only writing complete 32-bits aligned words */
+	if ((bytes % 4) || (offset % 4))
+		return -EINVAL;
+
+	priv = dev_get_drvdata(dev);
+
+	memset(&arg, 0, sizeof(arg));
+	memset(&param, 0, sizeof(param));
+
+	arg.func = PTA_BSEC_WRITE_MEM;
+	arg.session = priv->session_id;
+	arg.num_params = 2;
+
+	param[0].attr = TEE_IOCTL_PARAM_ATTR_TYPE_VALUE_INPUT;
+	param[0].u.value.a = offset;
+	param[0].u.value.b = FUSE_ACCESS;
+
+	shm = tee_shm_alloc(priv->ctx, bytes, TEE_SHM_MAPPED | TEE_SHM_DMA_BUF);
+	if (IS_ERR(shm))
+		return PTR_ERR(shm);
+
+	param[1].attr = TEE_IOCTL_PARAM_ATTR_TYPE_MEMREF_INPUT;
+	param[1].u.memref.shm = shm;
+	param[1].u.memref.size = bytes;
+
+	shm_buf = tee_shm_get_va(shm, 0);
+	if (IS_ERR(shm_buf)) {
+		dev_err(dev, "tee_shm_get_va failed for transmit\n");
+		return PTR_ERR(shm_buf);
+	}
+
+	memcpy(shm_buf, buf, bytes);
+
+	ret = tee_client_invoke_func(priv->ctx, &arg, param);
+	if (ret < 0 || arg.ret != 0) {
+		dev_err(dev, "TA_BSEC invoke failed TEE err: %x, ret:%x\n",
+			arg.ret, ret);
+		if (!ret)
+			ret = -EIO;
+	}
+	dev_dbg(dev, "Write OTPs %d to %d, ret=%d\n",
+		offset / 4, (offset + bytes) / 4, ret);
+
+	/* Lock the upper OTPs with ECC protection, word programming only */
+	if (!ret && ((offset + bytes) >= (romem_priv->lower * 4))) {
+		u32 start, nb_lock;
+		u32 *lock = (u32 *)shm_buf;
+		int i;
+
+		/*
+		 * don't lock the lower OTPs, no ECC protection and incremental
+		 * bit programming, a second write is allowed
+		 */
+		start = max_t(u32, offset, romem_priv->lower * 4);
+		nb_lock = (offset + bytes - start) / 4;
+
+		param[0].u.value.a = start;
+		param[0].u.value.b = LOCK_ACCESS;
+		param[1].u.memref.size = nb_lock * 4;
+
+		for (i = 0; i < nb_lock; i++)
+			lock[i] = LOCK_PERM;
+
+		ret = tee_client_invoke_func(priv->ctx, &arg, param);
+		if (ret < 0 || arg.ret != 0) {
+			dev_err(dev, "TA_BSEC invoke failed TEE err: %x, ret:%x\n",
+				arg.ret, ret);
+			if (!ret)
+				ret = -EIO;
+		}
+		dev_dbg(dev, "Lock upper OTPs %d to %d, ret=%d\n",
+			start / 4, start / 4 + nb_lock, ret);
+	}
+
+	tee_shm_free(shm);
+
+	return ret;
+}
+
 static const struct tee_client_device_id stm32_bsec_id_table[] = {
 	{
 		UUID_INIT(0x94cf71ad, 0x80e6, 0x40b5,
@@ -630,6 +761,15 @@ static int stm32_bsec_pta_read(void *context, unsigned int offset, void *buf,
 
 	return -ENXIO;
 }
+
+static int stm32_bsec_pta_write(void *context, unsigned int offset, void *buf,
+				size_t bytes)
+{
+	pr_debug("%s: TA BSEC request without OPTEE support\n", __func__);
+
+	return -ENXIO;
+}
+
 struct device *stm32_bsec_pta_find(struct device *dev)
 {
 	pr_debug("%s: TA BSEC request without OPTEE support\n", __func__);

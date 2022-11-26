@@ -23,7 +23,10 @@
 
 /* Chip ID */
 /* Page 0 */
+#define GC2145_REG_ANALOG_MODE1	0x17
 #define GC2145_REG_OUTPUT_FMT	0x84
+#define GC2145_REG_DEBUG_MODE2	0x8c
+#define GC2145_REG_DEBUG_MODE3	0x8d
 #define GC2145_REG_CHIP_ID	0xf0
 #define GC2145_REG_PAGE_SELECT	0xfe
 /* Page 3 */
@@ -940,6 +943,14 @@ static const struct gc2145_format supported_formats[] = {
 	},
 };
 
+struct gc2145_ctrls {
+	struct v4l2_ctrl_handler handler;
+	struct v4l2_ctrl *pixel_rate;
+	struct v4l2_ctrl *test_pattern;
+	struct v4l2_ctrl *hflip;
+	struct v4l2_ctrl *vflip;
+};
+
 struct gc2145 {
 	struct v4l2_subdev sd;
 	struct media_pad pad;
@@ -952,9 +963,8 @@ struct gc2145 {
 	struct gpio_desc *powerdown_gpio;
 	struct regulator_bulk_data supplies[GC2145_NUM_SUPPLIES];
 
-	struct v4l2_ctrl_handler ctrl_handler;
-	/* V4L2 Controls */
-	struct v4l2_ctrl *pixel_rate;
+	/* V4L2 controls */
+	struct gc2145_ctrls ctrls;
 
 	/* Current mode */
 	const struct gc2145_mode *mode;
@@ -972,6 +982,12 @@ struct gc2145 {
 static inline struct gc2145 *to_gc2145(struct v4l2_subdev *_sd)
 {
 	return container_of(_sd, struct gc2145, sd);
+}
+
+static inline struct v4l2_subdev *ctrl_to_sd(struct v4l2_ctrl *ctrl)
+{
+	return &container_of(ctrl->handler, struct gc2145,
+			     ctrls.handler)->sd;
 }
 
 static int gc2145_read_reg(struct gc2145 *gc2145, u8 addr, u8 *data, int data_size)
@@ -1024,6 +1040,22 @@ static int gc2145_write_reg(struct gc2145 *gc2145, u8 addr, u8 data)
 	}
 
 	return 0;
+}
+
+static int gc2145_mod_reg(struct gc2145 *gc2145, u16 reg, u8 mask, u8 val)
+{
+	u8 readval;
+	int ret;
+
+	ret = gc2145_read_reg(gc2145, reg, &readval, 1);
+	if (ret)
+		return ret;
+
+	readval &= ~mask;
+	val &= mask;
+	val |= readval;
+
+	return gc2145_write_reg(gc2145, reg, val);
 }
 
 /* Write a list of registers */
@@ -1129,6 +1161,36 @@ static int gc2145_enum_frame_size(struct v4l2_subdev *sd, struct v4l2_subdev_sta
 	return 0;
 }
 
+static int gc2145_enum_frame_interval(struct v4l2_subdev *sd, struct v4l2_subdev_state *sd_state,
+				      struct v4l2_subdev_frame_interval_enum *fie)
+{
+	struct gc2145 *gc2145 = to_gc2145(sd);
+	const struct gc2145_format *gc2145_format;
+	u32 code, i;
+
+	/* The driver currently only support a unique framerate per resolution */
+	if (fie->index > 0)
+		return -EINVAL;
+
+	gc2145_format = gc2145_get_format_code(gc2145, fie->code);
+	code = gc2145_format->code;
+	if (fie->code != code)
+		return -EINVAL;
+
+	for (i = 0; i < ARRAY_SIZE(supported_modes); i++)
+		if (supported_modes[i].width == fie->width &&
+		    supported_modes[i].height == fie->height)
+			break;
+
+	if (i >= ARRAY_SIZE(supported_modes))
+		return -EINVAL;
+
+	fie->interval.numerator = supported_modes[i].frame_interval.numerator;
+	fie->interval.denominator = supported_modes[i].frame_interval.denominator;
+
+	return 0;
+}
+
 static void gc2145_reset_colorspace(struct v4l2_mbus_framefmt *fmt)
 {
 	fmt->colorspace = V4L2_COLORSPACE_SRGB;
@@ -1182,6 +1244,7 @@ static int gc2145_set_pad_format(struct v4l2_subdev *sd, struct v4l2_subdev_stat
 	const struct gc2145_mode *mode;
 	const struct gc2145_format *gc2145_fmt;
 	struct v4l2_mbus_framefmt *framefmt;
+	struct gc2145_ctrls *ctrls = &gc2145->ctrls;
 
 	mutex_lock(&gc2145->mutex);
 
@@ -1204,7 +1267,7 @@ static int gc2145_set_pad_format(struct v4l2_subdev *sd, struct v4l2_subdev_stat
 		gc2145->fmt = fmt->format;
 		gc2145->mode = mode;
 		/* Update pixel_rate based on the mode */
-		__v4l2_ctrl_s_ctrl_int64(gc2145->pixel_rate, mode->pixel_rate);
+		__v4l2_ctrl_s_ctrl_int64(ctrls->pixel_rate, mode->pixel_rate);
 	}
 
 	mutex_unlock(&gc2145->mutex);
@@ -1314,8 +1377,13 @@ static int gc2145_start_streaming(struct gc2145 *gc2145)
 	if (ret)
 		return ret;
 
+	/* Come back on page 0 by default */
+	ret = gc2145_write_reg(gc2145, GC2145_REG_PAGE_SELECT, 0x00);
+	if (ret)
+		return ret;
+
 	/* Apply customized values from user */
-	ret =  __v4l2_ctrl_handler_setup(gc2145->sd.ctrl_handler);
+	ret =  __v4l2_ctrl_handler_setup(&gc2145->ctrls.handler);
 	if (ret)
 		goto err_rpm_put;
 
@@ -1497,6 +1565,42 @@ static int gc2145_identify_module(struct gc2145 *gc2145)
 	return 0;
 }
 
+static const char * const test_pattern_menu[] = {
+	"Disabled",
+	"Colored patterns",
+	"Uniform white",
+	"Uniform yellow",
+	"Uniform cyan",
+	"Uniform green",
+	"Uniform magenta",
+	"Uniform red",
+	"Uniform black",
+};
+
+#define GC2145_TEST_PATTERN_ENABLE	BIT(0)
+#define GC2145_TEST_PATTERN_UXGA	BIT(3)
+
+#define GC2145_TEST_UNIFORM		BIT(3)
+#define GC2145_TEST_WHITE		(4 << 4)
+#define GC2145_TEST_YELLOW		(8 << 4)
+#define GC2145_TEST_CYAN		(9 << 4)
+#define GC2145_TEST_GREEN		(6 << 4)
+#define GC2145_TEST_MAGENTA		(10 << 4)
+#define GC2145_TEST_RED			(5 << 4)
+#define GC2145_TEST_BLACK		(0)
+
+static const u8 test_pattern_val[] = {
+	0,
+	GC2145_TEST_PATTERN_ENABLE,
+	GC2145_TEST_UNIFORM | GC2145_TEST_WHITE,
+	GC2145_TEST_UNIFORM | GC2145_TEST_YELLOW,
+	GC2145_TEST_UNIFORM | GC2145_TEST_CYAN,
+	GC2145_TEST_UNIFORM | GC2145_TEST_GREEN,
+	GC2145_TEST_UNIFORM | GC2145_TEST_MAGENTA,
+	GC2145_TEST_UNIFORM | GC2145_TEST_RED,
+	GC2145_TEST_UNIFORM | GC2145_TEST_BLACK,
+};
+
 static const struct v4l2_subdev_core_ops gc2145_core_ops = {
 	.subscribe_event = v4l2_ctrl_subdev_subscribe_event,
 	.unsubscribe_event = v4l2_event_subdev_unsubscribe,
@@ -1517,6 +1621,7 @@ static const struct v4l2_subdev_pad_ops gc2145_pad_ops = {
 	.get_fmt = gc2145_get_pad_format,
 	.set_fmt = gc2145_set_pad_format,
 	.enum_frame_size = gc2145_enum_frame_size,
+	.enum_frame_interval = gc2145_enum_frame_interval,
 };
 
 static const struct v4l2_subdev_ops gc2145_subdev_ops = {
@@ -1529,38 +1634,124 @@ static const struct v4l2_subdev_internal_ops gc2145_internal_ops = {
 	.open = gc2145_open,
 };
 
+static int gc2145_set_ctrl_test_pattern(struct gc2145 *gc2145, int value)
+{
+	int ret;
+
+	if (!value) {
+		/* Disable test pattern */
+		ret = gc2145_write_reg(gc2145, GC2145_REG_DEBUG_MODE2, 0);
+		if (ret)
+			return ret;
+
+		return gc2145_write_reg(gc2145, GC2145_REG_DEBUG_MODE3, 0);
+	}
+
+	/* Enable test pattern, colored or uniform */
+	ret = gc2145_write_reg(gc2145, GC2145_REG_DEBUG_MODE2,
+			       GC2145_TEST_PATTERN_ENABLE |
+			       GC2145_TEST_PATTERN_UXGA);
+	if (ret)
+		return ret;
+
+	if (!(test_pattern_val[value] & GC2145_TEST_UNIFORM))
+		return gc2145_write_reg(gc2145, GC2145_REG_DEBUG_MODE3, 0);
+
+	/* Uniform */
+	return gc2145_write_reg(gc2145, GC2145_REG_DEBUG_MODE3,
+				test_pattern_val[value]);
+}
+
+static int gc2145_set_ctrl_hflip(struct gc2145 *gc2145, int value)
+{
+	return gc2145_mod_reg(gc2145, GC2145_REG_ANALOG_MODE1,
+			      BIT(0), (value ? BIT(0) : 0));
+}
+
+static int gc2145_set_ctrl_vflip(struct gc2145 *gc2145, int value)
+{
+	return gc2145_mod_reg(gc2145, GC2145_REG_ANALOG_MODE1,
+			      BIT(1), (value ? BIT(1) : 0));
+}
+
+static int gc2145_s_ctrl(struct v4l2_ctrl *ctrl)
+{
+	struct v4l2_subdev *sd = ctrl_to_sd(ctrl);
+	struct i2c_client *client = v4l2_get_subdevdata(sd);
+	struct gc2145 *gc2145 = to_gc2145(sd);
+	int ret;
+
+	/* v4l2_ctrl_lock() locks our own mutex */
+
+	ret = pm_runtime_resume_and_get(&client->dev);
+	if (ret < 0)
+		return ret;
+
+	switch (ctrl->id) {
+	case V4L2_CID_TEST_PATTERN:
+		ret = gc2145_set_ctrl_test_pattern(gc2145, ctrl->val);
+		break;
+	case V4L2_CID_HFLIP:
+		ret = gc2145_set_ctrl_hflip(gc2145, ctrl->val);
+		break;
+	case V4L2_CID_VFLIP:
+		ret = gc2145_set_ctrl_vflip(gc2145, ctrl->val);
+		break;
+	default:
+		ret = -EINVAL;
+		break;
+	}
+
+	pm_runtime_put(&client->dev);
+	return ret;
+}
+
+static const struct v4l2_ctrl_ops gc2145_ctrl_ops = {
+	.s_ctrl = gc2145_s_ctrl,
+};
+
 /* Initialize control handlers */
 static int gc2145_init_controls(struct gc2145 *gc2145)
 {
 	struct i2c_client *client = v4l2_get_subdevdata(&gc2145->sd);
-	struct v4l2_ctrl_handler *ctrl_hdlr;
+	const struct v4l2_ctrl_ops *ops = &gc2145_ctrl_ops;
+	struct gc2145_ctrls *ctrls = &gc2145->ctrls;
+	struct v4l2_ctrl_handler *hdl = &ctrls->handler;
 	int ret;
 
-	ctrl_hdlr = &gc2145->ctrl_handler;
-	ret = v4l2_ctrl_handler_init(ctrl_hdlr, 12);
+	ret = v4l2_ctrl_handler_init(hdl, 12);
 	if (ret)
 		return ret;
 
-	mutex_init(&gc2145->mutex);
-	ctrl_hdlr->lock = &gc2145->mutex;
+	hdl->lock = &gc2145->mutex;
 
 	/* By default, PIXEL_RATE is read only */
-	gc2145->pixel_rate = v4l2_ctrl_new_std(ctrl_hdlr, NULL, V4L2_CID_PIXEL_RATE, 0, INT_MAX, 1,
-					       GC2145_640_480_PIXELRATE);
-	gc2145->pixel_rate->flags |= V4L2_CTRL_FLAG_READ_ONLY;
+	ctrls->pixel_rate = v4l2_ctrl_new_std(hdl, ops, V4L2_CID_PIXEL_RATE,
+					      0, INT_MAX, 1,
+					      GC2145_640_480_PIXELRATE);
+	ctrls->pixel_rate->flags |= V4L2_CTRL_FLAG_READ_ONLY;
 
-	if (ctrl_hdlr->error) {
-		ret = ctrl_hdlr->error;
+	ctrls->test_pattern =
+		v4l2_ctrl_new_std_menu_items(hdl, ops, V4L2_CID_TEST_PATTERN,
+					     ARRAY_SIZE(test_pattern_menu) - 1,
+					     0, 0, test_pattern_menu);
+	ctrls->hflip = v4l2_ctrl_new_std(hdl, ops, V4L2_CID_HFLIP,
+					 0, 1, 1, 0);
+	ctrls->vflip = v4l2_ctrl_new_std(hdl, ops, V4L2_CID_VFLIP,
+					 0, 1, 1, 0);
+
+	if (hdl->error) {
+		ret = hdl->error;
 		dev_err(&client->dev, "control init failed (%d)\n", ret);
 		goto error;
 	}
 
-	gc2145->sd.ctrl_handler = ctrl_hdlr;
+	gc2145->sd.ctrl_handler = hdl;
 
 	return 0;
 
 error:
-	v4l2_ctrl_handler_free(ctrl_hdlr);
+	v4l2_ctrl_handler_free(hdl);
 	mutex_destroy(&gc2145->mutex);
 
 	return ret;
@@ -1568,8 +1759,7 @@ error:
 
 static void gc2145_free_controls(struct gc2145 *gc2145)
 {
-	v4l2_ctrl_handler_free(gc2145->sd.ctrl_handler);
-	mutex_destroy(&gc2145->mutex);
+	v4l2_ctrl_handler_free(&gc2145->ctrls.handler);
 }
 
 static int gc2145_check_hwcfg(struct device *dev)
@@ -1656,6 +1846,8 @@ static int gc2145_probe(struct i2c_client *client)
 	if (ret)
 		return ret;
 
+	mutex_init(&gc2145->mutex);
+
 	ret = gc2145_identify_module(gc2145);
 	if (ret)
 		goto error_power_off;
@@ -1705,6 +1897,7 @@ error_handler_free:
 
 error_power_off:
 	gc2145_power_off(dev);
+	mutex_destroy(&gc2145->mutex);
 
 	return ret;
 }
@@ -1722,6 +1915,8 @@ static int gc2145_remove(struct i2c_client *client)
 	if (!pm_runtime_status_suspended(&client->dev))
 		gc2145_power_off(&client->dev);
 	pm_runtime_set_suspended(&client->dev);
+
+	mutex_destroy(&gc2145->mutex);
 
 	return 0;
 }

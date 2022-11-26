@@ -2328,7 +2328,6 @@ static struct stm32_pinctrl_match_data stm32mp157_match_data = {
 static struct stm32_pinctrl_match_data stm32mp157_z_match_data = {
 	.pins = stm32mp157_z_pins,
 	.npins = ARRAY_SIZE(stm32mp157_z_pins),
-	.pin_base_shift = STM32MP157_Z_BASE_SHIFT,
 };
 
 static const struct of_device_id stm32mp157_pctrl_match[] = {

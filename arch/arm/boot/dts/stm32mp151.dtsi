@@ -431,6 +431,17 @@
 			};
 		};
 
+		i2s2: audio-controller@4000b000 {
+			compatible = "st,stm32h7-i2s";
+			#sound-dai-cells = <0>;
+			reg = <0x4000b000 0x400>;
+			interrupts = <GIC_SPI 36 IRQ_TYPE_LEVEL_HIGH>;
+			dmas = <&dmamux1 39 0x400 0x01>,
+			       <&dmamux1 40 0x400 0x01>;
+			dma-names = "rx", "tx";
+			status = "disabled";
+		};
+
 		spi2: spi@4000b000 {
 			#address-cells = <1>;
 			#size-cells = <0>;
@@ -445,13 +456,13 @@
 			status = "disabled";
 		};
 
-		i2s2: audio-controller@4000b000 {
+		i2s3: audio-controller@4000c000 {
 			compatible = "st,stm32h7-i2s";
 			#sound-dai-cells = <0>;
-			reg = <0x4000b000 0x400>;
-			interrupts = <GIC_SPI 36 IRQ_TYPE_LEVEL_HIGH>;
-			dmas = <&dmamux1 39 0x400 0x01>,
-			       <&dmamux1 40 0x400 0x01>;
+			reg = <0x4000c000 0x400>;
+			interrupts = <GIC_SPI 51 IRQ_TYPE_LEVEL_HIGH>;
+			dmas = <&dmamux1 61 0x400 0x01>,
+			       <&dmamux1 62 0x400 0x01>;
 			dma-names = "rx", "tx";
 			status = "disabled";
 		};
@@ -464,17 +475,6 @@
 			interrupts = <GIC_SPI 51 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&rcc SPI3_K>;
 			resets = <&rcc SPI3_R>;
-			dmas = <&dmamux1 61 0x400 0x01>,
-			       <&dmamux1 62 0x400 0x01>;
-			dma-names = "rx", "tx";
-			status = "disabled";
-		};
-
-		i2s3: audio-controller@4000c000 {
-			compatible = "st,stm32h7-i2s";
-			#sound-dai-cells = <0>;
-			reg = <0x4000c000 0x400>;
-			interrupts = <GIC_SPI 51 IRQ_TYPE_LEVEL_HIGH>;
 			dmas = <&dmamux1 61 0x400 0x01>,
 			       <&dmamux1 62 0x400 0x01>;
 			dma-names = "rx", "tx";
@@ -770,6 +770,17 @@
 			status = "disabled";
 		};
 
+		i2s1: audio-controller@44004000 {
+			compatible = "st,stm32h7-i2s";
+			#sound-dai-cells = <0>;
+			reg = <0x44004000 0x400>;
+			interrupts = <GIC_SPI 35 IRQ_TYPE_LEVEL_HIGH>;
+			dmas = <&dmamux1 37 0x400 0x01>,
+			       <&dmamux1 38 0x400 0x01>;
+			dma-names = "rx", "tx";
+			status = "disabled";
+		};
+
 		spi1: spi@44004000 {
 			#address-cells = <1>;
 			#size-cells = <0>;
@@ -778,17 +789,6 @@
 			interrupts = <GIC_SPI 35 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&rcc SPI1_K>;
 			resets = <&rcc SPI1_R>;
-			dmas = <&dmamux1 37 0x400 0x01>,
-			       <&dmamux1 38 0x400 0x01>;
-			dma-names = "rx", "tx";
-			status = "disabled";
-		};
-
-		i2s1: audio-controller@44004000 {
-			compatible = "st,stm32h7-i2s";
-			#sound-dai-cells = <0>;
-			reg = <0x44004000 0x400>;
-			interrupts = <GIC_SPI 35 IRQ_TYPE_LEVEL_HIGH>;
 			dmas = <&dmamux1 37 0x400 0x01>,
 			       <&dmamux1 38 0x400 0x01>;
 			dma-names = "rx", "tx";
@@ -1145,6 +1145,8 @@
 			adc1: adc@0 {
 				compatible = "st,stm32mp1-adc";
 				#io-channel-cells = <1>;
+				#address-cells = <1>;
+				#size-cells = <0>;
 				reg = <0x0>;
 				interrupt-parent = <&adc>;
 				interrupts = <0>;
@@ -1156,6 +1158,8 @@
 			adc2: adc@100 {
 				compatible = "st,stm32mp1-adc";
 				#io-channel-cells = <1>;
+				#address-cells = <1>;
+				#size-cells = <0>;
 				reg = <0x100>;
 				interrupt-parent = <&adc>;
 				interrupts = <1>;
@@ -1164,6 +1168,14 @@
 				nvmem-cells = <&vrefint>;
 				nvmem-cell-names = "vrefint";
 				status = "disabled";
+				channel@13 {
+					reg = <13>;
+					label = "vrefint";
+				};
+				channel@14 {
+					reg = <14>;
+					label = "vddcore";
+				};
 			};
 		};
 
@@ -1298,18 +1310,67 @@
 			compatible = "st,stm32mp1-exti", "syscon";
 			interrupt-controller;
 			#interrupt-cells = <2>;
+			#address-cells = <0>;
 			reg = <0x5000d000 0x400>;
 			hwlocks = <&hsem 1 1>;
+			wakeup-parent = <&pwr_irq>;
 
-			/* exti_pwr is an extra interrupt controller used for
-			 * EXTI 55 to 60. It's mapped on pwr interrupt
-			 * controller.
-			 */
-			exti_pwr: exti-pwr {
-				interrupt-controller;
+			exti-interrupt-map {
+				#address-cells = <0>;
 				#interrupt-cells = <2>;
-				interrupt-parent = <&pwr_irq>;
-				st,irq-number = <6>;
+				interrupt-map-mask = <0xffffffff 0>;
+				interrupt-map =
+					<0  0 &intc GIC_SPI 6   IRQ_TYPE_LEVEL_HIGH>,
+					<1  0 &intc GIC_SPI 7   IRQ_TYPE_LEVEL_HIGH>,
+					<2  0 &intc GIC_SPI 8   IRQ_TYPE_LEVEL_HIGH>,
+					<3  0 &intc GIC_SPI 9   IRQ_TYPE_LEVEL_HIGH>,
+					<4  0 &intc GIC_SPI 10  IRQ_TYPE_LEVEL_HIGH>,
+					<5  0 &intc GIC_SPI 23  IRQ_TYPE_LEVEL_HIGH>,
+					<6  0 &intc GIC_SPI 64  IRQ_TYPE_LEVEL_HIGH>,
+					<7  0 &intc GIC_SPI 65  IRQ_TYPE_LEVEL_HIGH>,
+					<8  0 &intc GIC_SPI 66  IRQ_TYPE_LEVEL_HIGH>,
+					<9  0 &intc GIC_SPI 67  IRQ_TYPE_LEVEL_HIGH>,
+					<10 0 &intc GIC_SPI 40  IRQ_TYPE_LEVEL_HIGH>,
+					<11 0 &intc GIC_SPI 42  IRQ_TYPE_LEVEL_HIGH>,
+					<12 0 &intc GIC_SPI 76  IRQ_TYPE_LEVEL_HIGH>,
+					<13 0 &intc GIC_SPI 77  IRQ_TYPE_LEVEL_HIGH>,
+					<14 0 &intc GIC_SPI 121 IRQ_TYPE_LEVEL_HIGH>,
+					<15 0 &intc GIC_SPI 127 IRQ_TYPE_LEVEL_HIGH>,
+					<16 0 &intc GIC_SPI 1   IRQ_TYPE_LEVEL_HIGH>,
+					<19 0 &intc GIC_SPI 3   IRQ_TYPE_LEVEL_HIGH>,
+					<21 0 &intc GIC_SPI 31  IRQ_TYPE_LEVEL_HIGH>,
+					<22 0 &intc GIC_SPI 33  IRQ_TYPE_LEVEL_HIGH>,
+					<23 0 &intc GIC_SPI 72  IRQ_TYPE_LEVEL_HIGH>,
+					<24 0 &intc GIC_SPI 95  IRQ_TYPE_LEVEL_HIGH>,
+					<25 0 &intc GIC_SPI 107 IRQ_TYPE_LEVEL_HIGH>,
+					<26 0 &intc GIC_SPI 37  IRQ_TYPE_LEVEL_HIGH>,
+					<27 0 &intc GIC_SPI 38  IRQ_TYPE_LEVEL_HIGH>,
+					<28 0 &intc GIC_SPI 39  IRQ_TYPE_LEVEL_HIGH>,
+					<29 0 &intc GIC_SPI 71  IRQ_TYPE_LEVEL_HIGH>,
+					<30 0 &intc GIC_SPI 52  IRQ_TYPE_LEVEL_HIGH>,
+					<31 0 &intc GIC_SPI 53  IRQ_TYPE_LEVEL_HIGH>,
+					<32 0 &intc GIC_SPI 82  IRQ_TYPE_LEVEL_HIGH>,
+					<33 0 &intc GIC_SPI 83  IRQ_TYPE_LEVEL_HIGH>,
+					<43 0 &intc GIC_SPI 75  IRQ_TYPE_LEVEL_HIGH>,
+					<44 0 &intc GIC_SPI 98  IRQ_TYPE_LEVEL_HIGH>,
+					<47 0 &intc GIC_SPI 93  IRQ_TYPE_LEVEL_HIGH>,
+					<48 0 &intc GIC_SPI 138 IRQ_TYPE_LEVEL_HIGH>,
+					<50 0 &intc GIC_SPI 139 IRQ_TYPE_LEVEL_HIGH>,
+					<52 0 &intc GIC_SPI 140 IRQ_TYPE_LEVEL_HIGH>,
+					<53 0 &intc GIC_SPI 141 IRQ_TYPE_LEVEL_HIGH>,
+					<54 0 &intc GIC_SPI 135 IRQ_TYPE_LEVEL_HIGH>,
+					<55 0 &pwr_irq 0 IRQ_TYPE_EDGE_FALLING 0>,
+					<56 0 &pwr_irq 1 IRQ_TYPE_EDGE_FALLING 0>,
+					<57 0 &pwr_irq 2 IRQ_TYPE_EDGE_FALLING 0>,
+					<58 0 &pwr_irq 3 IRQ_TYPE_EDGE_FALLING 0>,
+					<59 0 &pwr_irq 4 IRQ_TYPE_EDGE_FALLING 0>,
+					<60 0 &pwr_irq 5 IRQ_TYPE_EDGE_FALLING 0>,
+					<61 0 &intc GIC_SPI 100 IRQ_TYPE_LEVEL_HIGH>,
+					<65 0 &intc GIC_SPI 144 IRQ_TYPE_LEVEL_HIGH>,
+					<68 0 &intc GIC_SPI 143 IRQ_TYPE_LEVEL_HIGH>,
+					<69 0 &intc GIC_SPI 94  IRQ_TYPE_LEVEL_HIGH>,
+					<70 0 &intc GIC_SPI 62  IRQ_TYPE_LEVEL_HIGH>,
+					<73 0 &intc GIC_SPI 129 IRQ_TYPE_LEVEL_HIGH>;
 			};
 		};
 
@@ -1720,7 +1781,6 @@
 			reg = <0x5c000000 0x400>;
 			interrupts-extended = <&exti 26 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&scmi_clk CK_SCMI_USART1>;
-			resets = <&scmi_reset RST_SCMI_USART1>;
 			wakeup-source;
 			power-domains = <&pd_core>;
 			status = "disabled";
@@ -1835,7 +1895,7 @@
 		 * Break node order to solve dependency probe issue between
 		 * pinctrl and exti.
 		 */
-		pinctrl: pin-controller@50002000 {
+		pinctrl: pinctrl@50002000 {
 			#address-cells = <1>;
 			#size-cells = <1>;
 			compatible = "st,stm32mp157-pinctrl";
@@ -1967,7 +2027,7 @@
 			};
 		};
 
-		pinctrl_z: pin-controller-z@54004000 {
+		pinctrl_z: pinctrl@54004000 {
 			#address-cells = <1>;
 			#size-cells = <1>;
 			compatible = "st,stm32mp157-z-pinctrl";
