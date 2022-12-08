@@ -1257,6 +1257,22 @@ struct v4l2_ctrl_isp_stat_region {
 	__u32 height[25];
 };
 
+#define V4L2_CID_ISP_STAT_AVG_FILTER		(V4L2_CID_IMAGE_PROC_CLASS_BASE + 12)
+enum v4l2_isp_stat_avg_filter {
+	V4L2_STAT_AVG_FILTER_NONE	= 0,
+	V4L2_STAT_AVG_FILTER_EXCL16	= 1,
+	V4L2_STAT_AVG_FILTER_EXCL32	= 2,
+	V4L2_STAT_AVG_FILTER_EXCL64	= 3,
+};
+
+#define V4L2_CID_ISP_STAT_BIN_COMP		(V4L2_CID_IMAGE_PROC_CLASS_BASE + 13)
+enum v4l2_isp_stat_bin_comp {
+	V4L2_STAT_BIN_COMP_R		= 0,
+	V4L2_STAT_BIN_COMP_G		= 1,
+	V4L2_STAT_BIN_COMP_B		= 2,
+	V4L2_STAT_BIN_COMP_L		= 3,
+};
+
 /*  DV-class control IDs defined by V4L2 */
 #define V4L2_CID_DV_CLASS_BASE			(V4L2_CTRL_CLASS_DV | 0x900)
 #define V4L2_CID_DV_CLASS			(V4L2_CTRL_CLASS_DV | 1)
