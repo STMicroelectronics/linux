@@ -1239,6 +1239,24 @@ enum v4l2_jpeg_chroma_subsampling {
 #define V4L2_CID_DEINTERLACING_MODE		(V4L2_CID_IMAGE_PROC_CLASS_BASE + 4)
 #define V4L2_CID_DIGITAL_GAIN			(V4L2_CID_IMAGE_PROC_CLASS_BASE + 5)
 
+#define V4L2_CID_ISP_STAT_REGION		(V4L2_CID_IMAGE_PROC_CLASS_BASE + 10)
+/**
+ * struct v4l2_ctrl_isp_stat_region - Region where ISP statistics are collected
+ *
+ * @nb_regions: number of regions
+ * @top: top coordinate of a region
+ * @left: left coordinate of a region
+ * @width: width of a region
+ * @height: height of a region
+ */
+struct v4l2_ctrl_isp_stat_region {
+	__u8 nb_regions;
+	__u32 top[25];
+	__u32 left[25];
+	__u32 width[25];
+	__u32 height[25];
+};
+
 /*  DV-class control IDs defined by V4L2 */
 #define V4L2_CID_DV_CLASS_BASE			(V4L2_CTRL_CLASS_DV | 0x900)
 #define V4L2_CID_DV_CLASS			(V4L2_CTRL_CLASS_DV | 1)

@@ -441,6 +441,9 @@ void v4l2_ctrl_type_op_log(const struct v4l2_ctrl *ctrl)
 			ptr.p_rect->left, ptr.p_rect->top,
 			ptr.p_rect->width, ptr.p_rect->height);
 		break;
+	case V4L2_CTRL_TYPE_ISP_STAT_REGION:
+		pr_cont("ISP_STAT_REGION");
+		break;
 	default:
 		pr_cont("unknown type %d", ctrl->type);
 		break;
@@ -1307,6 +1310,9 @@ static int std_validate_compound(const struct v4l2_ctrl *ctrl, u32 idx,
 	case V4L2_CTRL_TYPE_H264_ENCODE_RC:
 		return validate_h264_encode_rc(p);
 
+	case V4L2_CTRL_TYPE_ISP_STAT_REGION:
+		break;
+
 	default:
 		return -EINVAL;
 	}
@@ -2012,6 +2018,9 @@ static struct v4l2_ctrl *v4l2_ctrl_new(struct v4l2_ctrl_handler *hdl,
 		break;
 	case V4L2_CTRL_TYPE_AV1_FILM_GRAIN:
 		elem_size = sizeof(struct v4l2_ctrl_av1_film_grain);
+		break;
+	case V4L2_CTRL_TYPE_ISP_STAT_REGION:
+		elem_size = sizeof(struct v4l2_ctrl_isp_stat_region);
 		break;
 	case V4L2_CTRL_TYPE_AREA:
 		elem_size = sizeof(struct v4l2_area);

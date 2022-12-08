@@ -1994,6 +1994,8 @@ enum v4l2_ctrl_type {
 	V4L2_CTRL_TYPE_AV1_TILE_GROUP_ENTRY = 0x281,
 	V4L2_CTRL_TYPE_AV1_FRAME	    = 0x282,
 	V4L2_CTRL_TYPE_AV1_FILM_GRAIN	    = 0x283,
+
+	V4L2_CTRL_TYPE_ISP_STAT_REGION     = 0x0310,
 };
 
 /*  Used in the VIDIOC_QUERYCTRL ioctl for querying controls */
