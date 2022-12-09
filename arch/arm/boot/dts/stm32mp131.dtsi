@@ -24,6 +24,7 @@
 			clock-names = "cpu";
 			nvmem-cells = <&part_number_otp>;
 			nvmem-cell-names = "part_number";
+			#cooling-cells = <2>;
 		};
 	};
 
@@ -48,11 +49,13 @@
 	};
 
 	firmware {
-		optee {
+		optee: optee {
 			method = "smc";
 			compatible = "linaro,optee-tz";
 			interrupt-parent = <&intc>;
 			interrupts = <GIC_PPI 15 (GIC_CPU_MASK_SIMPLE(1) | IRQ_TYPE_LEVEL_LOW)>;
+			interrupt-controller;
+			#interrupt-cells = <1>;
 		};
 
 		scmi: scmi {
@@ -148,7 +151,12 @@
 			thermal-sensors = <&dts>;
 
 			trips {
-				cpu-crit {
+				cpu_alert: cpu-alert0 {
+					temperature = <95000>;
+					hysteresis = <10000>;
+					type = "passive";
+				};
+				cpu_crit: cpu-crit0 {
 					temperature = <120000>;
 					hysteresis = <0>;
 					type = "critical";
@@ -156,6 +164,10 @@
 			};
 
 			cooling-maps {
+				map0 {
+					trip = <&cpu_alert>;
+					cooling-device = <&cpu0 1 1>;
+				};
 			};
 		};
 	};
@@ -836,6 +848,8 @@
 			adc2: adc@0 {
 				compatible = "st,stm32mp13-adc";
 				#io-channel-cells = <1>;
+				#address-cells = <1>;
+				#size-cells = <0>;
 				reg = <0x0>;
 				interrupt-parent = <&adc_2>;
 				interrupts = <0>;
@@ -844,6 +858,23 @@
 				nvmem-cells = <&vrefint>;
 				nvmem-cell-names = "vrefint";
 				status = "disabled";
+
+				channel@13 {
+					reg = <13>;
+					label = "vrefint";
+				};
+				channel@14 {
+					reg = <14>;
+					label = "vddcore";
+				};
+				channel@16 {
+					reg = <16>;
+					label = "vddcpu";
+				};
+				channel@17 {
+					reg = <17>;
+					label = "vddq_ddr";
+				};
 			};
 		};
 
@@ -1152,10 +1183,59 @@
 		};
 
 		exti: interrupt-controller@5000d000 {
-			compatible = "st,stm32mp13-exti", "syscon";
+			compatible = "st,stm32mp1-exti", "syscon";
 			interrupt-controller;
 			#interrupt-cells = <2>;
+			#address-cells = <0>;
 			reg = <0x5000d000 0x400>;
+
+			exti-interrupt-map {
+				#address-cells = <0>;
+				#interrupt-cells = <2>;
+				interrupt-map-mask = <0xffffffff 0>;
+				interrupt-map =
+					<0  0 &intc GIC_SPI 6   IRQ_TYPE_LEVEL_HIGH>,
+					<1  0 &intc GIC_SPI 7   IRQ_TYPE_LEVEL_HIGH>,
+					<2  0 &intc GIC_SPI 8   IRQ_TYPE_LEVEL_HIGH>,
+					<3  0 &intc GIC_SPI 9   IRQ_TYPE_LEVEL_HIGH>,
+					<4  0 &intc GIC_SPI 10  IRQ_TYPE_LEVEL_HIGH>,
+					<5  0 &intc GIC_SPI 24  IRQ_TYPE_LEVEL_HIGH>,
+					<6  0 &intc GIC_SPI 65  IRQ_TYPE_LEVEL_HIGH>,
+					<7  0 &intc GIC_SPI 66  IRQ_TYPE_LEVEL_HIGH>,
+					<8  0 &intc GIC_SPI 67  IRQ_TYPE_LEVEL_HIGH>,
+					<9  0 &intc GIC_SPI 68  IRQ_TYPE_LEVEL_HIGH>,
+					<10 0 &intc GIC_SPI 41  IRQ_TYPE_LEVEL_HIGH>,
+					<11 0 &intc GIC_SPI 43  IRQ_TYPE_LEVEL_HIGH>,
+					<12 0 &intc GIC_SPI 77  IRQ_TYPE_LEVEL_HIGH>,
+					<13 0 &intc GIC_SPI 78  IRQ_TYPE_LEVEL_HIGH>,
+					<14 0 &intc GIC_SPI 106 IRQ_TYPE_LEVEL_HIGH>,
+					<15 0 &intc GIC_SPI 109 IRQ_TYPE_LEVEL_HIGH>,
+					<16 0 &intc GIC_SPI 1   IRQ_TYPE_LEVEL_HIGH>,
+					<19 0 &intc GIC_SPI 3   IRQ_TYPE_LEVEL_HIGH>,
+					<21 0 &intc GIC_SPI 32  IRQ_TYPE_LEVEL_HIGH>,
+					<22 0 &intc GIC_SPI 34  IRQ_TYPE_LEVEL_HIGH>,
+					<23 0 &intc GIC_SPI 73  IRQ_TYPE_LEVEL_HIGH>,
+					<24 0 &intc GIC_SPI 93  IRQ_TYPE_LEVEL_HIGH>,
+					<25 0 &intc GIC_SPI 114 IRQ_TYPE_LEVEL_HIGH>,
+					<26 0 &intc GIC_SPI 38  IRQ_TYPE_LEVEL_HIGH>,
+					<27 0 &intc GIC_SPI 39  IRQ_TYPE_LEVEL_HIGH>,
+					<28 0 &intc GIC_SPI 40  IRQ_TYPE_LEVEL_HIGH>,
+					<29 0 &intc GIC_SPI 72  IRQ_TYPE_LEVEL_HIGH>,
+					<30 0 &intc GIC_SPI 53  IRQ_TYPE_LEVEL_HIGH>,
+					<31 0 &intc GIC_SPI 54  IRQ_TYPE_LEVEL_HIGH>,
+					<32 0 &intc GIC_SPI 83  IRQ_TYPE_LEVEL_HIGH>,
+					<33 0 &intc GIC_SPI 84  IRQ_TYPE_LEVEL_HIGH>,
+					<42 0 &intc GIC_SPI 75  IRQ_TYPE_LEVEL_HIGH>,
+					<43 0 &intc GIC_SPI 75  IRQ_TYPE_LEVEL_HIGH>,
+					<44 0 &intc GIC_SPI 96  IRQ_TYPE_LEVEL_HIGH>,
+					<47 0 &intc GIC_SPI 92  IRQ_TYPE_LEVEL_HIGH>,
+					<48 0 &intc GIC_SPI 116 IRQ_TYPE_LEVEL_HIGH>,
+					<50 0 &intc GIC_SPI 117 IRQ_TYPE_LEVEL_HIGH>,
+					<52 0 &intc GIC_SPI 118 IRQ_TYPE_LEVEL_HIGH>,
+					<53 0 &intc GIC_SPI 119 IRQ_TYPE_LEVEL_HIGH>,
+					<68 0 &intc GIC_SPI 63  IRQ_TYPE_LEVEL_HIGH>,
+					<70 0 &intc GIC_SPI 98  IRQ_TYPE_LEVEL_HIGH>;
+			};
 		};
 
 		syscfg: syscon@50020000 {
@@ -1406,12 +1486,6 @@
 			status = "disabled";
 		};
 
-		stmmac_axi_config_0: stmmac-axi-config {
-			snps,wr_osr_lmt = <0x7>;
-			snps,rd_osr_lmt = <0x7>;
-			snps,blen = <0 0 0 0 16 8 4>;
-		};
-
 		eth1: eth1@5800a000 {
 			compatible = "snps,dwmac-4.20a", "st,stm32mp13-dwmac";
 			reg = <0x5800a000 0x2000>;
@@ -1432,11 +1506,15 @@
 			st,syscon = <&syscfg 0x4 0xff0000>;
 			snps,mixed-burst;
 			snps,pbl = <2>;
-			snps,axi-config = <&stmmac_axi_config_0>;
+			snps,axi-config = <&stmmac_axi_config_1>;
 			snps,tso;
-			power-domains = <&pd_core>;
-			wakeup-source;
 			status = "disabled";
+
+			stmmac_axi_config_1: stmmac-axi-config {
+				snps,wr_osr_lmt = <0x7>;
+				snps,rd_osr_lmt = <0x7>;
+				snps,blen = <0 0 0 0 16 8 4>;
+			};
 		};
 
 		usbh_ohci: usbh-ohci@5800c000 {
@@ -1543,7 +1621,7 @@
 		 * Break node order to solve dependency probe issue between
 		 * pinctrl and exti.
 		 */
-		pinctrl: pin-controller@50002000 {
+		pinctrl: pinctrl@50002000 {
 			#address-cells = <1>;
 			#size-cells = <1>;
 			compatible = "st,stm32mp135-pinctrl";

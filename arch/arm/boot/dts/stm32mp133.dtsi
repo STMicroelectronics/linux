@@ -23,6 +23,8 @@
 			adc1: adc@0 {
 				compatible = "st,stm32mp13-adc";
 				#io-channel-cells = <1>;
+				#address-cells = <1>;
+				#size-cells = <0>;
 				reg = <0x0>;
 				interrupt-parent = <&adc_1>;
 				interrupts = <0>;
@@ -31,6 +33,11 @@
 				nvmem-cells = <&vrefint>;
 				nvmem-cell-names = "vrefint";
 				status = "disabled";
+
+				channel@18 {
+					reg = <18>;
+					label = "vrefint";
+				};
 			};
 		};
 
@@ -79,9 +86,15 @@
 			st,syscon = <&syscfg 0x4 0xff000000>;
 			snps,mixed-burst;
 			snps,pbl = <2>;
-			snps,axi-config = <&stmmac_axi_config_0>;
+			snps,axi-config = <&stmmac_axi_config_2>;
 			snps,tso;
 			status = "disabled";
+
+			stmmac_axi_config_2: stmmac-axi-config {
+				snps,wr_osr_lmt = <0x7>;
+				snps,rd_osr_lmt = <0x7>;
+				snps,blen = <0 0 0 0 16 8 4>;
+			};
 		};
 	};
 };

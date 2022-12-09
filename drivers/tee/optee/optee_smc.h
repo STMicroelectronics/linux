@@ -393,6 +393,22 @@ struct optee_smc_disable_shm_cache_result {
 #define OPTEE_SMC_GET_ASYNC_NOTIF_VALUE \
 	OPTEE_SMC_FAST_CALL_VAL(OPTEE_SMC_FUNCID_GET_ASYNC_NOTIF_VALUE)
 
+#define OPTEE_SMC_ASYNC_NOTIF_VALUE_DO_IT		1
+
+#define OPTEE_SMC_IT_NOTIF_VALUE_VALID		BIT(0)
+#define OPTEE_SMC_IT_NOTIF_VALUE_PENDING		BIT(1)
+
+/*
+ * Notification that OP-TEE generates and interruption.
+ */
+#define OPTEE_SMC_FUNCID_GET_IT_NOTIF_VALUE	53
+#define OPTEE_SMC_GET_IT_NOTIF_VALUE \
+	OPTEE_SMC_FAST_CALL_VAL(OPTEE_SMC_FUNCID_GET_IT_NOTIF_VALUE)
+
+#define OPTEE_SMC_FUNCID_SET_IT_NOTIF_MASK	54
+#define OPTEE_SMC_SET_IT_NOTIF_MASK \
+	OPTEE_SMC_FAST_CALL_VAL(OPTEE_SMC_FUNCID_SET_IT_NOTIF_MASK)
+
 /*
  * Resume from RPC (for example after processing a foreign interrupt)
  *

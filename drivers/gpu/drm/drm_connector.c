@@ -824,6 +824,12 @@ static const struct drm_prop_enum_list drm_scaling_mode_enum_list[] = {
 	{ DRM_MODE_SCALE_ASPECT, "Full aspect" },
 };
 
+static const struct drm_prop_enum_list drm_dithering_enum_list[] = {
+	{ DRM_MODE_DITHERING_OFF, "Off" },
+	{ DRM_MODE_DITHERING_ON, "On" },
+	{ DRM_MODE_DITHERING_AUTO, "Automatic" },
+};
+
 static const struct drm_prop_enum_list drm_aspect_ratio_enum_list[] = {
 	{ DRM_MODE_PICTURE_ASPECT_NONE, "Automatic" },
 	{ DRM_MODE_PICTURE_ASPECT_4_3, "4:3" },
@@ -1777,6 +1783,62 @@ int drm_connector_attach_scaling_mode_property(struct drm_connector *connector,
 EXPORT_SYMBOL(drm_connector_attach_scaling_mode_property);
 
 /**
+ * drm_connector_attach_dithering_property - attach atomic dithering property
+ * @connector: connector to attach dithering property on.
+ * @dithering_mask: or'ed mask of BIT(%DRM_MODE_DITHERING_\*).
+ *
+ * This is used to add support for dithering to atomic drivers.
+ *
+ * Returns:
+ * Zero on success, negative errno on failure.
+ */
+int drm_connector_attach_dithering_property(struct drm_connector *connector,
+					    u32 dithering_mask)
+{
+	struct drm_device *dev = connector->dev;
+	struct drm_property *dithering_property;
+	int i;
+	const unsigned int valid_dithering_mask =
+		(1U << ARRAY_SIZE(drm_dithering_enum_list)) - 1;
+
+	if (WARN_ON(hweight32(dithering_mask) < 2 ||
+		    dithering_mask & ~valid_dithering_mask))
+		return -EINVAL;
+
+	dithering_property =
+		drm_property_create(dev, DRM_MODE_PROP_ENUM, "dithering",
+				    hweight32(dithering_mask));
+
+	if (!dithering_property)
+		return -ENOMEM;
+
+	for (i = 0; i < ARRAY_SIZE(drm_dithering_enum_list); i++) {
+		int ret;
+
+		if (!(BIT(i) & dithering_mask))
+			continue;
+
+		ret = drm_property_add_enum(dithering_property,
+					    drm_dithering_enum_list[i].type,
+					    drm_dithering_enum_list[i].name);
+
+		if (ret) {
+			drm_property_destroy(dev, dithering_property);
+
+			return ret;
+		}
+	}
+
+	drm_object_attach_property(&connector->base,
+				   dithering_property, 0);
+
+	connector->dithering_property = dithering_property;
+
+	return 0;
+}
+EXPORT_SYMBOL(drm_connector_attach_dithering_property);
+
+/**
  * drm_mode_create_aspect_ratio_property - create aspect ratio property
  * @dev: DRM device
  *
@@ -2233,6 +2295,9 @@ EXPORT_SYMBOL(drm_connector_atomic_hdr_metadata_equal);
 void drm_connector_set_vrr_capable_property(
 		struct drm_connector *connector, bool capable)
 {
+	if (!connector->vrr_capable_property)
+		return;
+
 	drm_object_property_set_value(&connector->base,
 				      connector->vrr_capable_property,
 				      capable);

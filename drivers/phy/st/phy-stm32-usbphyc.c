@@ -360,7 +360,9 @@ static int stm32_usbphyc_phy_init(struct phy *phy)
 	return 0;
 
 pll_disable:
-	return stm32_usbphyc_pll_disable(usbphyc);
+	stm32_usbphyc_pll_disable(usbphyc);
+
+	return ret;
 }
 
 static int stm32_usbphyc_phy_exit(struct phy *phy)
@@ -743,9 +745,10 @@ static int stm32_usbphyc_probe(struct platform_device *pdev)
 		}
 
 		/* Get optional wakeup interrupt */
-		usbphyc->phys[port]->wakeirq = of_irq_get(child, 0);
-		if (usbphyc->phys[port]->wakeirq == -EPROBE_DEFER)
+		ret = of_irq_get(child, 0);
+		if (ret == -EPROBE_DEFER)
 			goto put_child;
+		usbphyc->phys[port]->wakeirq = ret;
 
 		/* Configure phy tuning */
 		stm32_usbphyc_phy_tuning(usbphyc, child, index);

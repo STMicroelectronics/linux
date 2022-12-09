@@ -2496,7 +2496,6 @@ static int ov5640_set_fmt(struct v4l2_subdev *sd,
 	struct ov5640_dev *sensor = to_ov5640_dev(sd);
 	const struct ov5640_mode_info *new_mode;
 	struct v4l2_mbus_framefmt *mbus_fmt = &format->format;
-	struct v4l2_mbus_framefmt *fmt;
 	int ret;
 
 	if (format->pad != 0)
@@ -2514,12 +2513,10 @@ static int ov5640_set_fmt(struct v4l2_subdev *sd,
 	if (ret)
 		goto out;
 
-	if (format->which == V4L2_SUBDEV_FORMAT_TRY)
-		fmt = v4l2_subdev_get_try_format(sd, sd_state, 0);
-	else
-		fmt = &sensor->fmt;
-
-	*fmt = *mbus_fmt;
+	if (format->which == V4L2_SUBDEV_FORMAT_TRY) {
+		*v4l2_subdev_get_try_format(sd, sd_state, 0) = *mbus_fmt;
+		goto out;
+	}
 
 	if (new_mode != sensor->current_mode) {
 		sensor->current_mode = new_mode;
@@ -2527,6 +2524,9 @@ static int ov5640_set_fmt(struct v4l2_subdev *sd,
 	}
 	if (mbus_fmt->code != sensor->fmt.code)
 		sensor->pending_fmt_change = true;
+
+	/* update format even if code is unchanged, resolution might change */
+	sensor->fmt = *mbus_fmt;
 
 	if (sensor->pending_mode_change || sensor->pending_fmt_change) {
 		unsigned long rate = ov5640_calc_pixel_rate(sensor);

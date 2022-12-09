@@ -57,11 +57,37 @@ struct clock_config {
 };
 
 struct clk_stm32_clock_data {
+	void __iomem			*base;
 	u16 *gate_cpt;
 	const struct stm32_gate_cfg	*gates;
 	const struct stm32_mux_cfg	*muxes;
 	const struct stm32_div_cfg	*dividers;
 	struct clk_hw *(*is_multi_mux)(struct clk_hw *hw);
+};
+
+struct clock_summary {
+	struct clk_summary *clocks;
+	int nb_clocks;
+};
+
+struct clk_summary {
+	const char *name;
+	unsigned long rate;
+	int enabled;
+	int nb_parents;
+	int gate_id;
+	int mux_id;
+	int div_id;
+	void *data;
+
+	bool (*is_enabled)(struct clk_stm32_clock_data *data,
+			   struct clk_summary *c);
+	u8 (*get_parent)(struct clk_stm32_clock_data *data,
+			 struct clk_summary *c);
+	unsigned long (*get_rate)(struct clk_stm32_clock_data *data,
+				  struct clk_summary *c,
+				  unsigned long parent_rate);
+	const char * const *parent_names;
 };
 
 struct stm32_rcc_match_data {
@@ -73,6 +99,9 @@ struct stm32_rcc_match_data {
 	int (*multi_mux)(void __iomem *base, const struct clock_config *cfg);
 	int (*check_security)(void __iomem *base, const struct clock_config *cfg);
 	u32 clear_offset;
+	u32				reset_us;
+
+	struct clock_summary		*clock_summary;
 };
 
 int stm32_rcc_reset_init(struct device *dev, const struct of_device_id *match,

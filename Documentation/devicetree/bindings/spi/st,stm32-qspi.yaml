@@ -46,6 +46,14 @@ properties:
       - const: tx
       - const: rx
 
+  st,dual-flash:
+    type: boolean
+    description:
+      Allows to use 8 data lines in case cs-gpios property is defined.
+
+dependencies:
+  st,dual-flash: [ cs-gpios ]
+
 required:
   - compatible
   - reg

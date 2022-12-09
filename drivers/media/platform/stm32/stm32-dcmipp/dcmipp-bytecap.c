@@ -163,7 +163,10 @@ static const struct v4l2_pix_format fmt_default = {
 	.height = DCMIPP_FMT_HEIGHT_DEFAULT,
 	.pixelformat = V4L2_PIX_FMT_RGB565,
 	.field = V4L2_FIELD_NONE,
-	.colorspace = V4L2_COLORSPACE_DEFAULT,
+	.colorspace = DCMIPP_COLORSPACE_DEFAULT,
+	.ycbcr_enc = DCMIPP_YCBCR_ENC_DEFAULT,
+	.quantization = DCMIPP_QUANTIZATION_DEFAULT,
+	.xfer_func = DCMIPP_XFER_FUNC_DEFAULT,
 };
 
 static inline int frame_size(u32 width, u32 height, u32 format)

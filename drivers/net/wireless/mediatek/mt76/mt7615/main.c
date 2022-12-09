@@ -235,7 +235,7 @@ static int mt7615_add_interface(struct ieee80211_hw *hw,
 	rcu_assign_pointer(dev->mt76.wcid[idx], &mvif->sta.wcid);
 	if (vif->txq) {
 		mtxq = (struct mt76_txq *)vif->txq->drv_priv;
-		mtxq->wcid = &mvif->sta.wcid;
+		mtxq->wcid = idx;
 	}
 
 	ret = mt7615_mcu_add_dev_info(phy, vif, true);
@@ -681,6 +681,9 @@ static void mt7615_sta_rate_tbl_update(struct ieee80211_hw *hw,
 	struct mt7615_sta *msta = (struct mt7615_sta *)sta->drv_priv;
 	struct ieee80211_sta_rates *sta_rates = rcu_dereference(sta->rates);
 	int i;
+
+	if (!sta_rates)
+		return;
 
 	spin_lock_bh(&dev->mt76.lock);
 	for (i = 0; i < ARRAY_SIZE(msta->rates); i++) {

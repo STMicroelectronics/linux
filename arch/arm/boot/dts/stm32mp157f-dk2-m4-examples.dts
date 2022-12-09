@@ -35,20 +35,20 @@
 	status = "okay";
 };
 
+&m4_crc2 {
+	status = "okay";
+};
+
+&m4_cryp2 {
+	status = "okay";
+};
+
 &m4_dac {
 	vref-supply = <&vrefbuf>;
 	status = "okay";
 };
 
 &m4_dma2 {
-	status = "okay";
-};
-
-&m4_crc2 {
-	status = "okay";
-};
-
-&m4_cryp2 {
 	status = "okay";
 };
 
@@ -93,13 +93,13 @@
 	status = "okay";
 };
 
-&m4_timers2 {
-	status = "okay";
-};
-
 &m4_timers1 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&m4_pwm1_pins_a_ch1>;
+	status = "okay";
+};
+
+&m4_timers2 {
 	status = "okay";
 };
 

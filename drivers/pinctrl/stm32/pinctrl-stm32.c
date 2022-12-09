@@ -118,7 +118,6 @@ struct stm32_pinctrl {
 	u32 pkg;
 	u16 irqmux_map;
 	spinlock_t irqmux_lock;
-	u32 pin_base_shift;
 };
 
 static inline int stm32_gpio_pin(int gpio)
@@ -331,6 +330,10 @@ static void stm32_gpio_irq_trigger(struct irq_data *d)
 {
 	struct stm32_gpio_bank *bank = d->domain->host_data;
 	int level;
+
+	/* Do not access the GPIO if this is not LEVEL triggered IRQ. */
+	if (!(bank->irq_type[d->hwirq] & IRQ_TYPE_LEVEL_MASK))
+		return;
 
 	/* If level interrupt type then retrig */
 	level = stm32_gpio_get(&bank->gpio_chip, d->hwirq);
@@ -1278,6 +1281,28 @@ static const struct pinconf_ops stm32_pconf_ops = {
 	.pin_config_dbg_show	= stm32_pconf_dbg_show,
 };
 
+static struct stm32_desc_pin *stm32_pctrl_get_desc_pin_from_gpio(struct stm32_pinctrl *pctl,
+								 struct stm32_gpio_bank *bank,
+								 unsigned int offset)
+{
+	unsigned int stm32_pin_nb = bank->bank_nr * STM32_GPIO_PINS_PER_BANK + offset;
+	struct stm32_desc_pin *pin_desc;
+	int i;
+
+	/* With few exceptions (e.g. bank 'Z'), pin number matches with pin index in array */
+	pin_desc = pctl->pins + stm32_pin_nb;
+	if (pin_desc->pin.number == stm32_pin_nb)
+		return pin_desc;
+
+	/* Otherwise, loop all array to find the pin with the right number */
+	for (i = 0; i < pctl->npins; i++) {
+		pin_desc = pctl->pins + i;
+		if (pin_desc->pin.number == stm32_pin_nb)
+			return pin_desc;
+	}
+	return NULL;
+}
+
 static int stm32_gpiolib_register_bank(struct stm32_pinctrl *pctl,
 	struct device_node *np)
 {
@@ -1289,6 +1314,8 @@ static int stm32_gpiolib_register_bank(struct stm32_pinctrl *pctl,
 	struct resource res;
 	int npins = STM32_GPIO_PINS_PER_BANK;
 	int bank_nr, err, i = 0;
+	struct stm32_desc_pin *stm32_pin;
+	char **names;
 
 	if (!IS_ERR(bank->rstc))
 		reset_control_deassert(bank->rstc);
@@ -1357,6 +1384,17 @@ static int stm32_gpiolib_register_bank(struct stm32_pinctrl *pctl,
 			goto err_clk;
 		}
 	}
+
+	names = devm_kcalloc(dev, npins, sizeof(char *), GFP_KERNEL);
+	for (i = 0; i < npins; i++) {
+		stm32_pin = stm32_pctrl_get_desc_pin_from_gpio(pctl, bank, i);
+		if (stm32_pin && stm32_pin->pin.name)
+			names[i] = devm_kasprintf(dev, GFP_KERNEL, "%s", stm32_pin->pin.name);
+		else
+			names[i] = NULL;
+	}
+
+	bank->gpio_chip.names = (const char * const *)names;
 
 	err = gpiochip_add_data(&bank->gpio_chip, bank);
 	if (err) {
@@ -1579,7 +1617,6 @@ int stm32_pctl_probe(struct platform_device *pdev)
 	pctl->pctl_desc.pctlops = &stm32_pctrl_ops;
 	pctl->pctl_desc.pmxops = &stm32_pmx_ops;
 	pctl->dev = &pdev->dev;
-	pctl->pin_base_shift = pctl->match_data->pin_base_shift;
 
 	pctl->pctl_dev = devm_pinctrl_register(&pdev->dev, &pctl->pctl_desc,
 					       pctl);

@@ -27,6 +27,15 @@ properties:
   resets:
     maxItems: 1
 
+  dmas:
+    maxItems: 2
+    minItems: 2
+
+  dma-names:
+    items:
+      - const: in
+      - const: out
+
 required:
   - compatible
   - reg

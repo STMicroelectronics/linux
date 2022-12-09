@@ -91,6 +91,7 @@
 #define STM32H7_ADC_IER			0x04
 #define STM32H7_ADC_CR			0x08
 #define STM32H7_ADC_CFGR		0x0C
+#define STM32H7_ADC_CFGR2		0x10
 #define STM32H7_ADC_SMPR1		0x14
 #define STM32H7_ADC_SMPR2		0x18
 #define STM32H7_ADC_PCSEL		0x1C
@@ -152,6 +153,14 @@
 #define STM32H7_DMNGT_SHIFT		0
 #define STM32H7_DMNGT_MASK		GENMASK(1, 0)
 
+/* STM32H7_ADC_CFGR2 bit fields */
+#define STM32H7_OVSR_SHIFT		16 /* Correspond to OSVR field in datasheet */
+#define STM32H7_OVSR_MASK		GENMASK(25, 16)
+#define STM32H7_OVSR_BITS		10
+#define STM32H7_OVSS_SHIFT		5
+#define STM32H7_OVSS_MASK		GENMASK(8, 5)
+#define STM32H7_ROVSE			BIT(0)
+
 enum stm32h7_adc_dmngt {
 	STM32H7_DMNGT_DR_ONLY,		/* Regular data in DR only */
 	STM32H7_DMNGT_DMA_ONESHOT,	/* DMA one shot mode */
@@ -205,6 +214,13 @@ enum stm32h7_adc_dmngt {
 #define STM32MP13_RES_SHIFT		3
 #define STM32MP13_RES_MASK		GENMASK(4, 3)
 
+/* STM32MP13_ADC_CFGR2 bit fields */
+#define STM32MP13_OVSR_SHIFT		2
+#define STM32MP13_OVSR_MASK		GENMASK(4, 2)
+#define STM32MP13_OVSR_BITS		3
+#define STM32MP13_OVSS_SHIFT		5
+#define STM32MP13_OVSS_MASK		GENMASK(8, 5)
+
 /* STM32MP13_ADC_DIFSEL - bit fields */
 #define STM32MP13_DIFSEL_SHIFT		0
 #define STM32MP13_DIFSEL_MASK		GENMASK(18, 0)
@@ -216,7 +232,9 @@ enum stm32h7_adc_dmngt {
 #define STM32MP13_CALFACT_S_MASK	GENMASK(6, 0)
 
 /* STM32MP13_ADC2_OR - bit fields */
-#define STM32MP13_VDDCOREEN		BIT(0)
+#define STM32MP13_OP2			BIT(2)
+#define STM32MP13_OP1			BIT(1)
+#define STM32MP13_OP0			BIT(0)
 
 /* STM32MP13_ADC_HWCFGR0 - bit fields */
 #define STM32MP13_ADCNUM_SHIFT		0

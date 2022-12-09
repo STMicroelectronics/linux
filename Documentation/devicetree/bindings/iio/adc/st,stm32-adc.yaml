@@ -356,7 +356,7 @@ patternProperties:
           label:
             description: |
               Unique name to identify which channel this is.
-              Reserved label names "vddcore", "vrefint" and "vbat"
+              Reserved label names "vddcore", "vddcpu", "vddq_ddr", "vrefint" and "vbat"
               are used to identify internal channels with matching names.
 
           diff-channels:

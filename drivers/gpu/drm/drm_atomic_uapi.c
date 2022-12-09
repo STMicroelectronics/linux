@@ -76,15 +76,17 @@ int drm_atomic_set_mode_for_crtc(struct drm_crtc_state *state,
 	state->mode_blob = NULL;
 
 	if (mode) {
+		struct drm_property_blob *blob;
+
 		drm_mode_convert_to_umode(&umode, mode);
-		state->mode_blob =
-			drm_property_create_blob(state->crtc->dev,
-						 sizeof(umode),
-						 &umode);
-		if (IS_ERR(state->mode_blob))
-			return PTR_ERR(state->mode_blob);
+		blob = drm_property_create_blob(crtc->dev,
+						sizeof(umode), &umode);
+		if (IS_ERR(blob))
+			return PTR_ERR(blob);
 
 		drm_mode_copy(&state->mode, mode);
+
+		state->mode_blob = blob;
 		state->enable = true;
 		drm_dbg_atomic(crtc->dev,
 			       "Set [MODE:%s] for [CRTC:%d:%s] state %p\n",
@@ -771,6 +773,8 @@ static int drm_atomic_connector_set_property(struct drm_connector *connector,
 		state->content_type = val;
 	} else if (property == connector->scaling_mode_property) {
 		state->scaling_mode = val;
+	} else if (property == connector->dithering_property) {
+		state->dithering = val;
 	} else if (property == config->content_protection_property) {
 		if (val == DRM_MODE_CONTENT_PROTECTION_ENABLED) {
 			DRM_DEBUG_KMS("only drivers can set CP Enabled\n");
@@ -860,6 +864,8 @@ drm_atomic_connector_get_property(struct drm_connector *connector,
 		*val = state->colorspace;
 	} else if (property == connector->scaling_mode_property) {
 		*val = state->scaling_mode;
+	} else if (property == connector->dithering_property) {
+		*val = state->dithering;
 	} else if (property == config->hdr_output_metadata_property) {
 		*val = state->hdr_output_metadata ?
 			state->hdr_output_metadata->base.id : 0;

@@ -78,6 +78,7 @@
 #define HASH_CSR_NB_SHA512		91
 #define HASH_CSR_NB_SHA3_HMAC		88
 #define HASH_CSR_NB_SHA3		72
+#define HASH_CSR_NB_MAX			HASH_CSR_NB_SHA512_HMAC
 
 #define HASH_FLAGS_INIT			BIT(0)
 #define HASH_FLAGS_OUTPUT_READY		BIT(1)
@@ -120,7 +121,9 @@ enum stm32_hash_algo {
 	HASH_SHA512			= 15,
 };
 
-#define HASH_MAX_BUFLEN			(SHA3_224_BLOCK_SIZE + 4)
+#define HASH_HW_FIFO_INIT_SIZE		(17 * sizeof(u32))
+#define HASH_HW_FIFO_SIZE		(16 * sizeof(u32))
+
 #define HASH_MAX_KEY_SIZE		(SHA512_BLOCK_SIZE * 8)
 #define HASH_QUEUE_LENGTH		60
 #define HASH_AUTOSUSPEND_DELAY		50
@@ -133,14 +136,26 @@ struct stm32_hash_ctx {
 	int			keylen;
 };
 
-struct stm32_hash_request_ctx {
+struct stm32_hash_state {
 	struct stm32_hash_dev	*hdev;
 	unsigned long		flags;
-	unsigned long		op;
 
-	u8 digest[SHA512_DIGEST_SIZE] __aligned(sizeof(u32));
+	/* Data not yet sent to hw */
+	u8 buffer[HASH_HW_FIFO_INIT_SIZE] __aligned(sizeof(u32));
 	size_t			bufcnt;
 	size_t			buflen;
+
+	/* HW Context */
+	u32			hw_context[3 + HASH_CSR_NB_MAX];
+};
+
+struct stm32_hash_request_ctx {
+	struct stm32_hash_state	state;
+
+	/*
+	 * Each new request will update following fields
+	 */
+	unsigned long		op;
 
 	/* DMA */
 	struct scatterlist	*sg;
@@ -148,16 +163,8 @@ struct stm32_hash_request_ctx {
 	unsigned int		total;
 	struct scatterlist	sg_key;
 
-	dma_addr_t		dma_addr;
 	size_t			dma_ct;
 	int			nents;
-
-	u8			data_type;
-
-	u8 buffer[HASH_MAX_BUFLEN] __aligned(sizeof(u32));
-
-	/* Export Context */
-	u32			*hw_context;
 };
 
 struct stm32_hash_algs_info {
@@ -232,6 +239,95 @@ static inline int stm32_hash_wait_dinis(struct stm32_hash_dev *hdev)
 				   (status & HASH_SR_DATA_INPUT_READY), 10, 10000);
 }
 
+static int hash_swap_reg(struct stm32_hash_request_ctx *rctx)
+{
+	switch ((rctx->state.flags & HASH_FLAGS_ALGO_MASK) >> HASH_FLAGS_ALGO_SHIFT) {
+	case HASH_MD5:
+	case HASH_SHA1:
+	case HASH_SHA224:
+	case HASH_SHA256:
+		if (rctx->state.flags & HASH_FLAGS_HMAC)
+			return HASH_CSR_NB_SHA256_HMAC;
+		else
+			return HASH_CSR_NB_SHA256;
+		break;
+
+	case HASH_SHA384:
+	case HASH_SHA512:
+		if (rctx->state.flags & HASH_FLAGS_HMAC)
+			return HASH_CSR_NB_SHA512_HMAC;
+		else
+			return HASH_CSR_NB_SHA512;
+		break;
+
+	case HASH_SHA3_224:
+	case HASH_SHA3_256:
+	case HASH_SHA3_384:
+	case HASH_SHA3_512:
+		if (rctx->state.flags & HASH_FLAGS_HMAC)
+			return HASH_CSR_NB_SHA3_HMAC;
+		else
+			return HASH_CSR_NB_SHA3;
+		break;
+
+	default:
+		return -EINVAL;
+	}
+}
+
+static int stm32_hash_save_hw_context(struct stm32_hash_dev *hdev)
+{
+	struct stm32_hash_request_ctx *rctx = ahash_request_ctx(hdev->req);
+	u32 *preg;
+	unsigned int i;
+	int swap_reg;
+
+	swap_reg = hash_swap_reg(rctx);
+	if (swap_reg < 0)
+		return swap_reg;
+
+	if (stm32_hash_wait_busy(hdev))
+		return -ETIMEDOUT;
+
+	preg = rctx->state.hw_context;
+
+	*preg++ = stm32_hash_read(hdev, HASH_IMR);
+	*preg++ = stm32_hash_read(hdev, HASH_STR);
+	*preg++ = stm32_hash_read(hdev, HASH_CR);
+	for (i = 0; i < swap_reg; i++)
+		*preg++ = stm32_hash_read(hdev, HASH_CSR(i));
+
+	return 0;
+}
+
+static int stm32_hash_restore_hw_context(struct stm32_hash_dev *hdev)
+{
+	struct stm32_hash_request_ctx *rctx = ahash_request_ctx(hdev->req);
+	u32 *preg;
+	u32 reg;
+	unsigned int i;
+	int swap_reg;
+
+	swap_reg = hash_swap_reg(rctx);
+	if (swap_reg < 0)
+		return swap_reg;
+
+	if (stm32_hash_wait_busy(hdev))
+		return -ETIMEDOUT;
+
+	preg = rctx->state.hw_context;
+
+	stm32_hash_write(hdev, HASH_IMR, *preg++);
+	stm32_hash_write(hdev, HASH_STR, *preg++);
+	reg = *preg++ | HASH_CR_INIT;
+	stm32_hash_write(hdev, HASH_CR, reg);
+
+	for (i = 0; i < swap_reg; i++)
+		stm32_hash_write(hdev, HASH_CSR(i), *preg++);
+
+	return 0;
+}
+
 static void stm32_hash_set_nblw(struct stm32_hash_dev *hdev, int length)
 {
 	u32 reg = stm32_hash_read(hdev, HASH_STR);
@@ -273,7 +369,7 @@ static void stm32_hash_write_ctrl(struct stm32_hash_dev *hdev)
 	struct stm32_hash_request_ctx *rctx = ahash_request_ctx(hdev->req);
 	struct crypto_ahash *tfm = crypto_ahash_reqtfm(hdev->req);
 	struct stm32_hash_ctx *ctx = crypto_ahash_ctx(tfm);
-	u32 alg = (rctx->flags & HASH_FLAGS_ALGO_MASK) >> HASH_FLAGS_ALGO_SHIFT;
+	u32 alg = (rctx->state.flags & HASH_FLAGS_ALGO_MASK) >> HASH_FLAGS_ALGO_SHIFT;
 	u32 reg = HASH_CR_INIT;
 
 	if (hdev->pdata->alg_shift == 7)
@@ -281,12 +377,12 @@ static void stm32_hash_write_ctrl(struct stm32_hash_dev *hdev)
 	else
 		reg |= alg << hdev->pdata->alg_shift;
 
-	reg |= (rctx->data_type << HASH_CR_DATATYPE_POS);
+	reg |= (HASH_DATA_8_BITS << HASH_CR_DATATYPE_POS);
 
-	if (rctx->flags & HASH_FLAGS_HMAC) {
+	if (rctx->state.flags & HASH_FLAGS_HMAC) {
 		hdev->flags |= HASH_FLAGS_HMAC;
 		reg |= HASH_CR_MODE;
-		if (ctx->keylen > (rctx->buflen - sizeof(uint32_t)))
+		if (ctx->keylen > crypto_ahash_blocksize(tfm))
 			reg |= HASH_CR_LKEY;
 	}
 
@@ -294,20 +390,23 @@ static void stm32_hash_write_ctrl(struct stm32_hash_dev *hdev)
 	stm32_hash_write(hdev, HASH_CR, reg);
 	stm32_hash_read(hdev, HASH_SR);
 
-	hdev->flags |= HASH_FLAGS_INIT;
+	rctx->state.flags |= HASH_FLAGS_INIT;
 
 	dev_dbg(hdev->dev, "Write Control %x\n", reg);
 
-	rctx->buflen = rctx->buflen - sizeof(uint32_t);
+	/*
+	 * After first buflen is fill up, the new buflen is smaller of one u32
+	 */
+	rctx->state.buflen = HASH_HW_FIFO_SIZE;
 }
 
 static void stm32_hash_append_sg(struct stm32_hash_request_ctx *rctx)
 {
 	size_t count;
 
-	while ((rctx->bufcnt < rctx->buflen) && rctx->total) {
+	while ((rctx->state.bufcnt < rctx->state.buflen) && rctx->total) {
 		count = min(rctx->sg->length - rctx->offset, rctx->total);
-		count = min(count, rctx->buflen - rctx->bufcnt);
+		count = min(count, rctx->state.buflen - rctx->state.bufcnt);
 
 		if (count <= 0) {
 			if ((rctx->sg->length == 0) && !sg_is_last(rctx->sg)) {
@@ -318,10 +417,10 @@ static void stm32_hash_append_sg(struct stm32_hash_request_ctx *rctx)
 			}
 		}
 
-		scatterwalk_map_and_copy(rctx->buffer + rctx->bufcnt, rctx->sg,
+		scatterwalk_map_and_copy(rctx->state.buffer + rctx->state.bufcnt, rctx->sg,
 					 rctx->offset, count, 0);
 
-		rctx->bufcnt += count;
+		rctx->state.bufcnt += count;
 		rctx->offset += count;
 		rctx->total -= count;
 
@@ -338,8 +437,8 @@ static void stm32_hash_append_sg(struct stm32_hash_request_ctx *rctx)
 static int stm32_hash_xmit_cpu(struct stm32_hash_request_ctx *rctx,
 			       size_t length, int final)
 {
-	const u32 *buffer = (const u32 *)rctx->buffer;
-	struct stm32_hash_dev *hdev = rctx->hdev;
+	const u32 *buffer = (const u32 *)rctx->state.buffer;
+	struct stm32_hash_dev *hdev = rctx->state.hdev;
 	unsigned int count, len32;
 	u32 reg;
 
@@ -353,7 +452,7 @@ static int stm32_hash_xmit_cpu(struct stm32_hash_request_ctx *rctx,
 
 	hdev->flags |= HASH_FLAGS_CPU;
 
-	if (!(hdev->flags & HASH_FLAGS_INIT))
+	if (!(rctx->state.flags & HASH_FLAGS_INIT))
 		stm32_hash_write_ctrl(hdev);
 
 	if ((hdev->flags & HASH_FLAGS_HMAC) &&
@@ -389,28 +488,30 @@ static int stm32_hash_update_cpu(struct stm32_hash_dev *hdev)
 	struct stm32_hash_request_ctx *rctx = ahash_request_ctx(hdev->req);
 	int bufcnt, err = 0, final;
 
-	dev_dbg(hdev->dev, "%s flags %lx\n", __func__, rctx->flags);
+	dev_dbg(hdev->dev, "%s flags %lx\n", __func__, rctx->state.flags);
 
-	final = (rctx->flags & HASH_FLAGS_FINUP);
+	final = (rctx->state.flags & HASH_FLAGS_FINUP);
 
-	while ((rctx->total > rctx->buflen) ||
-	       (rctx->bufcnt + rctx->total > rctx->buflen)) {
+	while ((rctx->total > rctx->state.buflen) ||
+	       (rctx->state.bufcnt + rctx->total > rctx->state.buflen)) {
 		stm32_hash_append_sg(rctx);
-		bufcnt = rctx->bufcnt;
-		rctx->bufcnt = 0;
+		bufcnt = rctx->state.bufcnt;
+		rctx->state.bufcnt = 0;
 		err = stm32_hash_xmit_cpu(rctx, bufcnt, 0);
 	}
 
 	stm32_hash_append_sg(rctx);
 
 	if (final) {
-		bufcnt = rctx->bufcnt;
-		rctx->bufcnt = 0;
+		bufcnt = rctx->state.bufcnt;
+		rctx->state.bufcnt = 0;
 		err = stm32_hash_xmit_cpu(rctx, bufcnt,
-					  (rctx->flags & HASH_FLAGS_FINUP));
+					  (rctx->state.flags & HASH_FLAGS_FINUP));
 	}
+	if (err)
+		return err;
 
-	return err;
+	return stm32_hash_save_hw_context(hdev);
 }
 
 static int stm32_hash_xmit_dma(struct stm32_hash_dev *hdev,
@@ -489,7 +590,7 @@ static int stm32_hash_hmac_dma_send(struct stm32_hash_dev *hdev)
 	struct stm32_hash_ctx *ctx = crypto_ahash_ctx(tfm);
 	int err;
 
-	if (ctx->keylen < rctx->buflen || (hdev->dma_mode == 1)) {
+	if (ctx->keylen < rctx->state.buflen || (hdev->dma_mode == 1)) {
 		err = stm32_hash_write_key(hdev);
 		if (stm32_hash_wait_busy(hdev))
 			return -ETIMEDOUT;
@@ -553,7 +654,7 @@ static int stm32_hash_dma_send(struct stm32_hash_dev *hdev)
 	struct scatterlist sg[1], *tsg;
 	int err = 0, len = 0, reg, ncp = 0;
 	unsigned int i;
-	u32 *buffer = (void *)rctx->buffer;
+	u32 *buffer = (void *)rctx->state.buffer;
 
 	rctx->sg = hdev->req->src;
 	rctx->total = hdev->req->nbytes;
@@ -562,7 +663,7 @@ static int stm32_hash_dma_send(struct stm32_hash_dev *hdev)
 	if (rctx->nents < 0)
 		return -EINVAL;
 
-	if (!(hdev->flags & HASH_FLAGS_INIT))
+	if (!(rctx->state.flags & HASH_FLAGS_INIT))
 		stm32_hash_write_ctrl(hdev);
 
 	if (hdev->flags & HASH_FLAGS_HMAC) {
@@ -572,16 +673,16 @@ static int stm32_hash_dma_send(struct stm32_hash_dev *hdev)
 	}
 
 	for_each_sg(rctx->sg, tsg, rctx->nents, i) {
-		len = sg->length;
-
 		sg[0] = *tsg;
+
+		len = sg->length;
 		if (sg_is_last(sg)) {
 			if (hdev->dma_mode == 1) {
 				len = (ALIGN(sg->length, 16) - 16);
 
 				ncp = sg_pcopy_to_buffer(
 					rctx->sg, rctx->nents,
-					rctx->buffer, sg->length - len,
+					rctx->state.buffer, sg->length - len,
 					rctx->total - sg->length + len);
 
 				sg->length = len;
@@ -644,13 +745,13 @@ static struct stm32_hash_dev *stm32_hash_find_dev(struct stm32_hash_request_ctx 
 {
 	struct stm32_hash_dev *hdev = NULL;
 
-	if (rctx->hdev)
-		return rctx->hdev;
+	if (rctx->state.hdev)
+		return rctx->state.hdev;
 
 	spin_lock_bh(&stm32_hash.lock);
 	hdev = list_first_entry(&stm32_hash.dev_list, struct stm32_hash_dev, list);
 	list_move_tail(&hdev->list, &stm32_hash.dev_list);
-	rctx->hdev = hdev;
+	rctx->state.hdev = hdev;
 	spin_unlock_bh(&stm32_hash.lock);
 
 	return hdev;
@@ -660,10 +761,10 @@ static bool stm32_hash_dma_aligned_data(struct ahash_request *req)
 {
 	struct scatterlist *sg;
 	struct stm32_hash_request_ctx *rctx = ahash_request_ctx(req);
-	struct stm32_hash_dev *hdev = rctx->hdev;
+	struct stm32_hash_dev *hdev = rctx->state.hdev;
 	int i;
 
-	if ((!hdev->dma_lch) || (req->nbytes <= rctx->buflen))
+	if ((!hdev->dma_lch) || (req->nbytes <= rctx->state.buflen))
 		return false;
 
 	if (sg_nents(req->src) > 1) {
@@ -691,63 +792,63 @@ static int stm32_hash_init(struct ahash_request *req)
 	struct stm32_hash_dev *hdev;
 	bool sha3_mode = ctx->flags & HASH_FLAGS_SHA3_MODE;
 
-	rctx->hdev = NULL;
+	rctx->state.hdev = NULL;
 	hdev = stm32_hash_find_dev(rctx);
 	if (!hdev)
 		return -ENODEV;
 
-	rctx->flags = HASH_FLAGS_CPU;
+	rctx->state.flags = HASH_FLAGS_CPU;
 
 	if (sha3_mode)
-		rctx->flags |= HASH_FLAGS_SHA3_MODE;
+		rctx->state.flags |= HASH_FLAGS_SHA3_MODE;
 
 	switch (crypto_ahash_digestsize(tfm)) {
 	case MD5_DIGEST_SIZE:
-		rctx->flags |= HASH_MD5 << HASH_FLAGS_ALGO_SHIFT;
+		rctx->state.flags |= HASH_MD5 << HASH_FLAGS_ALGO_SHIFT;
 		break;
 	case SHA1_DIGEST_SIZE:
-		rctx->flags |= HASH_SHA1 << HASH_FLAGS_ALGO_SHIFT;
+		rctx->state.flags |= HASH_SHA1 << HASH_FLAGS_ALGO_SHIFT;
 		break;
 	case SHA224_DIGEST_SIZE:
 		if (sha3_mode)
-			rctx->flags |= HASH_SHA3_224 << HASH_FLAGS_ALGO_SHIFT;
+			rctx->state.flags |= HASH_SHA3_224 << HASH_FLAGS_ALGO_SHIFT;
 		else
-			rctx->flags |= HASH_SHA224 << HASH_FLAGS_ALGO_SHIFT;
+			rctx->state.flags |= HASH_SHA224 << HASH_FLAGS_ALGO_SHIFT;
 		break;
 	case SHA256_DIGEST_SIZE:
 		if (sha3_mode)
-			rctx->flags |= HASH_SHA3_256 << HASH_FLAGS_ALGO_SHIFT;
+			rctx->state.flags |= HASH_SHA3_256 << HASH_FLAGS_ALGO_SHIFT;
 		else
-			rctx->flags |= HASH_SHA256 << HASH_FLAGS_ALGO_SHIFT;
+			rctx->state.flags |= HASH_SHA256 << HASH_FLAGS_ALGO_SHIFT;
 		break;
 	case SHA384_DIGEST_SIZE:
 		if (sha3_mode)
-			rctx->flags |= HASH_SHA3_384 << HASH_FLAGS_ALGO_SHIFT;
+			rctx->state.flags |= HASH_SHA3_384 << HASH_FLAGS_ALGO_SHIFT;
 		else
-			rctx->flags |= HASH_SHA384 << HASH_FLAGS_ALGO_SHIFT;
+			rctx->state.flags |= HASH_SHA384 << HASH_FLAGS_ALGO_SHIFT;
 		break;
 	case SHA512_DIGEST_SIZE:
 		if (sha3_mode)
-			rctx->flags |= HASH_SHA3_512 << HASH_FLAGS_ALGO_SHIFT;
+			rctx->state.flags |= HASH_SHA3_512 << HASH_FLAGS_ALGO_SHIFT;
 		else
-			rctx->flags |= HASH_SHA512 << HASH_FLAGS_ALGO_SHIFT;
+			rctx->state.flags |= HASH_SHA512 << HASH_FLAGS_ALGO_SHIFT;
 		break;
 	default:
 		return -EINVAL;
 	}
 
-	rctx->buflen = crypto_ahash_blocksize(tfm) + sizeof(uint32_t);
-	rctx->bufcnt = 0;
+	rctx->state.buflen = HASH_HW_FIFO_INIT_SIZE;
+	rctx->state.bufcnt = 0;
 	rctx->total = 0;
 	rctx->offset = 0;
-	rctx->data_type = HASH_DATA_8_BITS;
 
-	memset(rctx->buffer, 0, rctx->buflen);
+	memset(rctx->state.buffer, 0, rctx->state.buflen);
+	memset(rctx->state.hw_context, 0, sizeof(rctx->state.hw_context));
 
 	if (ctx->flags & HASH_FLAGS_HMAC)
-		rctx->flags |= HASH_FLAGS_HMAC;
+		rctx->state.flags |= HASH_FLAGS_HMAC;
 
-	dev_dbg(hdev->dev, "%s Flags %lx\n", __func__, rctx->flags);
+	dev_dbg(hdev->dev, "%s Flags %lx\n", __func__, rctx->state.flags);
 
 	return 0;
 }
@@ -762,11 +863,11 @@ static int stm32_hash_final_req(struct stm32_hash_dev *hdev)
 	struct ahash_request *req = hdev->req;
 	struct stm32_hash_request_ctx *rctx = ahash_request_ctx(req);
 	int err;
-	int buflen = rctx->bufcnt;
+	int buflen = rctx->state.bufcnt;
 
-	rctx->bufcnt = 0;
+	rctx->state.bufcnt = 0;
 
-	if (!(rctx->flags & HASH_FLAGS_CPU))
+	if (!(rctx->state.flags & HASH_FLAGS_CPU))
 		err = stm32_hash_dma_send(hdev);
 	else
 		err = stm32_hash_xmit_cpu(rctx, buflen, 1);
@@ -774,34 +875,27 @@ static int stm32_hash_final_req(struct stm32_hash_dev *hdev)
 	return err;
 }
 
-static void stm32_hash_copy_hash(struct ahash_request *req)
-{
-	struct stm32_hash_request_ctx *rctx = ahash_request_ctx(req);
-	struct crypto_ahash *tfm = crypto_ahash_reqtfm(req);
-	unsigned int hashsize = crypto_ahash_digestsize(tfm);
-	__be32 *hash = (void *)rctx->digest;
-	unsigned int i;
-	u32 reg;
-
-	for (i = 0; i < hashsize / sizeof(u32); i++)
-		hash[i] = cpu_to_be32(stm32_hash_read(rctx->hdev,
-						      HASH_HREG(i)));
-
-	reg = stm32_hash_read(rctx->hdev, HASH_SR);
-	reg &= ~HASH_SR_OUTPUT_READY;
-	stm32_hash_write(rctx->hdev, HASH_SR, reg);
-}
-
 static int stm32_hash_finish(struct ahash_request *req)
 {
 	struct stm32_hash_request_ctx *rctx = ahash_request_ctx(req);
 	struct crypto_ahash *tfm = crypto_ahash_reqtfm(req);
-	unsigned int digsize = crypto_ahash_digestsize(tfm);
+	unsigned int hashsize = crypto_ahash_digestsize(tfm);
+	__be32 hash[SHA512_DIGEST_SIZE / sizeof(__be32)];
+	unsigned int i;
+	u32 reg;
+
+	for (i = 0; i < hashsize / sizeof(u32); i++)
+		hash[i] = cpu_to_be32(stm32_hash_read(rctx->state.hdev,
+						      HASH_HREG(i)));
+
+	reg = stm32_hash_read(rctx->state.hdev, HASH_SR);
+	reg &= ~HASH_SR_OUTPUT_READY;
+	stm32_hash_write(rctx->state.hdev, HASH_SR, reg);
 
 	if (!req->result)
 		return -EINVAL;
 
-	memcpy(req->result, rctx->digest, digsize);
+	memcpy(req->result, hash, hashsize);
 
 	return 0;
 }
@@ -809,18 +903,18 @@ static int stm32_hash_finish(struct ahash_request *req)
 static void stm32_hash_finish_req(struct ahash_request *req, int err)
 {
 	struct stm32_hash_request_ctx *rctx = ahash_request_ctx(req);
-	struct stm32_hash_dev *hdev = rctx->hdev;
+	struct stm32_hash_dev *hdev = rctx->state.hdev;
 
 	if (!err && (HASH_FLAGS_FINAL & hdev->flags)) {
-		stm32_hash_copy_hash(req);
 		err = stm32_hash_finish(req);
 		hdev->flags &= ~(HASH_FLAGS_FINAL | HASH_FLAGS_CPU |
-				 HASH_FLAGS_INIT | HASH_FLAGS_DMA_READY |
+				 HASH_FLAGS_DMA_READY |
 				 HASH_FLAGS_OUTPUT_READY | HASH_FLAGS_HMAC |
 				 HASH_FLAGS_HMAC_INIT | HASH_FLAGS_HMAC_FINAL |
 				 HASH_FLAGS_HMAC_KEY | HASH_FLAGS_SHA3_MODE);
+		rctx->state.flags &= ~HASH_FLAGS_INIT;
 	} else {
-		rctx->flags |= HASH_FLAGS_ERRORS;
+		rctx->state.flags |= HASH_FLAGS_ERRORS;
 	}
 
 	pm_runtime_mark_last_busy(hdev->dev);
@@ -829,19 +923,24 @@ static void stm32_hash_finish_req(struct ahash_request *req, int err)
 	crypto_finalize_hash_request(hdev->engine, req, err);
 }
 
-static int stm32_hash_hw_init(struct stm32_hash_dev *hdev)
+static int stm32_hash_hw_init(struct stm32_hash_request_ctx *rctx)
 {
+	int ret = 0;
+	struct stm32_hash_dev *hdev = rctx->state.hdev;
+
 	pm_runtime_get_sync(hdev->dev);
 
-	if (!(HASH_FLAGS_INIT & hdev->flags)) {
+	if (!(HASH_FLAGS_INIT & rctx->state.flags)) {
 		stm32_hash_write(hdev, HASH_CR, HASH_CR_INIT);
 		stm32_hash_write(hdev, HASH_STR, 0);
 		stm32_hash_write(hdev, HASH_DIN, 0);
 		stm32_hash_write(hdev, HASH_IMR, 0);
 		hdev->err = 0;
+	} else {
+		ret = stm32_hash_restore_hw_context(hdev);
 	}
 
-	return 0;
+	return ret;
 }
 
 static int stm32_hash_one_request(struct crypto_engine *engine, void *areq);
@@ -858,14 +957,14 @@ static int stm32_hash_prepare_req(struct crypto_engine *engine, void *areq)
 	struct ahash_request *req = container_of(areq, struct ahash_request,
 						 base);
 	struct stm32_hash_request_ctx *rctx = ahash_request_ctx(req);
-	struct stm32_hash_dev *hdev = rctx->hdev;
+	struct stm32_hash_dev *hdev = rctx->state.hdev;
 
 	hdev->req = req;
 
 	dev_dbg(hdev->dev, "processing new req, op: %lu, nbytes %d\n",
 		rctx->op, req->nbytes);
 
-	return stm32_hash_hw_init(hdev);
+	return 0;
 }
 
 static int stm32_hash_one_request(struct crypto_engine *engine, void *areq)
@@ -873,12 +972,12 @@ static int stm32_hash_one_request(struct crypto_engine *engine, void *areq)
 	struct ahash_request *req = container_of(areq, struct ahash_request,
 						 base);
 	struct stm32_hash_request_ctx *rctx = ahash_request_ctx(req);
-	struct stm32_hash_dev *hdev = rctx->hdev;
+	struct stm32_hash_dev *hdev = rctx->state.hdev;
 	int err = 0;
 
 	hdev->req = req;
 
-	err = stm32_hash_hw_init(hdev);
+	err = stm32_hash_hw_init(rctx);
 	if (err)
 		return err;
 
@@ -897,7 +996,7 @@ static int stm32_hash_one_request(struct crypto_engine *engine, void *areq)
 static int stm32_hash_enqueue(struct ahash_request *req, unsigned int op)
 {
 	struct stm32_hash_request_ctx *rctx = ahash_request_ctx(req);
-	struct stm32_hash_dev *hdev = rctx->hdev;
+	struct stm32_hash_dev *hdev = rctx->state.hdev;
 
 	rctx->op = op;
 
@@ -908,7 +1007,7 @@ static int stm32_hash_update(struct ahash_request *req)
 {
 	struct stm32_hash_request_ctx *rctx = ahash_request_ctx(req);
 
-	if ((!req->nbytes) || !(rctx->flags & HASH_FLAGS_CPU))
+	if ((!req->nbytes) || !(rctx->state.flags & HASH_FLAGS_CPU))
 		return 0;
 
 	stm32_hash_find_dev(rctx);
@@ -917,7 +1016,7 @@ static int stm32_hash_update(struct ahash_request *req)
 	rctx->sg = req->src;
 	rctx->offset = 0;
 
-	if (rctx->bufcnt + rctx->total <= rctx->buflen) {
+	if (rctx->state.bufcnt + rctx->total <= rctx->state.buflen) {
 		stm32_hash_append_sg(rctx);
 		return 0;
 	}
@@ -929,7 +1028,7 @@ static int stm32_hash_final(struct ahash_request *req)
 {
 	struct stm32_hash_request_ctx *rctx = ahash_request_ctx(req);
 
-	rctx->flags |= HASH_FLAGS_FINUP;
+	rctx->state.flags |= HASH_FLAGS_FINUP;
 
 	return stm32_hash_enqueue(req, HASH_OP_FINAL);
 }
@@ -939,7 +1038,7 @@ static int stm32_hash_finup(struct ahash_request *req)
 	struct stm32_hash_request_ctx *rctx = ahash_request_ctx(req);
 	int err1, err2;
 
-	rctx->flags |= HASH_FLAGS_FINUP;
+	rctx->state.flags |= HASH_FLAGS_FINUP;
 
 	err1 = stm32_hash_update(req);
 
@@ -965,79 +1064,16 @@ static int stm32_hash_digest(struct ahash_request *req)
 		return ret;
 
 	if (stm32_hash_dma_aligned_data(req))
-		rctx->flags &= ~HASH_FLAGS_CPU;
+		rctx->state.flags &= ~HASH_FLAGS_CPU;
 
 	return stm32_hash_finup(req);
-}
-
-static int hash_swap_reg(struct stm32_hash_request_ctx *rctx)
-{
-	switch ((rctx->flags & HASH_FLAGS_ALGO_MASK) >>
-		HASH_FLAGS_ALGO_SHIFT) {
-	case HASH_MD5:
-	case HASH_SHA1:
-	case HASH_SHA224:
-	case HASH_SHA256:
-		if (rctx->flags & HASH_FLAGS_HMAC)
-			return HASH_CSR_NB_SHA256_HMAC;
-		else
-			return HASH_CSR_NB_SHA256;
-		break;
-
-	case HASH_SHA384:
-	case HASH_SHA512:
-		if (rctx->flags & HASH_FLAGS_HMAC)
-			return HASH_CSR_NB_SHA512_HMAC;
-		else
-			return HASH_CSR_NB_SHA512;
-		break;
-
-	case HASH_SHA3_224:
-	case HASH_SHA3_256:
-	case HASH_SHA3_384:
-	case HASH_SHA3_512:
-		if (rctx->flags & HASH_FLAGS_HMAC)
-			return HASH_CSR_NB_SHA3_HMAC;
-		else
-			return HASH_CSR_NB_SHA3;
-		break;
-
-	default:
-		return -EINVAL;
-	}
 }
 
 static int stm32_hash_export(struct ahash_request *req, void *out)
 {
 	struct stm32_hash_request_ctx *rctx = ahash_request_ctx(req);
-	struct stm32_hash_dev *hdev = rctx->hdev;
-	u32 *preg;
-	unsigned int i;
-	int swap_reg;
 
-	pm_runtime_get_sync(hdev->dev);
-
-	while ((stm32_hash_read(hdev, HASH_SR) & HASH_SR_BUSY))
-		cpu_relax();
-
-	swap_reg = hash_swap_reg(rctx);
-	if (swap_reg < 0)
-		return swap_reg;
-
-	rctx->hw_context = kmalloc_array(3 + swap_reg,  sizeof(u32), GFP_KERNEL);
-
-	preg = rctx->hw_context;
-
-	*preg++ = stm32_hash_read(hdev, HASH_IMR);
-	*preg++ = stm32_hash_read(hdev, HASH_STR);
-	*preg++ = stm32_hash_read(hdev, HASH_CR);
-	for (i = 0; i < swap_reg; i++)
-		*preg++ = stm32_hash_read(hdev, HASH_CSR(i));
-
-	pm_runtime_mark_last_busy(hdev->dev);
-	pm_runtime_put_autosuspend(hdev->dev);
-
-	memcpy(out, rctx, sizeof(*rctx));
+	memcpy(out, &rctx->state, sizeof(rctx->state));
 
 	return 0;
 }
@@ -1045,35 +1081,8 @@ static int stm32_hash_export(struct ahash_request *req, void *out)
 static int stm32_hash_import(struct ahash_request *req, const void *in)
 {
 	struct stm32_hash_request_ctx *rctx = ahash_request_ctx(req);
-	struct stm32_hash_dev *hdev;
-	const u32 *preg = in;
-	u32 reg;
-	unsigned int i;
-	int swap_reg;
 
-	memcpy(rctx, in, sizeof(*rctx));
-	hdev = rctx->hdev;
-	preg = rctx->hw_context;
-
-	pm_runtime_get_sync(hdev->dev);
-
-	stm32_hash_write(hdev, HASH_IMR, *preg++);
-	stm32_hash_write(hdev, HASH_STR, *preg++);
-	stm32_hash_write(hdev, HASH_CR, *preg);
-	reg = *preg++ | HASH_CR_INIT;
-	stm32_hash_write(hdev, HASH_CR, reg);
-
-	swap_reg = hash_swap_reg(rctx);
-	if (swap_reg < 0)
-		return swap_reg;
-
-	for (i = 0; i < swap_reg; i++)
-		stm32_hash_write(hdev, HASH_CSR(i), *preg++);
-
-	pm_runtime_mark_last_busy(hdev->dev);
-	pm_runtime_put_autosuspend(hdev->dev);
-
-	kfree(rctx->hw_context);
+	memcpy(&rctx->state, in, sizeof(rctx->state));
 
 	return 0;
 }
@@ -1184,8 +1193,7 @@ static struct ahash_alg algs_md5[] = {
 		.import = stm32_hash_import,
 		.halg = {
 			.digestsize = MD5_DIGEST_SIZE,
-			.statesize = sizeof(struct stm32_hash_request_ctx) +
-				HASH_MAX_BUFLEN,
+			.statesize = sizeof(struct stm32_hash_state),
 			.base = {
 				.cra_name = "md5",
 				.cra_driver_name = "stm32-md5",
@@ -1211,8 +1219,7 @@ static struct ahash_alg algs_md5[] = {
 		.setkey = stm32_hash_setkey,
 		.halg = {
 			.digestsize = MD5_DIGEST_SIZE,
-			.statesize = sizeof(struct stm32_hash_request_ctx) +
-				HASH_MAX_BUFLEN,
+			.statesize = sizeof(struct stm32_hash_state),
 			.base = {
 				.cra_name = "hmac(md5)",
 				.cra_driver_name = "stm32-hmac-md5",
@@ -1240,8 +1247,7 @@ static struct ahash_alg algs_sha1[] = {
 		.import = stm32_hash_import,
 		.halg = {
 			.digestsize = SHA1_DIGEST_SIZE,
-			.statesize = sizeof(struct stm32_hash_request_ctx) +
-				HASH_MAX_BUFLEN,
+			.statesize = sizeof(struct stm32_hash_state),
 			.base = {
 				.cra_name = "sha1",
 				.cra_driver_name = "stm32-sha1",
@@ -1267,8 +1273,7 @@ static struct ahash_alg algs_sha1[] = {
 		.setkey = stm32_hash_setkey,
 		.halg = {
 			.digestsize = SHA1_DIGEST_SIZE,
-			.statesize = sizeof(struct stm32_hash_request_ctx) +
-				HASH_MAX_BUFLEN,
+			.statesize = sizeof(struct stm32_hash_state),
 			.base = {
 				.cra_name = "hmac(sha1)",
 				.cra_driver_name = "stm32-hmac-sha1",
@@ -1296,8 +1301,7 @@ static struct ahash_alg algs_sha224_sha256[] = {
 		.import = stm32_hash_import,
 		.halg = {
 			.digestsize = SHA224_DIGEST_SIZE,
-			.statesize = sizeof(struct stm32_hash_request_ctx) +
-				HASH_MAX_BUFLEN,
+			.statesize = sizeof(struct stm32_hash_state),
 			.base = {
 				.cra_name = "sha224",
 				.cra_driver_name = "stm32-sha224",
@@ -1323,8 +1327,7 @@ static struct ahash_alg algs_sha224_sha256[] = {
 		.import = stm32_hash_import,
 		.halg = {
 			.digestsize = SHA224_DIGEST_SIZE,
-			.statesize = sizeof(struct stm32_hash_request_ctx) +
-				HASH_MAX_BUFLEN,
+			.statesize = sizeof(struct stm32_hash_state),
 			.base = {
 				.cra_name = "hmac(sha224)",
 				.cra_driver_name = "stm32-hmac-sha224",
@@ -1349,8 +1352,7 @@ static struct ahash_alg algs_sha224_sha256[] = {
 		.import = stm32_hash_import,
 		.halg = {
 			.digestsize = SHA256_DIGEST_SIZE,
-			.statesize = sizeof(struct stm32_hash_request_ctx) +
-				HASH_MAX_BUFLEN,
+			.statesize = sizeof(struct stm32_hash_state),
 			.base = {
 				.cra_name = "sha256",
 				.cra_driver_name = "stm32-sha256",
@@ -1376,8 +1378,7 @@ static struct ahash_alg algs_sha224_sha256[] = {
 		.setkey = stm32_hash_setkey,
 		.halg = {
 			.digestsize = SHA256_DIGEST_SIZE,
-			.statesize = sizeof(struct stm32_hash_request_ctx) +
-				HASH_MAX_BUFLEN,
+			.statesize = sizeof(struct stm32_hash_state),
 			.base = {
 				.cra_name = "hmac(sha256)",
 				.cra_driver_name = "stm32-hmac-sha256",
@@ -1394,7 +1395,6 @@ static struct ahash_alg algs_sha224_sha256[] = {
 	},
 };
 
-
 static struct ahash_alg algs_sha384_sha512[] = {
 	{
 		.init = stm32_hash_init,
@@ -1406,8 +1406,7 @@ static struct ahash_alg algs_sha384_sha512[] = {
 		.import = stm32_hash_import,
 		.halg = {
 			.digestsize = SHA384_DIGEST_SIZE,
-			.statesize = sizeof(struct stm32_hash_request_ctx) +
-				HASH_MAX_BUFLEN,
+			.statesize = sizeof(struct stm32_hash_state),
 			.base = {
 				.cra_name = "sha384",
 				.cra_driver_name = "stm32-sha384",
@@ -1433,8 +1432,7 @@ static struct ahash_alg algs_sha384_sha512[] = {
 		.import = stm32_hash_import,
 		.halg = {
 			.digestsize = SHA384_DIGEST_SIZE,
-			.statesize = sizeof(struct stm32_hash_request_ctx) +
-				HASH_MAX_BUFLEN,
+			.statesize = sizeof(struct stm32_hash_state),
 			.base = {
 				.cra_name = "hmac(sha384)",
 				.cra_driver_name = "stm32-hmac-sha384",
@@ -1459,8 +1457,7 @@ static struct ahash_alg algs_sha384_sha512[] = {
 		.import = stm32_hash_import,
 		.halg = {
 			.digestsize = SHA512_DIGEST_SIZE,
-			.statesize = sizeof(struct stm32_hash_request_ctx) +
-				HASH_MAX_BUFLEN,
+			.statesize = sizeof(struct stm32_hash_state),
 			.base = {
 				.cra_name = "sha512",
 				.cra_driver_name = "stm32-sha512",
@@ -1486,8 +1483,7 @@ static struct ahash_alg algs_sha384_sha512[] = {
 		.setkey = stm32_hash_setkey,
 		.halg = {
 			.digestsize = SHA512_DIGEST_SIZE,
-			.statesize = sizeof(struct stm32_hash_request_ctx) +
-				HASH_MAX_BUFLEN,
+			.statesize = sizeof(struct stm32_hash_state),
 			.base = {
 				.cra_name = "hmac(sha512)",
 				.cra_driver_name = "stm32-hmac-sha512",
@@ -1515,8 +1511,7 @@ static struct ahash_alg algs_sha3[] = {
 		.import = stm32_hash_import,
 		.halg = {
 			.digestsize = SHA3_224_DIGEST_SIZE,
-			.statesize = sizeof(struct stm32_hash_request_ctx) +
-				HASH_MAX_BUFLEN,
+			.statesize = sizeof(struct stm32_hash_state),
 			.base = {
 				.cra_name = "sha3-224",
 				.cra_driver_name = "stm32-sha3-224",
@@ -1542,8 +1537,7 @@ static struct ahash_alg algs_sha3[] = {
 		.setkey = stm32_hash_setkey,
 		.halg = {
 			.digestsize = SHA3_224_DIGEST_SIZE,
-			.statesize = sizeof(struct stm32_hash_request_ctx) +
-				HASH_MAX_BUFLEN,
+			.statesize = sizeof(struct stm32_hash_state),
 			.base = {
 				.cra_name = "hmac(sha3-224)",
 				.cra_driver_name = "stm32-hmac-sha3-224",
@@ -1568,8 +1562,7 @@ static struct ahash_alg algs_sha3[] = {
 		.import = stm32_hash_import,
 		.halg = {
 			.digestsize = SHA3_256_DIGEST_SIZE,
-			.statesize = sizeof(struct stm32_hash_request_ctx) +
-				HASH_MAX_BUFLEN,
+			.statesize = sizeof(struct stm32_hash_state),
 			.base = {
 				.cra_name = "sha3-256",
 				.cra_driver_name = "stm32-sha3-256",
@@ -1595,8 +1588,7 @@ static struct ahash_alg algs_sha3[] = {
 		.setkey = stm32_hash_setkey,
 		.halg = {
 			.digestsize = SHA3_256_DIGEST_SIZE,
-			.statesize = sizeof(struct stm32_hash_request_ctx) +
-				HASH_MAX_BUFLEN,
+			.statesize = sizeof(struct stm32_hash_state),
 			.base = {
 				.cra_name = "hmac(sha3-256)",
 				.cra_driver_name = "stm32-hmac-sha3-256",
@@ -1621,8 +1613,7 @@ static struct ahash_alg algs_sha3[] = {
 		.import = stm32_hash_import,
 		.halg = {
 			.digestsize = SHA3_384_DIGEST_SIZE,
-			.statesize = sizeof(struct stm32_hash_request_ctx) +
-				HASH_MAX_BUFLEN,
+			.statesize = sizeof(struct stm32_hash_state),
 			.base = {
 				.cra_name = "sha3-384",
 				.cra_driver_name = "stm32-sha3-384",
@@ -1648,8 +1639,7 @@ static struct ahash_alg algs_sha3[] = {
 		.setkey = stm32_hash_setkey,
 		.halg = {
 			.digestsize = SHA3_384_DIGEST_SIZE,
-			.statesize = sizeof(struct stm32_hash_request_ctx) +
-				HASH_MAX_BUFLEN,
+			.statesize = sizeof(struct stm32_hash_state),
 			.base = {
 				.cra_name = "hmac(sha3-384)",
 				.cra_driver_name = "stm32-hmac-sha3-384",
@@ -1674,8 +1664,7 @@ static struct ahash_alg algs_sha3[] = {
 		.import = stm32_hash_import,
 		.halg = {
 			.digestsize = SHA3_512_DIGEST_SIZE,
-			.statesize = sizeof(struct stm32_hash_request_ctx) +
-				HASH_MAX_BUFLEN,
+			.statesize = sizeof(struct stm32_hash_state),
 			.base = {
 				.cra_name = "sha3-512",
 				.cra_driver_name = "stm32-sha3-512",
@@ -1701,8 +1690,7 @@ static struct ahash_alg algs_sha3[] = {
 		.setkey = stm32_hash_setkey,
 		.halg = {
 			.digestsize = SHA3_512_DIGEST_SIZE,
-			.statesize = sizeof(struct stm32_hash_request_ctx) +
-				HASH_MAX_BUFLEN,
+			.statesize = sizeof(struct stm32_hash_state),
 			.base = {
 				.cra_name = "hmac(sha3-512)",
 				.cra_driver_name = "stm32-hmac-sha3-512",
@@ -1718,7 +1706,6 @@ static struct ahash_alg algs_sha3[] = {
 		}
 	}
 };
-
 
 static int stm32_hash_register_algs(struct stm32_hash_dev *hdev)
 {
@@ -1796,7 +1783,6 @@ static const struct stm32_hash_pdata stm32_hash_pdata_stm32f7 = {
 	.algs_info	= stm32_hash_algs_info_stm32f7,
 	.algs_info_size	= ARRAY_SIZE(stm32_hash_algs_info_stm32f7),
 };
-
 
 static struct stm32_hash_algs_info stm32_hash_algs_info_stm32mp13[] = {
 	{

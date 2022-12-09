@@ -14,6 +14,9 @@
 			interrupts = <GIC_SPI 79 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&scmi_clk CK_SCMI_CRYP1>;
 			resets = <&scmi_reset RST_SCMI_CRYP1>;
+			dmas = <&mdma1 29 0x0 0x400202 0x0 0x0 0x0>,
+			       <&mdma1 30 0x3 0x400808 0x0 0x0 0x0>;
+			dma-names = "in", "out";
 			status = "disabled";
 		};
 	};

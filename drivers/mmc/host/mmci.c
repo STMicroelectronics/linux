@@ -274,7 +274,6 @@ static struct variant_data variant_stm32_sdmmc = {
 	.busy_detect		= true,
 	.busy_detect_flag	= MCI_STM32_BUSYD0,
 	.busy_detect_mask	= MCI_STM32_BUSYD0ENDMASK,
-	.disable_keep_power	= true,
 	.init			= sdmmc_variant_init,
 };
 
@@ -302,7 +301,6 @@ static struct variant_data variant_stm32_sdmmcv2 = {
 	.busy_detect		= true,
 	.busy_detect_flag	= MCI_STM32_BUSYD0,
 	.busy_detect_mask	= MCI_STM32_BUSYD0ENDMASK,
-	.disable_keep_power	= true,
 	.init			= sdmmc_variant_init,
 };
 
@@ -2170,8 +2168,7 @@ static int mmci_probe(struct amba_device *dev,
 	host->stop_abort.flags = MMC_RSP_R1B | MMC_CMD_AC;
 
 	/* We support these PM capabilities. */
-	if (!variant->disable_keep_power)
-		mmc->pm_caps |= MMC_PM_KEEP_POWER;
+	mmc->pm_caps |= MMC_PM_KEEP_POWER;
 
 	/*
 	 * We can do SGIO

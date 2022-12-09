@@ -89,7 +89,7 @@
 		};
 	};
 
-	m4_ethernet0_rgmii_pins_a: m4-rgmii-0 {
+	m4_ethernet0_rgmii_pins_a: m4-ethernet0-rgmii-0 {
 		pins {
 			pinmux = <STM32_PINMUX('G', 5, RSVD)>, /* ETH_RGMII_CLK125 */
 				 <STM32_PINMUX('G', 4, RSVD)>, /* ETH_RGMII_GTX_CLK */
@@ -492,16 +492,16 @@
 		};
 	};
 
-	m4_usbotg_hs_pins_a: m4-usbotg_hs-0 {
-		pins {
-			pinmux = <STM32_PINMUX('A', 10, RSVD)>; /* OTG_ID */
-		};
-	};
-
 	m4_usbotg_fs_dp_dm_pins_a: m4-usbotg-fs-dp-dm-0 {
 		pins {
 			pinmux = <STM32_PINMUX('A', 11, RSVD)>, /* OTG_FS_DM */
 				 <STM32_PINMUX('A', 12, RSVD)>; /* OTG_FS_DP */
+		};
+	};
+
+	m4_usbotg_hs_pins_a: m4-usbotg_hs-0 {
+		pins {
+			pinmux = <STM32_PINMUX('A', 10, RSVD)>; /* OTG_ID */
 		};
 	};
 };

@@ -42,24 +42,23 @@ properties:
     description:
       Interrupts references to primary interrupt controller
 
+  wakeup-parent: true
+
 patternProperties:
-  '^exti[0-9a-f]*$':
+  '^exti-interrupt-map$':
     type: object
     properties:
-      interrupt-controller: true
+      interrupt-map: true
+      interrupt-map-mask: true
       "#interrupt-cells":
         const: 2
-
-      st,irq-number:
-        description:
-          Interrupt number mapped on the parent.
-        $ref: "/schemas/types.yaml#/definitions/uint32"
+      "#address-cells":
+        const: 0
 
     required:
+      - interrupt-map
       - "#interrupt-cells"
-      - interrupt-controller
-      - st,irq-number
-      - interrupt-parent
+      - "#address-cells"
 
 required:
   - "#interrupt-cells"
@@ -109,7 +108,25 @@ examples:
     };
 
     //Example 2
-    exti2: interrupt-controller@40013c00 {
+    exti1: interrupt-controller@5000d000 {
+        compatible = "st,stm32mp1-exti", "syscon";
+        interrupt-controller;
+        #interrupt-cells = <2>;
+        reg = <0x5000d000 0x400>;
+        wakeup-parent = <&pwr_irq>;
+        exti-interrupt-map {
+            #address-cells = <0>;
+            #interrupt-cells = <2>;
+            interrupt-map-mask = <0xffffffff 0>;
+            interrupt-map =
+                <0 0 &intc GIC_SPI 6 IRQ_TYPE_LEVEL_HIGH>,
+                <3 0 &intc GIC_SPI 9 IRQ_TYPE_LEVEL_HIGH>,
+                <55 0 &pwr_irq 0 IRQ_TYPE_EDGE_FALLING 0>;
+        };
+    };
+
+    //Example 3
+    exti3: interrupt-controller@40013c00 {
         compatible = "st,stm32-exti";
         interrupt-controller;
         #interrupt-cells = <2>;

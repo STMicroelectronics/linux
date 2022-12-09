@@ -810,7 +810,8 @@ lpfc_rcv_logo(struct lpfc_vport *vport, struct lpfc_nodelist *ndlp,
 		lpfc_nvmet_invalidate_host(phba, ndlp);
 
 	if (ndlp->nlp_DID == Fabric_DID) {
-		if (vport->port_state <= LPFC_FDISC)
+		if (vport->port_state <= LPFC_FDISC ||
+		    vport->fc_flag & FC_PT2PT)
 			goto out;
 		lpfc_linkdown_port(vport);
 		spin_lock_irq(shost->host_lock);
@@ -1961,8 +1962,9 @@ lpfc_cmpl_reglogin_reglogin_issue(struct lpfc_vport *vport,
 			 * is configured try it.
 			 */
 			ndlp->nlp_fc4_type |= NLP_FC4_FCP;
-			if ((vport->cfg_enable_fc4_type == LPFC_ENABLE_BOTH) ||
-			    (vport->cfg_enable_fc4_type == LPFC_ENABLE_NVME)) {
+			if ((!(vport->fc_flag & FC_PT2PT_NO_NVME)) &&
+			    (vport->cfg_enable_fc4_type == LPFC_ENABLE_BOTH ||
+			    vport->cfg_enable_fc4_type == LPFC_ENABLE_NVME)) {
 				ndlp->nlp_fc4_type |= NLP_FC4_NVME;
 				/* We need to update the localport also */
 				lpfc_nvme_update_localport(vport);
@@ -2137,9 +2139,9 @@ lpfc_cmpl_prli_prli_issue(struct lpfc_vport *vport, struct lpfc_nodelist *ndlp,
 	npr = NULL;
 	nvpr = NULL;
 	temp_ptr = lpfc_check_elscmpl_iocb(phba, cmdiocb, rspiocb);
-	if (cmdiocb->iocb_flag & LPFC_PRLI_FCP_REQ)
+	if (cmdiocb->cmd_flag & LPFC_PRLI_FCP_REQ)
 		npr = (PRLI *) temp_ptr;
-	else if (cmdiocb->iocb_flag & LPFC_PRLI_NVME_REQ)
+	else if (cmdiocb->cmd_flag & LPFC_PRLI_NVME_REQ)
 		nvpr = (struct lpfc_nvme_prli *) temp_ptr;
 
 	irsp = &rspiocb->iocb;

@@ -26,8 +26,6 @@
 #define STM32MP_PKG_AC		BIT(2)
 #define STM32MP_PKG_AD		BIT(3)
 
-#define STM32MP157_Z_BASE_SHIFT	400
-
 struct stm32_desc_function {
 	const char *name;
 	const unsigned char num;
@@ -63,7 +61,6 @@ struct stm32_pinctrl_match_data {
 	const struct stm32_desc_pin *pins;
 	const unsigned int npins;
 	bool secure_control;
-	const unsigned int pin_base_shift;
 };
 
 struct stm32_gpio_bank;

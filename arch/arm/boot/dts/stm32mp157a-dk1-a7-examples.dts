@@ -1,0 +1,95 @@
+// SPDX-License-Identifier: (GPL-2.0-or-later OR BSD-3-Clause)
+/*
+ * Copyright (C) STMicroelectronics 2022 - All Rights Reserved
+ * Author: Amelie Delaunay <amelie.delaunay@foss.st.com> for STMicroelectronics.
+ */
+
+/dts-v1/;
+
+#include "stm32mp157a-dk1.dts"
+
+/ {
+	model = "STMicroelectronics STM32MP157A-DK1 configured to run Linux A7 examples";
+	compatible = "st,stm32mp157a-dk1-a7-examples", "st,stm32mp157a-dk1", "st,stm32mp157";
+};
+
+&adc {
+	pinctrl-0 = <&adc12_ain_pins_a>, <&adc12_usb_cc_pins_a>;
+
+	adc1: adc@0 {
+		channel@0 {
+			reg = <0>;
+			st,min-sample-time-ns = <5000>;
+		};
+		channel@1 {
+			reg = <1>;
+			st,min-sample-time-ns = <5000>;
+		};
+		channel@6 {
+			reg = <6>;
+			st,min-sample-time-ns = <5000>;
+		};
+		channel@13 {
+			reg = <13>;
+			st,min-sample-time-ns = <5000>;
+		};
+	};
+
+	adc2: adc@100 {
+		/* Set IRQ mode as example. DMA is the preferred mode, yet. */
+		/delete-property/dmas;
+		/delete-property/dma-names;
+		channel@0 {
+			reg = <0>;
+			st,min-sample-time-ns = <5000>;
+		};
+		channel@1 {
+			reg = <1>;
+			st,min-sample-time-ns = <5000>;
+		};
+		channel@2 {
+			reg = <2>;
+			st,min-sample-time-ns = <5000>;
+		};
+		channel@6 {
+			reg = <6>;
+			st,min-sample-time-ns = <5000>;
+		};
+	};
+};
+
+&i2c5 {
+	status = "okay";
+};
+
+&timers1 {
+	status = "okay";
+};
+
+&timers3 {
+	status = "okay";
+};
+
+&timers4 {
+	status = "okay";
+};
+
+&timers5 {
+	status = "okay";
+};
+
+&timers6 {
+	status = "okay";
+};
+
+&timers12 {
+	status = "okay";
+};
+
+&uart7 {
+	status = "okay";
+};
+
+&usart3 {
+	status = "okay";
+};

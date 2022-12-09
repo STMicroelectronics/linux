@@ -48,7 +48,6 @@ struct dcmipp_device {
 	/* Hardware resources */
 	struct reset_control		*rstc;
 	void __iomem			*regs;
-	struct clk			*mclk;
 	struct clk			*kclk;
 
 	/* The pipeline configuration */
@@ -621,7 +620,6 @@ static __maybe_unused int dcmipp_runtime_suspend(struct device *dev)
 	struct dcmipp_device *dcmipp = dev_get_drvdata(dev);
 
 	clk_disable_unprepare(dcmipp->kclk);
-	clk_disable_unprepare(dcmipp->mclk);
 
 	return 0;
 }
@@ -630,10 +628,6 @@ static __maybe_unused int dcmipp_runtime_resume(struct device *dev)
 {
 	struct dcmipp_device *dcmipp = dev_get_drvdata(dev);
 	int ret;
-
-	ret = clk_prepare_enable(dcmipp->mclk);
-	if (ret)
-		dev_err(dev, "%s: Failed to prepare_enable clock\n", __func__);
 
 	ret = clk_prepare_enable(dcmipp->kclk);
 	if (ret)

@@ -378,7 +378,7 @@ static int scmi_regulator_probe(struct scmi_device *sdev)
 
 		rinfo->sregv[d] = sreg;
 	}
-
+	of_node_put(np);
 	/*
 	 * Map each DT entry with an existing SCMI Voltage Domain number
 	 * all belonging to this SCMI platform instance node (handle->dev->of_node).
