@@ -336,9 +336,10 @@ static int rtl8211f_config_init(struct phy_device *phydev)
 	u16 val_txdly, val_rxdly;
 	int ret;
 
-	/* Set green LED for Link, yellow LED for Active */
+	/* LED0=10/1000+ACT, LED1=100/1000+ACT, LED2=Disabled */
 	phy_write(phydev, RTL821x_PAGE_SELECT, 0xd04);
-	phy_write(phydev, 0x10, 0x617f);
+	phy_write(phydev, 0x10, 0x0359);
+	phy_write(phydev, 0x11, 0x0000);
 	phy_write(phydev, RTL821x_PAGE_SELECT, 0x0);
 
 	switch (phydev->interface) {
