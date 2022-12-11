@@ -17,11 +17,19 @@
 #define STM32_DAC_DHR12R2	0x14
 #define STM32_DAC_DOR1		0x2C
 #define STM32_DAC_DOR2		0x30
+#define STM32_DAC_MCR		0x3C
 
 /* STM32_DAC_CR bit fields */
-#define STM32_DAC_CR_EN1		BIT(0)
+#define STM32_DAC_CR_EN1			BIT(0)
 #define STM32H7_DAC_CR_HFSEL		BIT(15)
-#define STM32_DAC_CR_EN2		BIT(16)
+#define STM32_DAC_CR_EN2			BIT(16)
+
+/* STM32_DAC_MCR bit fields */
+#define STM32_DAC_MCR_MODE2_MASK	GENMASK(18,16)
+#define STM32_DAC_MCR_MODE2(x)		(((x) & 0x7) << 16)
+#define STM32_DAC_MCR_MODE1_MASK	GENMASK(2,0)
+#define STM32_DAC_MCR_MODE1(x)		(((x) & 0x7) << 0)
+
 
 /**
  * struct stm32_dac_common - stm32 DAC driver common data (for all instances)
