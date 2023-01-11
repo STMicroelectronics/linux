@@ -2048,6 +2048,31 @@ static const struct panel_desc edt_etm0350g0dh6 = {
 	.connector_type = DRM_MODE_CONNECTOR_DPI,
 };
 
+static const struct drm_display_mode bearpi_rgblcd_mode = {
+	.clock = 51200,
+	.hdisplay = 800,
+	.hsync_start = 800 + 46,
+	.hsync_end = 800 + 46 + 1,
+	.htotal = 800 + 46 + 1 + 210,
+	.vdisplay = 480,
+	.vsync_start = 480 + 23,
+	.vsync_end = 480 + 23 + 1,
+	.vtotal = 480 + 23 + 1 + 22,
+	.flags = DRM_MODE_FLAG_NVSYNC | DRM_MODE_FLAG_NHSYNC,
+};
+
+static const struct panel_desc bearpi_rgblcd_desc = {
+	.modes = &bearpi_rgblcd_mode,
+    .num_modes = 1,
+    .bpc = 6,
+	.size = {
+		.width = 152,
+		.height = 91,
+	},
+    .bus_format = MEDIA_BUS_FMT_RGB888_1X24,
+    .bus_flags = DRM_BUS_FLAG_DE_HIGH | DRM_BUS_FLAG_PIXDATA_DRIVE_POSEDGE,
+};
+
 static const struct drm_display_mode edt_etm043080dh6gp_mode = {
 	.clock = 10870,
 	.hdisplay = 480,
@@ -4558,6 +4583,9 @@ static const struct of_device_id platform_of_match[] = {
 	}, {
 		.compatible = "avic,tm070ddh03",
 		.data = &avic_tm070ddh03,
+	}, {
+		.compatible = "bearpi,rgblcd",
+		.data = &bearpi_rgblcd_desc,
 	}, {
 		.compatible = "bananapi,s070wv20-ct16",
 		.data = &bananapi_s070wv20_ct16,
