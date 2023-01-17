@@ -14,6 +14,7 @@
 #include <linux/of.h>
 #include <linux/platform_device.h>
 #include <linux/pm_wakeirq.h>
+#include <linux/workqueue.h>
 
 #define IPCC_XCR		0x000
 #define XCR_RXOIE		BIT(0)
@@ -40,10 +41,21 @@
 
 #define STM32_MAX_PROCS		2
 
+/* Use virtual ID by setting bit 8 of a channel ID to keep interrupt context for client */
+#define STM32_IPCC_CH_ID_MASK		GENMASK(7, 0)
+#define STM32_IPCC_CH_HIGH_PRIO_MASK	GENMASK(8, 8)
+
 enum {
 	IPCC_IRQ_RX,
 	IPCC_IRQ_TX,
 	IPCC_IRQ_NUM,
+};
+
+struct stm32_ipcc_ch {
+	struct mbox_chan   *mbox;
+	struct work_struct rx_work;
+	unsigned long      chan;
+	bool               irq_ctx;
 };
 
 struct stm32_ipcc {
@@ -51,6 +63,8 @@ struct stm32_ipcc {
 	void __iomem *reg_base;
 	void __iomem *reg_proc;
 	struct clk *clk;
+	struct stm32_ipcc_ch *chnl;
+	struct workqueue_struct *workqueue;
 	spinlock_t lock; /* protect access to IPCC registers */
 	int irqs[IPCC_IRQ_NUM];
 	u32 proc_id;
@@ -79,10 +93,21 @@ static inline void stm32_ipcc_clr_bits(spinlock_t *lock, void __iomem *reg,
 	spin_unlock_irqrestore(lock, flags);
 }
 
+/*
+ * Message receiver(workqueue)
+ */
+static void stm32_ipcc_rx_work(struct work_struct *work)
+{
+	struct stm32_ipcc_ch *chnl = container_of(work, struct stm32_ipcc_ch, rx_work);
+
+	mbox_chan_received_data(chnl->mbox, NULL);
+};
+
 static irqreturn_t stm32_ipcc_rx_irq(int irq, void *data)
 {
 	struct stm32_ipcc *ipcc = data;
 	struct device *dev = ipcc->controller.dev;
+	struct stm32_ipcc_ch *chnl;
 	u32 status, mr, tosr, chan;
 	irqreturn_t ret = IRQ_NONE;
 	int proc_offset;
@@ -101,7 +126,17 @@ static irqreturn_t stm32_ipcc_rx_irq(int irq, void *data)
 
 		dev_dbg(dev, "%s: chan:%d rx\n", __func__, chan);
 
-		mbox_chan_received_data(&ipcc->controller.chans[chan], NULL);
+		chnl = &ipcc->chnl[chan];
+
+		/*
+		 * Depending on the DT parameter,call the client under interrupt context
+		 * or use workqueue to call the callback in normal context
+		 */
+
+		if (chnl->irq_ctx)
+			mbox_chan_received_data(chnl->mbox, NULL);
+		else
+			queue_work(ipcc->workqueue, &chnl->rx_work);
 
 		stm32_ipcc_set_bits(&ipcc->lock, ipcc->reg_proc + IPCC_XSCR,
 				    RX_BIT_CHAN(chan));
@@ -145,7 +180,8 @@ static irqreturn_t stm32_ipcc_tx_irq(int irq, void *data)
 
 static int stm32_ipcc_send_data(struct mbox_chan *link, void *data)
 {
-	unsigned long chan = (unsigned long)link->con_priv;
+	struct stm32_ipcc_ch *chnl = (struct stm32_ipcc_ch *)link->con_priv;
+	unsigned long chan = chnl->chan;
 	struct stm32_ipcc *ipcc = container_of(link->mbox, struct stm32_ipcc,
 					       controller);
 
@@ -164,7 +200,8 @@ static int stm32_ipcc_send_data(struct mbox_chan *link, void *data)
 
 static int stm32_ipcc_startup(struct mbox_chan *link)
 {
-	unsigned long chan = (unsigned long)link->con_priv;
+	struct stm32_ipcc_ch *chnl = (struct stm32_ipcc_ch *)link->con_priv;
+	unsigned long chan = chnl->chan;
 	struct stm32_ipcc *ipcc = container_of(link->mbox, struct stm32_ipcc,
 					       controller);
 	int ret;
@@ -184,13 +221,17 @@ static int stm32_ipcc_startup(struct mbox_chan *link)
 
 static void stm32_ipcc_shutdown(struct mbox_chan *link)
 {
-	unsigned long chan = (unsigned long)link->con_priv;
+	struct stm32_ipcc_ch *chnl = (struct stm32_ipcc_ch *)link->con_priv;
+	unsigned long chan = chnl->chan;
 	struct stm32_ipcc *ipcc = container_of(link->mbox, struct stm32_ipcc,
 					       controller);
 
 	/* mask rx/tx interrupt */
 	stm32_ipcc_set_bits(&ipcc->lock, ipcc->reg_proc + IPCC_XMR,
 			    RX_BIT_CHAN(chan) | TX_BIT_CHAN(chan));
+
+	if (!chnl->irq_ctx)
+		flush_work(&chnl->rx_work);
 
 	clk_disable_unprepare(ipcc->clk);
 }
@@ -200,6 +241,26 @@ static const struct mbox_chan_ops stm32_ipcc_ops = {
 	.startup	= stm32_ipcc_startup,
 	.shutdown	= stm32_ipcc_shutdown,
 };
+
+static struct mbox_chan *stm32_ipcc_xlate(struct mbox_controller *mbox,
+					  const struct of_phandle_args *sp)
+{
+	int ind = sp->args[0] & STM32_IPCC_CH_ID_MASK;
+	struct stm32_ipcc_ch *chnl;
+
+	if (ind >= mbox->num_chans)
+		return ERR_PTR(-EINVAL);
+
+	chnl = (struct stm32_ipcc_ch *)mbox->chans[ind].con_priv;
+	chnl->mbox = &mbox->chans[ind];
+	chnl->chan = ind;
+	chnl->irq_ctx = !!(sp->args[0] & STM32_IPCC_CH_HIGH_PRIO_MASK);
+
+	if (!chnl->irq_ctx)
+		INIT_WORK(&chnl->rx_work, stm32_ipcc_rx_work);
+
+	return &mbox->chans[ind];
+}
 
 static int stm32_ipcc_probe(struct platform_device *pdev)
 {
@@ -293,6 +354,7 @@ static int stm32_ipcc_probe(struct platform_device *pdev)
 	ipcc->controller.dev = dev;
 	ipcc->controller.txdone_irq = true;
 	ipcc->controller.ops = &stm32_ipcc_ops;
+	ipcc->controller.of_xlate = &stm32_ipcc_xlate;
 	ipcc->controller.num_chans = ipcc->n_chans;
 	ipcc->controller.chans = devm_kcalloc(dev, ipcc->controller.num_chans,
 					      sizeof(*ipcc->controller.chans),
@@ -302,12 +364,26 @@ static int stm32_ipcc_probe(struct platform_device *pdev)
 		goto err_irq_wkp;
 	}
 
+	ipcc->chnl = devm_kcalloc(dev, ipcc->controller.num_chans,
+				  sizeof(*ipcc->chnl), GFP_KERNEL);
+	if (!ipcc->chnl) {
+		ret = -ENOMEM;
+		goto err_irq_wkp;
+	}
+
 	for (i = 0; i < ipcc->controller.num_chans; i++)
-		ipcc->controller.chans[i].con_priv = (void *)i;
+		ipcc->controller.chans[i].con_priv = (void *)&ipcc->chnl[i];
 
 	ret = devm_mbox_controller_register(dev, &ipcc->controller);
 	if (ret)
 		goto err_irq_wkp;
+
+	ipcc->workqueue = create_workqueue(dev_name(dev));
+	if (!ipcc->workqueue) {
+		dev_err(dev, "cannot create workqueue\n");
+		ret = -ENOMEM;
+		goto err_irq_wkp;
+	}
 
 	platform_set_drvdata(pdev, ipcc);
 
@@ -334,9 +410,12 @@ err_clk:
 static void stm32_ipcc_remove(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
+	struct stm32_ipcc *ipcc = dev_get_drvdata(dev);
 
 	if (of_property_read_bool(dev->of_node, "wakeup-source"))
 		dev_pm_clear_wake_irq(&pdev->dev);
+
+	destroy_workqueue(ipcc->workqueue);
 
 	device_set_wakeup_capable(dev, false);
 }
