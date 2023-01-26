@@ -102,43 +102,35 @@ allOf:
         - clocks
         - clock-names
 
-  - if:
-      properties:
-        compatible:
-          contains:
-            const: st,stm32mp1-rcc-secure
-    then:
-      properties:
-        clocks:
-          description: Specifies oscillators.
-          minItems: 5
-          maxItems: 5
-
-        clock-names:
-          items:
-            - const: hse
-            - const: hsi
-            - const: csi
-            - const: lse
-            - const: lsi
-      required:
-        - clocks
-        - clock-names
-
-  - if:
-      properties:
-        compatible:
-          contains:
-            const: st,stm32mp1-rcc
-    then:
+    else:
       properties:
         clocks:
           description:
-            Specifies the external RX clock for ethernet MAC.
-          maxItems: 1
+            Specifies oscillators and the external RX clock for ethernet MAC.
+          maxItems: 6
 
         clock-names:
-          const: ETH_RX_CLK/ETH_REF_CLK
+          items:
+            enum:
+              - hse
+              - hsi
+              - csi
+              - lse
+              - lsi
+              - ETH_RX_CLK/ETH_REF_CLK
+  - if:
+      properties:
+        compatible:
+          contains:
+            enum:
+              - st,stm32mp1-rcc-secure
+    then:
+      properties:
+        clocks:
+          minItems: 5
+      required:
+        - clocks
+        - clock-names
 
 additionalProperties: false
 
