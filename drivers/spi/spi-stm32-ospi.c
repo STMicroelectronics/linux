@@ -127,12 +127,24 @@
 
 #define STM32_AUTOSUSPEND_DELAY -1
 
+struct stm32_ospi_flash {
+	struct spi_device *spi;
+	u32 presc;
+	u32 dlyb_cr;
+	u32 dcr_reg;
+	u64 str_idcode;
+	bool is_spi_nor;
+	bool is_calibrated;
+	bool sample_later;
+};
+
 struct stm32_ospi {
 	struct device *dev;
 	struct spi_controller *ctrl;
 	struct clk *clk;
 	struct reset_control *rstc;
 	struct regmap *regmap;
+	struct stm32_ospi_flash flash[STM32_OSPI_MAX_NORCHIP];
 
 	struct completion match_completion;
 
@@ -144,11 +156,11 @@ struct stm32_ospi {
 	void __iomem *mm_base;
 	phys_addr_t regs_phys_base;
 	resource_size_t mm_size;
+	u64 id_buf;
 	u32 clk_rate;
 	u32 fmode;
 	u32 cr_reg;
-	u32 dcr_reg;
-	u32 flash_presc[STM32_OSPI_MAX_NORCHIP];
+	int last_cs;
 	u32 dlyb_base;
 	int irq;
 	unsigned long status_timeout;
@@ -736,11 +748,24 @@ static int stm32_ospi_get_mode(u8 buswidth)
 	}
 }
 
+static void stm32_ospi_set_prescaler(struct stm32_ospi *ospi, u32 presc)
+{
+	void __iomem *regs_base = ospi->regs_base;
+	u32 dcr2;
+
+	/* Set prescaler */
+	dcr2 = readl_relaxed(regs_base + OSPI_DCR2);
+	dcr2 &= ~DCR2_PRESC_MASK;
+	dcr2 |= FIELD_PREP(DCR2_PRESC_MASK, presc);
+	writel_relaxed(dcr2, regs_base + OSPI_DCR2);
+}
+
 static int stm32_ospi_send(struct spi_device *spi, const struct spi_mem_op *op)
 {
 	struct stm32_ospi *ospi = spi_controller_get_devdata(spi->controller);
+	struct stm32_ospi_flash *flash;
 	void __iomem *regs_base = ospi->regs_base;
-	u32 ccr, cr, dcr2, tcr;
+	u32 ccr, cr, tcr = 0;
 	int timeout, err = 0, err_poll_status = 0;
 	u8 cs = spi->chip_select[ffs(spi->cs_index_mask) - 1];
 
@@ -756,13 +781,11 @@ static int stm32_ospi_send(struct spi_device *spi, const struct spi_mem_op *op)
 	cr |= FIELD_PREP(CR_FMODE_MASK, ospi->fmode);
 	writel_relaxed(cr, regs_base + OSPI_CR);
 
-	if (op->data.nbytes)
-		writel_relaxed(op->data.nbytes - 1, regs_base + OSPI_DLR);
+	flash = &ospi->flash[cs];
+	writel_relaxed(flash->dcr_reg, regs_base + OSPI_DCR1);
 
-	/* set prescaler */
-	dcr2 = readl_relaxed(regs_base + OSPI_DCR2);
-	dcr2 |= FIELD_PREP(DCR2_PRESC_MASK, ospi->flash_presc[cs]);
-	writel_relaxed(dcr2, regs_base + OSPI_DCR2);
+	if (op->data.nbytes && ospi->fmode != CR_FMODE_MM)
+		writel_relaxed(op->data.nbytes - 1, regs_base + OSPI_DLR);
 
 	ccr = FIELD_PREP(CCR_IMODE_MASK, stm32_ospi_get_mode(op->cmd.buswidth));
 
@@ -772,17 +795,20 @@ static int stm32_ospi_send(struct spi_device *spi, const struct spi_mem_op *op)
 		ccr |= FIELD_PREP(CCR_ADSIZE_MASK, op->addr.nbytes - 1);
 	}
 
-	tcr = TCR_SSHIFT;
+	if (flash->sample_later)
+		tcr |= TCR_SSHIFT;
+
 	if (op->dummy.buswidth && op->dummy.nbytes) {
-		tcr |= FIELD_PREP(TCR_DCYC_MASK,
-				  op->dummy.nbytes * 8 / op->dummy.buswidth);
+		u8 dcyc = op->dummy.nbytes * 8 / op->dummy.buswidth;
+
+		tcr |= FIELD_PREP(TCR_DCYC_MASK, dcyc);
 	}
+
 	writel_relaxed(tcr, regs_base + OSPI_TCR);
 
-	if (op->data.nbytes) {
+	if (op->data.nbytes)
 		ccr |= FIELD_PREP(CCR_DMODE_MASK,
 				  stm32_ospi_get_mode(op->data.buswidth));
-	}
 
 	writel_relaxed(ccr, regs_base + OSPI_CCR);
 
@@ -818,11 +844,161 @@ abort:
 	timeout = stm32_ospi_abort(ospi);
 	writel_relaxed(FCR_CTCF | FCR_CSMF, regs_base + OSPI_FCR);
 
-	if (err || err_poll_status || timeout)
+	if (!ospi->calibration && (err || err_poll_status || timeout))
 		dev_err(ospi->dev, "%s err:%d err_poll_status:%d abort timeout:%d\n",
 			__func__, err, err_poll_status, timeout);
 
 	return err;
+}
+
+static int stm32_ospi_readid(struct stm32_ospi *ospi)
+{
+	struct stm32_ospi_flash *flash = &ospi->flash[ospi->last_cs];
+	struct spi_device *spi = flash->spi;
+	struct spi_mem_op readid_op;
+	struct gpio_desc *cs_gpiod = spi->cs_gpiod[ffs(spi->cs_index_mask) - 1];
+	u64 *rx_buf = &ospi->id_buf;
+	int ret;
+	u8 nb_dummy_bytes = flash->is_spi_nor ? 0 : 1;
+
+	ospi->fmode = CR_FMODE_INDR;
+
+	readid_op = (struct spi_mem_op)
+		    SPI_MEM_OP(SPI_MEM_OP_CMD(0x9f, 1),
+			       SPI_MEM_OP_NO_ADDR,
+			       SPI_MEM_OP_DUMMY(nb_dummy_bytes, 1),
+			       SPI_MEM_OP_DATA_IN(sizeof(*rx_buf),
+						  (u8 *)rx_buf, 1));
+
+	if (cs_gpiod)
+		gpiod_set_value_cansleep(cs_gpiod, true);
+
+	ret = stm32_ospi_send(spi, &readid_op);
+
+	if (cs_gpiod)
+		gpiod_set_value_cansleep(cs_gpiod, false);
+
+	if (ret)
+		return ret;
+
+	dev_dbg(ospi->dev, "Flash ID 0x%08llx\n", *rx_buf);
+
+	/*
+	 * On stm32_ospi_readid() first execution, save the golden
+	 * read id
+	 */
+	if (!flash->str_idcode)
+		flash->str_idcode = *rx_buf;
+
+	if (*rx_buf == flash->str_idcode)
+		return 0;
+
+	return -EIO;
+}
+
+static int stm32_ospi_str_calibration(struct stm32_ospi *ospi)
+{
+	struct stm32_ospi_flash *flash = &ospi->flash[ospi->last_cs];
+	struct spi_device *spi = flash->spi;
+	u32 bus_freq;
+	u8 window_len_tcr0 = 0, window_len_tcr1 = 0;
+	int ret, ret_tcr0, ret_tcr1;
+
+	/*
+	 * Set memory device at low frequency (50MHz) and sent
+	 * READID (0x9F) command, save the answer as golden answer
+	 */
+	flash->presc = DIV_ROUND_UP(ospi->clk_rate, STM32_DLYB_FREQ_THRESHOLD) - 1;
+	stm32_ospi_set_prescaler(ospi, flash->presc);
+
+	ret = stm32_ospi_readid(ospi);
+	if (ret)
+		return ret;
+
+	/*
+	 * Set memory device at expected frequency read from DT
+	 * prescaler should be set before locking the DLL
+	 */
+	flash->presc = DIV_ROUND_UP(ospi->clk_rate, spi->max_speed_hz) - 1;
+	stm32_ospi_set_prescaler(ospi, flash->presc);
+	bus_freq = DIV_ROUND_UP(ospi->clk_rate, flash->presc + 1);
+
+	/* Calibration needed above 50MHz */
+	if (bus_freq <= STM32_DLYB_FREQ_THRESHOLD)
+		return 0;
+
+	flash->dcr_reg &= ~DCR1_DLYBYP;
+	writel_relaxed(flash->dcr_reg, ospi->regs_base + OSPI_DCR1);
+
+	ret = stm32_ospi_dlyb_init(ospi, false, 0);
+	if (ret)
+		return ret;
+
+	/*
+	 * Perform only Rx TAP selection
+	 * When DTR support will be added, Rx/Tx TAP selection will have to
+	 * be performed
+	 */
+	ret_tcr0 = stm32_ospi_dlyb_find_tap(ospi, true, &window_len_tcr0);
+	if (!ret_tcr0)
+		/*
+		 * Save flash delay block configuration, will be restored
+		 * each time this flash is addressed
+		 */
+		stm32_ospi_dlyb_get_cr(ospi, &flash->dlyb_cr);
+
+	stm32_ospi_dlyb_stop(ospi);
+	ret = stm32_ospi_dlyb_init(ospi, false, 0);
+	if (ret)
+		return ret;
+
+	flash->sample_later = true;
+	ret_tcr1 = stm32_ospi_dlyb_find_tap(ospi, true, &window_len_tcr1);
+	if (ret_tcr0 && ret_tcr1) {
+		dev_info(ospi->dev, "Calibration phase failed\n");
+		return ret_tcr0;
+	}
+
+	if (window_len_tcr0 >= window_len_tcr1) {
+		flash->sample_later = false;
+		stm32_ospi_dlyb_stop(ospi);
+
+		ret = stm32_ospi_dlyb_set_cr(ospi, flash->dlyb_cr);
+		if (ret)
+			return ret;
+	} else {
+		stm32_ospi_dlyb_get_cr(ospi, &flash->dlyb_cr);
+	}
+
+	flash->is_calibrated = true;
+
+	return 0;
+}
+
+static int stm32_ospi_prepare_to_send(struct spi_device *spi,
+				      const struct spi_mem_op *op)
+{
+	struct stm32_ospi *ospi = spi_controller_get_devdata(spi->controller);
+	struct stm32_ospi_flash *flash;
+	int ret = 0;
+	u8 cs = spi->chip_select[ffs(spi->cs_index_mask) - 1];
+
+	flash = &ospi->flash[cs];
+
+	if (ospi->last_cs != cs) {
+		ospi->last_cs = cs;
+
+		stm32_ospi_dlyb_stop(ospi);
+		stm32_ospi_set_prescaler(ospi, flash->presc);
+
+		if (flash->is_calibrated) {
+			ret = stm32_ospi_dlyb_set_cr(ospi, flash->dlyb_cr);
+			if (ret)
+				return ret;
+		}
+	}
+
+	return ret;
 }
 
 static int stm32_ospi_poll_status(struct spi_mem *mem,
@@ -841,15 +1017,16 @@ static int stm32_ospi_poll_status(struct spi_mem *mem,
 		return ret;
 
 	mutex_lock(&ospi->lock);
-
 	writel_relaxed(mask, regs_base + OSPI_PSMKR);
 	writel_relaxed(match, regs_base + OSPI_PSMAR);
 	ospi->fmode = CR_FMODE_APM;
 	ospi->status_timeout = timeout_ms;
 
-	ret = stm32_ospi_send(mem->spi, op);
-	mutex_unlock(&ospi->lock);
+	ret = stm32_ospi_prepare_to_send(mem->spi, op);
+	if (!ret)
+		ret = stm32_ospi_send(mem->spi, op);
 
+	mutex_unlock(&ospi->lock);
 	pm_runtime_put_autosuspend(ospi->dev);
 
 	return ret;
@@ -870,9 +1047,11 @@ static int stm32_ospi_exec_op(struct spi_mem *mem, const struct spi_mem_op *op)
 	else
 		ospi->fmode = CR_FMODE_INDW;
 
-	ret = stm32_ospi_send(mem->spi, op);
-	mutex_unlock(&ospi->lock);
+	ret = stm32_ospi_prepare_to_send(mem->spi, op);
+	if (!ret)
+		ret = stm32_ospi_send(mem->spi, op);
 
+	mutex_unlock(&ospi->lock);
 	pm_runtime_put_autosuspend(ospi->dev);
 
 	return ret;
@@ -926,9 +1105,11 @@ static ssize_t stm32_ospi_dirmap_read(struct spi_mem_dirmap_desc *desc,
 	else
 		ospi->fmode = CR_FMODE_INDR;
 
-	ret = stm32_ospi_send(desc->mem->spi, &op);
-	mutex_unlock(&ospi->lock);
+	ret = stm32_ospi_prepare_to_send(desc->mem->spi, &op);
+	if (!ret)
+		ret = stm32_ospi_send(desc->mem->spi, &op);
 
+	mutex_unlock(&ospi->lock);
 	pm_runtime_put_autosuspend(ospi->dev);
 
 	return ret ?: len;
@@ -998,6 +1179,10 @@ static int stm32_ospi_transfer_one_message(struct spi_controller *ctrl,
 			op.data.buf.out = transfer->tx_buf;
 		}
 
+		ret = stm32_ospi_prepare_to_send(spi, &op);
+		if (ret)
+			goto end_of_transfer;
+
 		ret = stm32_ospi_send(spi, &op);
 		if (ret)
 			goto end_of_transfer;
@@ -1020,6 +1205,7 @@ end_of_transfer:
 
 static int stm32_ospi_setup(struct spi_device *spi)
 {
+	struct stm32_ospi_flash *flash;
 	struct spi_controller *ctrl = spi->controller;
 	struct stm32_ospi *ospi = spi_controller_get_devdata(ctrl);
 	void __iomem *regs_base = ospi->regs_base;
@@ -1036,19 +1222,44 @@ static int stm32_ospi_setup(struct spi_device *spi)
 	if (ret < 0)
 		return ret;
 
-	ospi->flash_presc[cs] = DIV_ROUND_UP(ospi->clk_rate, spi->max_speed_hz) - 1;
+	flash = &ospi->flash[cs];
+	flash->presc = DIV_ROUND_UP(ospi->clk_rate, spi->max_speed_hz) - 1;
+	flash->spi = spi;
 
 	mutex_lock(&ospi->lock);
 
 	ospi->cr_reg = CR_APMS | 3 << CR_FTHRES_SHIFT | CR_EN;
 	writel_relaxed(ospi->cr_reg, regs_base + OSPI_CR);
 
-	/* set dcr fsize to max address */
-	ospi->dcr_reg = DCR1_DEVSIZE_MASK | DCR1_DLYBYP;
-	writel_relaxed(ospi->dcr_reg, regs_base + OSPI_DCR1);
+	/* Stop the DLL */
+	stm32_ospi_dlyb_stop(ospi);
+
+	/* Set dcr fsize to max address */
+	flash->dcr_reg = DCR1_DEVSIZE_MASK | DCR1_DLYBYP;
+	writel_relaxed(flash->dcr_reg, regs_base + OSPI_DCR1);
+
+	stm32_ospi_set_prescaler(ospi, flash->presc);
+
+	ospi->last_cs = cs;
+
+	ret = stm32_ospi_str_calibration(ospi);
+	if (ret) {
+		dev_info(ospi->dev, "Set flash frequency to a safe value (%d Hz)\n",
+			 STM32_DLYB_FREQ_THRESHOLD);
+
+		/* Stop the DLL */
+		stm32_ospi_dlyb_stop(ospi);
+		flash->sample_later = false;
+
+		flash->presc = DIV_ROUND_UP(ospi->clk_rate,
+					    STM32_DLYB_FREQ_THRESHOLD) - 1;
+		stm32_ospi_set_prescaler(ospi, flash->presc);
+
+		flash->dcr_reg |= DCR1_DLYBYP;
+		writel_relaxed(flash->dcr_reg, regs_base + OSPI_DCR1);
+	}
 
 	mutex_unlock(&ospi->lock);
-
 	pm_runtime_put_autosuspend(ospi->dev);
 
 	return 0;
@@ -1202,6 +1413,7 @@ static int stm32_ospi_probe(struct platform_device *pdev)
 
 	ospi = spi_controller_get_devdata(ctrl);
 	ospi->ctrl = ctrl;
+	ospi->check_transfer = stm32_ospi_readid;
 
 	ospi->dev = &pdev->dev;
 	platform_set_drvdata(pdev, ospi);
@@ -1251,6 +1463,32 @@ static int stm32_ospi_probe(struct platform_device *pdev)
 	udelay(2);
 	reset_control_deassert(ospi->rstc);
 
+	/* Find memory model on each child node (SPI NOR or SPI NAND) */
+	for_each_available_child_of_node(ospi->dev->of_node, child) {
+		u32 cs;
+
+		ret = of_property_read_u32(child, "reg", &cs);
+		if (ret) {
+			dev_err(ospi->dev, "could not retrieve reg property: %d\n",
+				ret);
+			of_node_put(child);
+			goto err_pm_resume;
+		}
+
+		if (cs >= STM32_OSPI_MAX_NORCHIP) {
+			dev_err(ospi->dev, "invalid reg value: %d\n", cs);
+			of_node_put(child);
+			ret = -EINVAL;
+			goto err_pm_resume;
+		}
+
+		if (of_device_is_compatible(child, "jedec,spi-nor")) {
+			struct stm32_ospi_flash *flash = &ospi->flash[cs];
+
+			flash->is_spi_nor = true;
+		}
+	}
+
 	ret = spi_register_controller(ctrl);
 	if (ret) {
 		/* Disable ospi */
@@ -1287,6 +1525,7 @@ static void stm32_ospi_remove(struct platform_device *pdev)
 	spi_unregister_controller(ospi->ctrl);
 	/* Disable ospi */
 	writel_relaxed(0, ospi->regs_base + OSPI_CR);
+	stm32_ospi_dlyb_stop(ospi);
 	mutex_destroy(&ospi->lock);
 
 	if (ospi->dma_chtx)
@@ -1334,7 +1573,7 @@ static int stm32_ospi_resume(struct device *dev)
 	}
 
 	writel_relaxed(ospi->cr_reg, regs_base + OSPI_CR);
-	writel_relaxed(ospi->dcr_reg, regs_base + OSPI_DCR1);
+	ospi->last_cs = -1;
 	pm_runtime_put_autosuspend(ospi->dev);
 
 	return 0;
