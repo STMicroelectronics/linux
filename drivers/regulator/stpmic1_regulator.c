@@ -620,26 +620,29 @@ static irqreturn_t stpmic1_boost_irq_handler(int irq, void *data)
 }
 
 #define MATCH(_name, _id) \
-	[STPMIC1_##_id] = { \
-		.name = #_name, \
+	{ \
+		.name = _name, \
 		.desc = &stpmic1_regulator_cfgs[STPMIC1_##_id].desc, \
 	}
 
 static struct of_regulator_match stpmic1_matches[] = {
-	MATCH(buck1, BUCK1),
-	MATCH(buck2, BUCK2),
-	MATCH(buck3, BUCK3),
-	MATCH(buck4, BUCK4),
-	MATCH(ldo1, LDO1),
-	MATCH(ldo2, LDO2),
-	MATCH(ldo3, LDO3),
-	MATCH(ldo4, LDO4),
-	MATCH(ldo5, LDO5),
-	MATCH(ldo6, LDO6),
-	MATCH(vref_ddr, VREF_DDR),
-	MATCH(boost, BOOST),
-	MATCH(pwr_sw1, VBUS_OTG),
-	MATCH(pwr_sw2, SW_OUT),
+	MATCH("buck1", BUCK1),
+	MATCH("buck2", BUCK2),
+	MATCH("buck3", BUCK3),
+	MATCH("buck4", BUCK4),
+	MATCH("ldo1", LDO1),
+	MATCH("ldo2", LDO2),
+	MATCH("ldo3", LDO3),
+	MATCH("ldo4", LDO4),
+	MATCH("ldo5", LDO5),
+	MATCH("ldo6", LDO6),
+	MATCH("vref_ddr", VREF_DDR),
+	MATCH("vref-ddr", VREF_DDR),
+	MATCH("boost", BOOST),
+	MATCH("pwr_sw1", VBUS_OTG),
+	MATCH("pwr-sw1", VBUS_OTG),
+	MATCH("pwr_sw2", SW_OUT),
+	MATCH("pwr-sw2", SW_OUT),
 };
 
 static struct regulator_dev *
@@ -756,22 +759,27 @@ static int stpmic1_regulator_probe(struct platform_device *pdev)
 	if (!usb_data)
 		return -ENOMEM;
 
-	for (i = 0; i < ARRAY_SIZE(stpmic1_regulator_cfgs); i++) {
-		if (i == STPMIC1_BOOST) {
+	for (i = 0; i < ARRAY_SIZE(stpmic1_matches); i++) {
+		int id = stpmic1_matches[i].desc->id;
+
+		if (!stpmic1_matches[i].init_data)
+			continue;
+
+		if (id == STPMIC1_BOOST) {
 			rdev =
-			stpmic1_boost_register(pdev, i, &stpmic1_matches[i],
-					       &stpmic1_regulator_cfgs[i],
+			stpmic1_boost_register(pdev, id, &stpmic1_matches[i],
+					       &stpmic1_regulator_cfgs[id],
 					       usb_data);
 
 			usb_data->boost_rdev = rdev;
 		} else {
 			rdev =
-			stpmic1_regulator_register(pdev, i, &stpmic1_matches[i],
-						   &stpmic1_regulator_cfgs[i]);
+			stpmic1_regulator_register(pdev, id, &stpmic1_matches[i],
+						   &stpmic1_regulator_cfgs[id]);
 
-			if (i == STPMIC1_VBUS_OTG)
+			if (id == STPMIC1_VBUS_OTG)
 				usb_data->vbus_otg_rdev = rdev;
-			else if (i == STPMIC1_SW_OUT)
+			else if (id == STPMIC1_SW_OUT)
 				usb_data->sw_out_rdev = rdev;
 		}
 		if (IS_ERR(rdev))
