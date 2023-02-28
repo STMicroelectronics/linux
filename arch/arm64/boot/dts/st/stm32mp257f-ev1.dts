@@ -528,6 +528,16 @@
 	status = "okay";
 };
 
+&mlahb {
+	intc_rpmsg: interrupt-controller@1 {
+		compatible = "rpmsg,intc";
+		reg = <1 0>;
+		#interrupt-cells = <1>;
+		interrupt-controller;
+		status = "okay";
+	};
+};
+
 &ommanager {
 	memory-region = <&mm_ospi1>;
 	memory-region-names = "ospi1";
