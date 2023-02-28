@@ -387,6 +387,10 @@
 	/delete-property/dma-names;
 };
 
+&ipcc1 {
+	status = "okay";
+};
+
 /* use LPTIMER with tick broadcast for suspend mode */
 &lptimer3 {
 	status = "okay";
