@@ -884,6 +884,7 @@ static int std_validate_compound(const struct v4l2_ctrl *ctrl, u32 idx,
 	struct v4l2_ctrl_hevc_pps *p_hevc_pps;
 	struct v4l2_ctrl_hdr10_mastering_display *p_hdr10_mastering;
 	struct v4l2_ctrl_hevc_decode_params *p_hevc_decode_params;
+	struct v4l2_ctrl_vp8_encode_params *p_vp8_encode_params;
 	struct v4l2_area *area;
 	struct v4l2_rect *rect;
 	void *p = ptr.p + idx * ctrl->elem_size;
@@ -1119,6 +1120,15 @@ static int std_validate_compound(const struct v4l2_ctrl *ctrl, u32 idx,
 		zero_padding(p_vp8_frame->quant);
 		zero_padding(p_vp8_frame->entropy);
 		zero_padding(p_vp8_frame->coder_state);
+		break;
+
+	case V4L2_CTRL_TYPE_VP8_ENCODE_PARAMS:
+		p_vp8_encode_params = p;
+		if (p_vp8_encode_params->loop_filter_level > 63)
+			return -EINVAL;
+
+		if (p_vp8_encode_params->sharpness_level > 7)
+			return -EINVAL;
 		break;
 
 	case V4L2_CTRL_TYPE_HEVC_SPS:
@@ -1957,6 +1967,9 @@ static struct v4l2_ctrl *v4l2_ctrl_new(struct v4l2_ctrl_handler *hdl,
 		break;
 	case V4L2_CTRL_TYPE_AREA:
 		elem_size = sizeof(struct v4l2_area);
+		break;
+	case V4L2_CTRL_TYPE_VP8_ENCODE_PARAMS:
+		elem_size = sizeof(struct v4l2_ctrl_vp8_encode_params);
 		break;
 	case V4L2_CTRL_TYPE_RECT:
 		elem_size = sizeof(struct v4l2_rect);
