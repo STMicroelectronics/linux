@@ -10,13 +10,17 @@ description: |
   The STM32G0 MCU can be programmed to control Type-C connector(s) through I2C
   typically using the UCSI protocol over I2C, with a dedicated alert
   (interrupt) pin.
+  On STM32MP25, the co-processor can be used with a dedicated firmware to
+  achieve similar Type-C and Power Delivery functionality.
 
 maintainers:
   - Fabrice Gasnier <fabrice.gasnier@foss.st.com>
 
 properties:
   compatible:
-    const: st,stm32g0-typec
+    enum:
+      - st,stm32g0-typec
+      - st,stm32mp25-typec
 
   reg:
     maxItems: 1
