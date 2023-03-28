@@ -333,6 +333,8 @@ static void stm32mp_exti_eoi(struct irq_data *d)
 	stm32mp_exti_write_bit(d, bank->rpr_ofst);
 	stm32mp_exti_write_bit(d, bank->fpr_ofst);
 
+	chip_data->mask_cache = stm32mp_exti_set_bit(d, bank->imr_ofst);
+
 	raw_spin_unlock(&chip_data->rlock);
 
 	irq_chip_eoi_parent(d);
