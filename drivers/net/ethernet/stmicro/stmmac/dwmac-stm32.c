@@ -566,10 +566,10 @@ static int stm32_dwmac_resume(struct device *dev)
 
 	return ret;
 }
-#endif /* CONFIG_PM_SLEEP */
 
 static SIMPLE_DEV_PM_OPS(stm32_dwmac_pm_ops,
 	stm32_dwmac_suspend, stm32_dwmac_resume);
+#endif /* CONFIG_PM_SLEEP */
 
 static struct stm32_ops stm32mcu_dwmac_data = {
 	.set_mode = stm32mcu_set_mode,
@@ -629,7 +629,9 @@ static struct platform_driver stm32_dwmac_driver = {
 	.remove = stm32_dwmac_remove,
 	.driver = {
 		.name           = "stm32-dwmac",
+#ifdef CONFIG_PM_SLEEP
 		.pm		= &stm32_dwmac_pm_ops,
+#endif /* CONFIG_PM_SLEEP */
 		.of_match_table = stm32_dwmac_match,
 	},
 };
