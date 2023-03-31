@@ -3028,6 +3028,9 @@ static void dwc2_gadget_handle_nak(struct dwc2_hsotg_ep *hs_ep)
 		dwc2_gadget_start_next_request(hs_ep);
 }
 
+static void kill_all_requests(struct dwc2_hsotg *hsotg,
+			      struct dwc2_hsotg_ep *ep,
+			      int result);
 /**
  * dwc2_hsotg_epint - handle an in/out endpoint interrupt
  * @hsotg: The driver state
@@ -3070,8 +3073,23 @@ static void dwc2_hsotg_epint(struct dwc2_hsotg *hsotg, unsigned int idx,
 	 * exit from setup phase of control transfer.
 	 */
 	if (using_desc_dma(hsotg) && idx == 0 && !hs_ep->dir_in &&
-	    hsotg->ep0_state == DWC2_EP0_SETUP && !(ints & DXEPINT_SETUP))
+	    hsotg->ep0_state == DWC2_EP0_SETUP && !(ints & DXEPINT_SETUP)) {
 		ints &= ~DXEPINT_XFERCOMPL;
+
+		if (!(dwc2_readl(hsotg, epctl_reg) & DXEPCTL_EPENA)) {
+			/*
+			 * More than 3 setup packets have likely been missed.
+			 * This may happen when other packets has been stored
+			 * in the RxFifo on other endpoints accepting packet
+			 * without being enabled.
+			 * As the EP0 got disabled, complete cb will never be
+			 * called. So enforce here the EP0 remains active (re
+			 * enqueue setup) when later stuck packets gets pulled.
+			 */
+			kill_all_requests(hsotg, hsotg->eps_out[0], -ESHUTDOWN);
+			dwc2_hsotg_enqueue_setup(hsotg);
+		}
+	}
 
 	if (ints & DXEPINT_XFERCOMPL) {
 		dev_dbg(hsotg->dev,
