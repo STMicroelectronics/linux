@@ -206,6 +206,11 @@ enum scmi_optee_ocall_reply {
 	 * issue Ocall command PTA_SCMI_OCALL_CMD_THREAD_READY again.
 	 */
 	PTA_SCMI_OCALL_PROCESS_SMT_MESSAGE = 2,
+	/*
+	 * On return of Ocall, SCMI PTA shall process channel's MSG SCMI message
+	 * and issue Ocall command PTA_SCMI_OCALL_CMD_THREAD_READY again.
+	 */
+	PTA_SCMI_OCALL_PROCESS_MSG = 3,
 };
 
 /*
@@ -591,18 +596,9 @@ static int close_ocall_thread(struct scmi_optee_channel *channel)
 	return ret;
 }
 
-static int invoke_ocall_thread(struct scmi_optee_channel *channel,
-			       size_t msg_size)
+static int invoke_ocall_thread(struct scmi_optee_channel *channel)
 {
-	struct ocall_ctx *ocall_ctx = channel->ocall_ctx;
-	int ret;
-
-	ocall_ctx->ocall_arg.out_param1 = PTA_SCMI_OCALL_PROCESS_SMT_MESSAGE;
-	ocall_ctx->ocall_arg.out_param2 = msg_size;
-
-	ret = invoke_optee_ocall(channel);
-
-	if (!ret && ocall_thread_is_ready(channel))
+	if (!invoke_optee_ocall(channel) && ocall_thread_is_ready(channel))
 		return 0;
 
 	if (return_is_ocall(channel->ocall_ctx))
@@ -611,6 +607,32 @@ static int invoke_ocall_thread(struct scmi_optee_channel *channel,
 	free_ocall_ctx(channel);
 
 	return -EPROTO;
+}
+
+static int invoke_ocall_msg_thread(struct scmi_optee_channel *channel,
+				   size_t msg_size)
+{
+	struct ocall_ctx *ocall_ctx = channel->ocall_ctx;
+	int ret;
+
+	ocall_ctx->ocall_arg.out_param1 = PTA_SCMI_OCALL_PROCESS_MSG;
+	ocall_ctx->ocall_arg.out_param2 = msg_size;
+
+	ret = invoke_ocall_thread(channel);
+	if (!ret)
+		channel->rx_len = ocall_ctx->ocall_arg.in_param2;
+
+	return ret;
+}
+
+static int invoke_ocall_smt_thread(struct scmi_optee_channel *channel)
+{
+	struct ocall_ctx *ocall_ctx = channel->ocall_ctx;
+
+	ocall_ctx->ocall_arg.out_param1 = PTA_SCMI_OCALL_PROCESS_SMT_MESSAGE;
+	ocall_ctx->ocall_arg.out_param2 = 0;
+
+	return invoke_ocall_thread(channel);
 }
 
 static int invoke_process_smt_channel(struct scmi_optee_channel *channel)
@@ -841,8 +863,8 @@ static int scmi_optee_send_message(struct scmi_chan_info *cinfo,
 		core->msg->tx_prepare(channel->req.msg, xfer);
 
 		if (channel->ocall_ctx)
-			ret = invoke_ocall_thread(channel,
-						  core->msg->command_size(xfer));
+			ret = invoke_ocall_msg_thread(channel,
+						      core->msg->command_size(xfer));
 		else
 			ret = invoke_process_msg_channel(channel,
 							 core->msg->command_size(xfer));
@@ -851,7 +873,7 @@ static int scmi_optee_send_message(struct scmi_chan_info *cinfo,
 					channel->io_ops->toio);
 
 		if (channel->ocall_ctx)
-			ret = invoke_ocall_thread(channel, 0);
+			ret = invoke_ocall_smt_thread(channel);
 		else
 			ret = invoke_process_smt_channel(channel);
 	}
