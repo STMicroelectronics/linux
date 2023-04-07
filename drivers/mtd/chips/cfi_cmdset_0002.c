@@ -122,6 +122,10 @@ static int cfi_use_status_reg(struct cfi_private *cfi)
 	struct cfi_pri_amdstd *extp = cfi->cmdset_priv;
 	u8 poll_mask = CFI_POLL_STATUS_REG | CFI_POLL_DQ;
 
+	/* DQ polling is not supported in Cypress chips (S26Hx) */
+	if (cfi->mfr == CFI_MFR_CYPRESS)
+		return 1;
+
 	return extp && extp->MinorVersion >= '5' &&
 		(extp->SoftwareFeatures & poll_mask) == CFI_POLL_STATUS_REG;
 }
@@ -448,6 +452,23 @@ static void fixup_quirks(struct mtd_info *mtd)
 		cfi->quirks |= CFI_QUIRK_DQ_TRUE_DATA;
 }
 
+static void fixup_s26hx_writesize(struct mtd_info *mtd)
+{
+	/*
+	 * Programming is supported only in 16-byte ECC data unit granularity.
+	 * Byte(word)-programming, bit-walking, or multiple program operations
+	 * to the same ECC data unit without an erase are not allowed.
+	 */
+	mtd->writesize = 16;
+	mtd->_write = cfi_amdstd_write_buffers;
+
+	/*
+	 * Unset MTD_BIT_WRITEABLE to activate JFFS2 write buffer for ECC'd NOR
+	 * flash.
+	 */
+	mtd->flags = MTD_CAP_NORFLASH & ~MTD_BIT_WRITEABLE;
+}
+
 /* Used to fix CFI-Tables of chips without Extended Query Tables */
 static struct cfi_fixup cfi_nopri_fixup_table[] = {
 	{ CFI_MFR_SST, 0x234a, fixup_sst39vf }, /* SST39VF1602 */
@@ -458,6 +479,10 @@ static struct cfi_fixup cfi_nopri_fixup_table[] = {
 	{ CFI_MFR_SST, 0x235d, fixup_sst39vf_rev_b }, /* SST39VF3201B */
 	{ CFI_MFR_SST, 0x236c, fixup_sst39vf_rev_b }, /* SST39VF6402B */
 	{ CFI_MFR_SST, 0x236d, fixup_sst39vf_rev_b }, /* SST39VF6401B */
+	{ CFI_MFR_CYPRESS, 0x6a1a, fixup_s26hx_writesize }, /* S26HL512T */
+	{ CFI_MFR_CYPRESS, 0x6a1b, fixup_s26hx_writesize }, /* S26HL01GT */
+	{ CFI_MFR_CYPRESS, 0x7b1a, fixup_s26hx_writesize }, /* S26HS512T */
+	{ CFI_MFR_CYPRESS, 0x7b1b, fixup_s26hx_writesize }, /* S26HS01GT */
 	{ 0, 0, NULL }
 };
 
