@@ -12,6 +12,7 @@
  * Base Functions
  */
 
+#include <linux/hwspinlock.h>
 #include <linux/module.h>
 #include <linux/init.h>
 #include <linux/poll.h>
@@ -210,6 +211,50 @@ static struct kobj_type portio_attr_type = {
 	.default_attrs	= portio_attrs,
 };
 
+static ssize_t tx_offsets_show(struct device *dev,
+			       struct device_attribute *attr, char *buf)
+{
+	struct uio_device *idev = dev_get_drvdata(dev);
+	int rd_offset, wr_offset;
+	int ret;
+
+	mutex_lock(&idev->info_lock);
+	if (!idev->info) {
+		ret = -EINVAL;
+		dev_err(dev, "the device has been unregistered\n");
+		goto out;
+	}
+	if (uio_dsi_mcc_tx_offsets(idev->info->priv, &rd_offset, &wr_offset))
+		goto out;
+	ret = sprintf(buf, "rd:%d, wr:%d\n", rd_offset, wr_offset);
+out:
+	mutex_unlock(&idev->info_lock);
+	return ret;
+}
+static DEVICE_ATTR_RO(tx_offsets);
+
+static ssize_t rx_offsets_show(struct device *dev,
+			       struct device_attribute *attr, char *buf)
+{
+	struct uio_device *idev = dev_get_drvdata(dev);
+	int rd_offset, wr_offset;
+	int ret;
+
+	mutex_lock(&idev->info_lock);
+	if (!idev->info) {
+		ret = -EINVAL;
+		dev_err(dev, "the device has been unregistered\n");
+		goto out;
+	}
+	if (uio_dsi_mcc_rx_offsets(idev->info->priv, &rd_offset, &wr_offset))
+		goto out;
+	ret = sprintf(buf, "rd:%d, wr:%d\n", rd_offset, wr_offset);
+out:
+	mutex_unlock(&idev->info_lock);
+	return ret;
+}
+static DEVICE_ATTR_RO(rx_offsets);
+
 static ssize_t name_show(struct device *dev,
 			 struct device_attribute *attr, char *buf)
 {
@@ -261,10 +306,9 @@ static ssize_t event_show(struct device *dev,
 static DEVICE_ATTR_RO(event);
 
 static struct attribute *uio_attrs[] = {
-	&dev_attr_name.attr,
-	&dev_attr_version.attr,
-	&dev_attr_event.attr,
-	NULL,
+	&dev_attr_tx_offsets.attr, &dev_attr_rx_offsets.attr,
+	&dev_attr_name.attr,       &dev_attr_version.attr,
+	&dev_attr_event.attr,      NULL,
 };
 ATTRIBUTE_GROUPS(uio);
 

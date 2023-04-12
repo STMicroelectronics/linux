@@ -41,6 +41,8 @@ struct uio_mem {
 	resource_size_t		size;
 	int			memtype;
 	void __iomem		*internal_addr;
+	unsigned long		rd_offset;
+	unsigned long		wr_offset;
 	struct uio_map		*map;
 };
 
@@ -130,6 +132,8 @@ extern int __must_check
 
 extern void uio_unregister_device(struct uio_info *info);
 extern void uio_event_notify(struct uio_info *info);
+extern int uio_dsi_mcc_tx_offsets(void *priv, int *wr_offset, int *rd_offset);
+extern int uio_dsi_mcc_rx_offsets(void *priv, int *wr_offset, int *rd_offset);
 
 extern int __must_check
 	__devm_uio_register_device(struct module *owner,
