@@ -103,8 +103,9 @@ static int stm32_dac_probe(struct platform_device *pdev)
 		return -ENOMEM;
 	platform_set_drvdata(pdev, &priv->common);
 
-	cfg = (const struct stm32_dac_cfg *)
-		of_match_device(dev->driver->of_match_table, dev)->data;
+	cfg = (const struct stm32_dac_cfg *)of_match_device(
+		      dev->driver->of_match_table, dev)
+		      ->data;
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	mmio = devm_ioremap_resource(dev, res);
@@ -150,7 +151,8 @@ static int stm32_dac_probe(struct platform_device *pdev)
 	rst = devm_reset_control_get_optional_exclusive(dev, NULL);
 	if (rst) {
 		if (IS_ERR(rst)) {
-			ret = dev_err_probe(dev, PTR_ERR(rst), "reset get failed\n");
+			ret = dev_err_probe(dev, PTR_ERR(rst),
+					    "reset get failed\n");
 			goto err_hw_stop;
 		}
 
@@ -162,14 +164,12 @@ static int stm32_dac_probe(struct platform_device *pdev)
 	if (cfg && cfg->has_hfsel) {
 		/* When clock speed is higher than 80MHz, set HFSEL */
 		priv->common.hfsel = (clk_get_rate(priv->pclk) > 80000000UL);
-		ret = regmap_update_bits(regmap, STM32_DAC_CR,
-					 STM32H7_DAC_CR_HFSEL,
-					 priv->common.hfsel ?
-					 STM32H7_DAC_CR_HFSEL : 0);
+		ret = regmap_update_bits(
+			regmap, STM32_DAC_CR, STM32H7_DAC_CR_HFSEL,
+			priv->common.hfsel ? STM32H7_DAC_CR_HFSEL : 0);
 		if (ret)
 			goto err_hw_stop;
 	}
-
 
 	ret = of_platform_populate(pdev->dev.of_node, NULL, NULL, dev);
 	if (ret < 0) {
@@ -235,9 +235,8 @@ static int __maybe_unused stm32_dac_core_runtime_resume(struct device *dev)
 
 static const struct dev_pm_ops stm32_dac_core_pm_ops = {
 	SET_SYSTEM_SLEEP_PM_OPS(pm_runtime_force_suspend, stm32_dac_core_resume)
-	SET_RUNTIME_PM_OPS(stm32_dac_core_runtime_suspend,
-			   stm32_dac_core_runtime_resume,
-			   NULL)
+		SET_RUNTIME_PM_OPS(stm32_dac_core_runtime_suspend,
+				   stm32_dac_core_runtime_resume, NULL)
 };
 
 static const struct stm32_dac_cfg stm32h7_dac_cfg = {
@@ -247,7 +246,8 @@ static const struct stm32_dac_cfg stm32h7_dac_cfg = {
 static const struct of_device_id stm32_dac_of_match[] = {
 	{
 		.compatible = "st,stm32f4-dac-core",
-	}, {
+	},
+	{
 		.compatible = "st,stm32h7-dac-core",
 		.data = (void *)&stm32h7_dac_cfg,
 	},
@@ -258,13 +258,30 @@ MODULE_DEVICE_TABLE(of, stm32_dac_of_match);
 static struct platform_driver stm32_dac_driver = {
 	.probe = stm32_dac_probe,
 	.remove = stm32_dac_remove,
-	.driver = {
-		.name = "stm32-dac-core",
-		.of_match_table = stm32_dac_of_match,
-		.pm = &stm32_dac_core_pm_ops,
-	},
+	.driver =
+		{
+			.name = "stm32-dac-core",
+			.of_match_table = stm32_dac_of_match,
+			.pm = &stm32_dac_core_pm_ops,
+		},
 };
-module_platform_driver(stm32_dac_driver);
+//module_platform_driver(stm32_dac_driver);
+
+/*
+ * DAC driver register needs to be done after adc for Datum
+ * This is a patch until DAC/ADC functions are moved to the CM4 context
+ */
+static int __init stm32_dac_drv_reg(void)
+{
+	return platform_driver_register(&stm32_dac_driver);
+}
+late_initcall(stm32_dac_drv_reg);
+
+static void __exit stm32_dac_exit(void)
+{
+	platform_driver_unregister(&stm32_dac_driver);
+}
+module_exit(stm32_dac_exit);
 
 MODULE_AUTHOR("Fabrice Gasnier <fabrice.gasnier@st.com>");
 MODULE_DESCRIPTION("STMicroelectronics STM32 DAC core driver");
