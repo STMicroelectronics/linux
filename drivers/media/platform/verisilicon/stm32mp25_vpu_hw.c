@@ -92,6 +92,19 @@ static const struct hantro_fmt stm32mp25_venc_fmts[] = {
 			.step_height = MB_DIM,
 		},
 	},
+	{
+		.fourcc = V4L2_PIX_FMT_VP8_FRAME,
+		.codec_mode = HANTRO_MODE_VP8_ENC,
+		.max_depth = 2,
+		.frmsize = {
+			.min_width = 96,
+			.max_width = FMT_4K_WIDTH,
+			.step_width = MB_DIM,
+			.min_height = 96,
+			.max_height = FMT_4K_HEIGHT,
+			.step_height = MB_DIM,
+		},
+	},
 };
 
 static irqreturn_t stm32mp25_venc_irq(int irq, void *dev_id)
@@ -143,6 +156,13 @@ static const struct hantro_codec_ops stm32mp25_venc_codec_ops[] = {
 		.reset = stm32mp25_venc_reset,
 		.done = hantro_h1_jpeg_enc_done,
 	},
+	[HANTRO_MODE_VP8_ENC] = {
+		.run = hantro_h1_vp8_enc_run,
+		.reset = stm32mp25_venc_reset,
+		.init = hantro_vp8_enc_init,
+		.done = hantro_h1_vp8_enc_done,
+		.exit = hantro_vp8_enc_exit,
+	},
 };
 
 /*
@@ -177,7 +197,7 @@ static const char * const stm32mp25_venc_clk_names[] = {
 const struct hantro_variant stm32mp25_venc_variant = {
 	.enc_fmts = stm32mp25_venc_fmts,
 	.num_enc_fmts = ARRAY_SIZE(stm32mp25_venc_fmts),
-	.codec = HANTRO_JPEG_ENCODER,
+	.codec = HANTRO_JPEG_ENCODER | HANTRO_VP8_ENCODER,
 	.codec_ops = stm32mp25_venc_codec_ops,
 	.irqs = stm32mp25_venc_irqs,
 	.num_irqs = ARRAY_SIZE(stm32mp25_venc_irqs),
