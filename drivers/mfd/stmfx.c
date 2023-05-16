@@ -303,6 +303,21 @@ irq_exit:
 	return ret;
 }
 
+static int stmfx_chip_wait_boot(struct stmfx *stmfx)
+{
+	unsigned long timeout_ms = 0;
+	unsigned int val;
+	int ret;
+
+	while (1) {
+		ret = regmap_read(stmfx->map, STMFX_REG_FW_VERSION_MSB, &val);
+		if (ret != -ENXIO || timeout_ms > STMFX_BOOT_TIME_MS)
+			return ret;
+		mdelay(1);
+		timeout_ms++;
+	}
+}
+
 static int stmfx_chip_reset(struct stmfx *stmfx)
 {
 	int ret;
@@ -338,6 +353,11 @@ static int stmfx_chip_init(struct i2c_client *client)
 			dev_err(&client->dev, "VDD enable failed: %d\n", ret);
 			return ret;
 		}
+	}
+	ret = stmfx_chip_wait_boot(stmfx);
+	if (ret) {
+		dev_err(stmfx->dev, "Boot chip failed: %d\n", ret);
+		goto err;
 	}
 
 	ret = regmap_read(stmfx->map, STMFX_REG_CHIP_ID, &id);
@@ -506,24 +526,29 @@ static int stmfx_resume(struct device *dev)
 			return ret;
 		}
 	}
+	ret = stmfx_chip_wait_boot(stmfx);
+	if (ret) {
+		dev_err(stmfx->dev, "Boot chip failed: %d\n", ret);
+		goto err;
+	}
 
 	/* Reset STMFX - supply has been stopped during suspend */
 	ret = stmfx_chip_reset(stmfx);
 	if (ret) {
 		dev_err(stmfx->dev, "Failed to reset chip: %d\n", ret);
-		return ret;
+		goto err;
 	}
 
 	ret = regmap_raw_write(stmfx->map, STMFX_REG_SYS_CTRL,
 			       &stmfx->bkp_sysctrl, sizeof(stmfx->bkp_sysctrl));
 	if (ret)
-		return ret;
+		goto err;
 
 	ret = regmap_raw_write(stmfx->map, STMFX_REG_IRQ_OUT_PIN,
 			       &stmfx->bkp_irqoutpin,
 			       sizeof(stmfx->bkp_irqoutpin));
 	if (ret)
-		return ret;
+		goto err;
 
 	ret = regmap_raw_write(stmfx->map, STMFX_REG_IRQ_SRC_EN,
 			       &stmfx->irq_src, sizeof(stmfx->irq_src));
@@ -533,6 +558,11 @@ static int stmfx_resume(struct device *dev)
 	enable_irq(stmfx->irq);
 
 	return 0;
+err:
+	if (stmfx->vdd)
+		regulator_disable(stmfx->vdd);
+
+	return ret;
 }
 
 static DEFINE_SIMPLE_DEV_PM_OPS(stmfx_dev_pm_ops, stmfx_suspend, stmfx_resume);
