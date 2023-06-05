@@ -76,8 +76,11 @@
 #define STM32_GPIO_SEMCR_SEM_MUTEX	BIT(0)
 #define STM32_GPIO_SEMCR_SEMCID_MASK	GENMASK(5, 4)
 
-#define STM32_GPIO_PINS_PER_BANK 16
-#define STM32_GPIO_IRQ_LINE	 16
+#define STM32_GPIO_PINS_PER_BANK	16
+#define STM32_GPIO_IRQ_LINE		16
+
+/* to pass bank_ioport_nr to EXTI in struct irq_fwspec::param[1] */
+#define STM32_GPIO_BANK_MASK		GENMASK(23, 16)
 
 #define SYSCFG_IRQMUX_MASK GENMASK(3, 0)
 
@@ -663,7 +666,8 @@ static int stm32_gpio_domain_alloc(struct irq_domain *d,
 	parent_fwspec.fwnode = d->parent->fwnode;
 	parent_fwspec.param_count = 2;
 	parent_fwspec.param[0] = fwspec->param[0];
-	parent_fwspec.param[1] = fwspec->param[1];
+	parent_fwspec.param[1] = (fwspec->param[1] & IRQ_TYPE_SENSE_MASK) |
+				 FIELD_PREP(STM32_GPIO_BANK_MASK, bank->bank_ioport_nr);
 
 	irq_domain_set_hwirq_and_chip(d, virq, hwirq, &stm32_gpio_irq_chip,
 				      bank);
