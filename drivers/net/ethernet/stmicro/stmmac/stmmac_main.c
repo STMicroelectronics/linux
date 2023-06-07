@@ -173,12 +173,6 @@ int stmmac_bus_clks_config(struct stmmac_priv *priv, bool enabled)
 }
 EXPORT_SYMBOL_GPL(stmmac_bus_clks_config);
 
-/* temporary implementation of dma_alloc_coherent() on STM32H7 SOM */
-#define STM32H7_SOM_DMA
-#ifdef STM32H7_SOM_DMA
-static const char dma_rx_phy[16384] __attribute__ ((aligned (16)));
-static const char dma_tx_phy[16384] __attribute__ ((aligned (16)));
-#endif
 /**
  * stmmac_verify_args - verify the driver parameters.
  * Description: it checks the driver parameters and set a default in case of
@@ -1914,7 +1908,6 @@ static void __free_dma_rx_desc_resources(struct stmmac_priv *priv, u32 queue)
 	rx_q->buf_alloc_num = 0;
 	rx_q->xsk_pool = NULL;
 
-#ifndef STM32H7_SOM_DMA
 	/* Free DMA regions of consistent memory previously allocated */
 	if (!priv->extend_desc)
 		dma_free_coherent(priv->device, priv->dma_rx_size *
@@ -1924,7 +1917,6 @@ static void __free_dma_rx_desc_resources(struct stmmac_priv *priv, u32 queue)
 		dma_free_coherent(priv->device, priv->dma_rx_size *
 				  sizeof(struct dma_extended_desc),
 				  rx_q->dma_erx, rx_q->dma_rx_phy);
-#endif
 
 	if (xdp_rxq_info_is_reg(&rx_q->xdp_rxq))
 		xdp_rxq_info_unreg(&rx_q->xdp_rxq);
@@ -1971,9 +1963,7 @@ static void __free_dma_tx_desc_resources(struct stmmac_priv *priv, u32 queue)
 
 	size *= priv->dma_tx_size;
 
-#ifndef STM32H7_SOM_DMA
 	dma_free_coherent(priv->device, size, addr, tx_q->dma_tx_phy);
-#endif
 
 	kfree(tx_q->tx_skbuff_dma);
 	kfree(tx_q->tx_skbuff);
@@ -2035,12 +2025,6 @@ static int __alloc_dma_rx_desc_resources(struct stmmac_priv *priv, u32 queue)
 		return -ENOMEM;
 
 	if (priv->extend_desc) {
-#ifdef STM32H7_SOM_DMA
-		rx_q->dma_erx = (void*) dma_rx_phy;
-		rx_q->dma_rx_phy = (dma_addr_t) dma_rx_phy;
-		if ((u32)dma_rx_phy > 0xd03f0000)
-			return -ENOMEM;
-#else
 		rx_q->dma_erx = dma_alloc_coherent(priv->device,
 						   priv->dma_rx_size *
 						   sizeof(struct dma_extended_desc),
@@ -2048,15 +2032,8 @@ static int __alloc_dma_rx_desc_resources(struct stmmac_priv *priv, u32 queue)
 						   GFP_KERNEL);
 		if (!rx_q->dma_erx)
 			return -ENOMEM;
-#endif
 
 	} else {
-#ifdef STM32H7_SOM_DMA
-		rx_q->dma_rx = (void*) dma_rx_phy;
-		rx_q->dma_rx_phy = (dma_addr_t) dma_rx_phy;
-		if ((u32)dma_rx_phy > 0xd03f0000)
-			return -ENOMEM;
-#else
 		rx_q->dma_rx = dma_alloc_coherent(priv->device,
 						  priv->dma_rx_size *
 						  sizeof(struct dma_desc),
@@ -2064,7 +2041,6 @@ static int __alloc_dma_rx_desc_resources(struct stmmac_priv *priv, u32 queue)
 						  GFP_KERNEL);
 		if (!rx_q->dma_rx)
 			return -ENOMEM;
-#endif
 	}
 
 	if (stmmac_xdp_is_enabled(priv) &&
@@ -2144,17 +2120,10 @@ static int __alloc_dma_tx_desc_resources(struct stmmac_priv *priv, u32 queue)
 
 	size *= priv->dma_tx_size;
 
-#ifdef STM32H7_SOM_DMA
-	addr = (void*) dma_tx_phy;
-	tx_q->dma_tx_phy = (dma_addr_t) dma_tx_phy;
-	if ((u32)dma_tx_phy > 0xd03f0000)
-		return -ENOMEM;
-#else
 	addr = dma_alloc_coherent(priv->device, size,
 				  &tx_q->dma_tx_phy, GFP_KERNEL);
 	if (!addr)
 		return -ENOMEM;
-#endif
 
 	if (priv->extend_desc)
 		tx_q->dma_etx = addr;
