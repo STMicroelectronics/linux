@@ -186,6 +186,11 @@ struct stm32_pinctrl {
 
 static void stm32_pmx_get_mode(struct stm32_gpio_bank *bank, int pin, u32 *mode, u32 *alt);
 
+static inline bool stm32_pctl_uses_syscfg(struct stm32_pinctrl *pctl)
+{
+	return pctl->regmap;
+}
+
 static inline int stm32_gpio_pin(int gpio)
 {
 	return gpio % STM32_GPIO_PINS_PER_BANK;
@@ -617,6 +622,9 @@ static int stm32_gpio_domain_activate(struct irq_domain *d,
 	struct stm32_pinctrl *pctl = dev_get_drvdata(bank->gpio_chip.parent);
 	int ret;
 
+	if (!stm32_pctl_uses_syscfg(pctl))
+		return 0;
+
 	if (pctl->hwlock) {
 		ret = hwspin_lock_timeout_in_atomic(pctl->hwlock,
 						    HWSPNLCK_TIMEOUT);
@@ -646,22 +654,24 @@ static int stm32_gpio_domain_alloc(struct irq_domain *d,
 	unsigned long flags;
 	int ret = 0;
 
-	/*
-	 * Check first that the IRQ MUX of that line is free.
-	 * gpio irq mux is shared between several banks, protect with a lock
-	 */
-	spin_lock_irqsave(&pctl->irqmux_lock, flags);
+	if (stm32_pctl_uses_syscfg(pctl)) {
+		/*
+		 * Check first that the IRQ MUX of that line is free.
+		 * gpio irq mux is shared between several banks, protect with a lock
+		 */
+		spin_lock_irqsave(&pctl->irqmux_lock, flags);
 
-	if (pctl->irqmux_map & BIT(hwirq)) {
-		dev_err(pctl->dev, "irq line %ld already requested.\n", hwirq);
-		ret = -EBUSY;
-	} else {
-		pctl->irqmux_map |= BIT(hwirq);
+		if (pctl->irqmux_map & BIT(hwirq)) {
+			dev_err(pctl->dev, "irq line %ld already requested.\n", hwirq);
+			ret = -EBUSY;
+		} else {
+			pctl->irqmux_map |= BIT(hwirq);
+		}
+
+		spin_unlock_irqrestore(&pctl->irqmux_lock, flags);
+		if (ret)
+			return ret;
 	}
-
-	spin_unlock_irqrestore(&pctl->irqmux_lock, flags);
-	if (ret)
-		return ret;
 
 	parent_fwspec.fwnode = d->parent->fwnode;
 	parent_fwspec.param_count = 2;
@@ -685,9 +695,11 @@ static void stm32_gpio_domain_free(struct irq_domain *d, unsigned int virq,
 
 	irq_domain_free_irqs_common(d, virq, nr_irqs);
 
-	spin_lock_irqsave(&pctl->irqmux_lock, flags);
-	pctl->irqmux_map &= ~BIT(hwirq);
-	spin_unlock_irqrestore(&pctl->irqmux_lock, flags);
+	if (stm32_pctl_uses_syscfg(pctl)) {
+		spin_lock_irqsave(&pctl->irqmux_lock, flags);
+		pctl->irqmux_map &= ~BIT(hwirq);
+		spin_unlock_irqrestore(&pctl->irqmux_lock, flags);
+	}
 }
 
 static const struct irq_domain_ops stm32_gpio_domain_ops = {
@@ -1910,8 +1922,13 @@ int stm32_pctl_probe(struct platform_device *pdev)
 
 	if (pctl->domain) {
 		ret = stm32_pctrl_dt_setup_irq(pdev, pctl);
-		if (ret)
+		if (ret == -EPROBE_DEFER)
 			return ret;
+		if (ret && match_data->need_syscon)
+			return ret;
+		/* work without syscon, no legacy mode */
+		if (ret)
+			pctl->regmap = NULL;
 	}
 
 	pins = devm_kcalloc(&pdev->dev, pctl->npins, sizeof(*pins),
@@ -2068,7 +2085,7 @@ static int __maybe_unused stm32_pinctrl_restore_gpio_regs(
 			return ret;
 	}
 
-	if (pin_is_irq)
+	if (stm32_pctl_uses_syscfg(pctl) && pin_is_irq)
 		regmap_field_write(pctl->irqmux[offset], bank->bank_ioport_nr);
 
 	return 0;
