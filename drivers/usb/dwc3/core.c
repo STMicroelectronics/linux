@@ -182,8 +182,27 @@ static void __dwc3_set_mode(struct work_struct *work)
 	if (!desired_dr_role)
 		goto out;
 
-	if (desired_dr_role == dwc->current_dr_role)
+	if (desired_dr_role == dwc->current_dr_role) {
+		switch (dwc->current_dr_role) {
+		case DWC3_GCTL_PRTCAP_HOST:
+			for (i = 0; i < dwc->num_usb2_ports; i++)
+				phy_set_mode_ext(dwc->usb2_generic_phy[i], PHY_MODE_USB_HOST,
+						 dwc->submode);
+			for (i = 0; i < dwc->num_usb3_ports; i++)
+				phy_set_mode_ext(dwc->usb3_generic_phy[i], PHY_MODE_USB_HOST,
+						 dwc->submode);
+			break;
+		case DWC3_GCTL_PRTCAP_DEVICE:
+			phy_set_mode_ext(dwc->usb2_generic_phy[0], PHY_MODE_USB_DEVICE,
+					 dwc->submode);
+			phy_set_mode_ext(dwc->usb3_generic_phy[0], PHY_MODE_USB_DEVICE,
+					 dwc->submode);
+			break;
+		default:
+			break;
+		}
 		goto out;
+	}
 
 	if (desired_dr_role == DWC3_GCTL_PRTCAP_OTG && dwc->edev)
 		goto out;
@@ -247,9 +266,11 @@ static void __dwc3_set_mode(struct work_struct *work)
 				otg_set_vbus(dwc->usb2_phy->otg, true);
 
 			for (i = 0; i < dwc->num_usb2_ports; i++)
-				phy_set_mode(dwc->usb2_generic_phy[i], PHY_MODE_USB_HOST);
+				phy_set_mode_ext(dwc->usb2_generic_phy[i], PHY_MODE_USB_HOST,
+						 dwc->submode);
 			for (i = 0; i < dwc->num_usb3_ports; i++)
-				phy_set_mode(dwc->usb3_generic_phy[i], PHY_MODE_USB_HOST);
+				phy_set_mode_ext(dwc->usb3_generic_phy[i], PHY_MODE_USB_HOST,
+						 dwc->submode);
 
 			if (dwc->dis_split_quirk) {
 				reg = dwc3_readl(dwc, DWC3_GUCTL3);
@@ -265,8 +286,8 @@ static void __dwc3_set_mode(struct work_struct *work)
 
 		if (dwc->usb2_phy)
 			otg_set_vbus(dwc->usb2_phy->otg, false);
-		phy_set_mode(dwc->usb2_generic_phy[0], PHY_MODE_USB_DEVICE);
-		phy_set_mode(dwc->usb3_generic_phy[0], PHY_MODE_USB_DEVICE);
+		phy_set_mode_ext(dwc->usb2_generic_phy[0], PHY_MODE_USB_DEVICE, dwc->submode);
+		phy_set_mode_ext(dwc->usb3_generic_phy[0], PHY_MODE_USB_DEVICE, dwc->submode);
 
 		ret = dwc3_gadget_init(dwc);
 		if (ret)
@@ -286,7 +307,7 @@ out:
 	mutex_unlock(&dwc->mutex);
 }
 
-void dwc3_set_mode(struct dwc3 *dwc, u32 mode)
+void dwc3_set_mode_ext(struct dwc3 *dwc, u32 mode, int submode)
 {
 	unsigned long flags;
 
@@ -295,6 +316,7 @@ void dwc3_set_mode(struct dwc3 *dwc, u32 mode)
 
 	spin_lock_irqsave(&dwc->lock, flags);
 	dwc->desired_dr_role = mode;
+	dwc->submode = submode;
 	spin_unlock_irqrestore(&dwc->lock, flags);
 
 	queue_work(system_freezable_wq, &dwc->drd_work);
