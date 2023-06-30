@@ -10,6 +10,7 @@
 #include <linux/gpio/consumer.h>
 #include <linux/mod_devicetable.h>
 #include <linux/module.h>
+#include <linux/of.h>
 #include <linux/regulator/consumer.h>
 
 #include <video/mipi_display.h>
@@ -92,6 +93,21 @@ static const struct drm_display_mode default_mode = {
 	.flags = DRM_MODE_FLAG_NHSYNC | DRM_MODE_FLAG_NVSYNC,
 	.width_mm = 68,
 	.height_mm = 122,
+};
+
+static const struct drm_display_mode rotate_mode = {
+	.clock = 54000,
+	.hdisplay = 1280,
+	.hsync_start = 1280 + 12,
+	.hsync_end = 1280 + 12 + 5,
+	.htotal = 1280 + 12 + 5 + 12,
+	.vdisplay = 720,
+	.vsync_start = 720 + 48,
+	.vsync_end = 720 + 48 + 9,
+	.vtotal = 720 + 48 + 9 + 48,
+	.flags = DRM_MODE_FLAG_NHSYNC | DRM_MODE_FLAG_NVSYNC,
+	.width_mm = 122,
+	.height_mm = 68,
 };
 
 static inline struct rm68200 *panel_to_rm68200(struct drm_panel *panel)
@@ -295,13 +311,32 @@ static int rm68200_get_modes(struct drm_panel *panel,
 			     struct drm_connector *connector)
 {
 	struct drm_display_mode *mode;
+	struct rm68200 *ctx = panel_to_rm68200(panel);
+	struct device *dev = ctx->dev;
+	int rotation, ret;
 
-	mode = drm_mode_duplicate(connector->dev, &default_mode);
-	if (!mode) {
-		dev_err(panel->dev, "failed to add mode %ux%u@%u\n",
-			default_mode.hdisplay, default_mode.vdisplay,
-			drm_mode_vrefresh(&default_mode));
-		return -ENOMEM;
+	ret = of_property_read_u32(dev->of_node, "rotation", &rotation);
+	if (ret == -EINVAL)
+		rotation = 0;
+
+	if (rotation == 90 || rotation == 270) {
+		mode = drm_mode_duplicate(connector->dev, &rotate_mode);
+
+		if (!mode) {
+			dev_err(panel->dev, "failed to add mode %ux%u@%u\n",
+				rotate_mode.hdisplay, rotate_mode.vdisplay,
+				drm_mode_vrefresh(&rotate_mode));
+			return -ENOMEM;
+		}
+	} else {
+		mode = drm_mode_duplicate(connector->dev, &default_mode);
+
+		if (!mode) {
+			dev_err(panel->dev, "failed to add mode %ux%u@%u\n",
+				default_mode.hdisplay, default_mode.vdisplay,
+				drm_mode_vrefresh(&default_mode));
+			return -ENOMEM;
+		}
 	}
 
 	drm_mode_set_name(mode);
