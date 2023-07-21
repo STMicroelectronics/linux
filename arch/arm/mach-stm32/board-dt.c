@@ -18,6 +18,7 @@ static const char *const stm32_compat[] __initconst = {
 	"st,stm32f769",
 	"st,stm32h743",
 	"st,stm32h750",
+	"st,stm32h753",
 	"st,stm32mp131",
 	"st,stm32mp133",
 	"st,stm32mp135",
