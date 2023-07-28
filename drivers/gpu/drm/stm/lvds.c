@@ -20,6 +20,7 @@
 #include <linux/module.h>
 #include <linux/of_device.h>
 #include <linux/platform_device.h>
+#include <linux/pm_runtime.h>
 #include <linux/reset.h>
 
 /* LVDS Host registers */
@@ -552,19 +553,6 @@ static int lvds_pixel_clk_enable(struct clk_hw *hw)
 	struct lvds_phy_info *phy;
 	int ret;
 
-	ret = clk_prepare_enable(lvds->pclk);
-	if (ret) {
-		drm_err(drm, "Failed to enable lvds peripheral clk\n");
-		return ret;
-	}
-
-	ret = clk_prepare_enable(lvds->pllref_clk);
-	if (ret) {
-		drm_err(drm, "Failed to enable lvds reference clk\n");
-		clk_disable_unprepare(lvds->pclk);
-		return ret;
-	}
-
 	/* In case we are operating in dual link the second PHY is set before the primary PHY. */
 	if (lvds->secondary) {
 		phy = lvds->secondary;
@@ -625,9 +613,6 @@ static void lvds_pixel_clk_disable(struct clk_hw *hw)
 		lvds_clear(lvds, lvds->secondary->base + lvds->secondary->ofs.GCR,
 			   PHY_GCR_DIV_RSTN | PHY_GCR_RSTZ);
 	}
-
-	clk_disable_unprepare(lvds->pllref_clk);
-	clk_disable_unprepare(lvds->pclk);
 }
 
 static unsigned long lvds_pixel_clk_recalc_rate(struct clk_hw *hw,
@@ -986,12 +971,6 @@ static void lvds_atomic_enable(struct drm_bridge *bridge,
 	struct drm_connector *connector;
 	int ret;
 
-	ret = clk_prepare_enable(lvds->pclk);
-	if (ret) {
-		drm_err(bridge->dev, "Failed to enable lvds peripheral clk\n");
-		return;
-	}
-
 	connector = drm_atomic_get_new_connector_for_encoder(state, bridge->encoder);
 	if (!connector)
 		return;
@@ -999,6 +978,12 @@ static void lvds_atomic_enable(struct drm_bridge *bridge,
 	conn_state = drm_atomic_get_new_connector_state(state, connector);
 	if (!conn_state)
 		return;
+
+	ret = pm_runtime_resume_and_get(lvds->dev);
+	if (ret < 0) {
+		drm_err(bridge->dev, "Failed to enable lvds, cannot resume pm\n");
+		return;
+	}
 
 	lvds_config_mode(lvds);
 
@@ -1027,7 +1012,7 @@ static void lvds_atomic_disable(struct drm_bridge *bridge,
 	/* Disable LVDS module */
 	lvds_clear(lvds, LVDS_CR, CR_LVDSEN);
 
-	clk_disable_unprepare(lvds->pclk);
+	pm_runtime_put(lvds->dev);
 }
 
 static const struct drm_bridge_funcs lvds_bridge_funcs = {
@@ -1076,17 +1061,11 @@ static int lvds_probe(struct platform_device *pdev)
 		return ret;
 	}
 
-	ret = clk_prepare_enable(lvds->pclk);
-	if (ret) {
-		dev_err(dev, "%s: Failed to enable peripheral clk\n", __func__);
-		return ret;
-	}
-
 	rstc = devm_reset_control_get_exclusive(dev, NULL);
 
 	if (IS_ERR(rstc)) {
 		ret = PTR_ERR(rstc);
-		goto err_lvds_probe;
+		return ret;
 	}
 
 	reset_control_assert(rstc);
@@ -1146,7 +1125,7 @@ static int lvds_probe(struct platform_device *pdev)
 		break;
 	default:
 		ret = -EINVAL;
-		goto err_lvds_probe;
+		return ret;
 	}
 	of_node_put(port1);
 	of_node_put(port2);
@@ -1155,41 +1134,73 @@ static int lvds_probe(struct platform_device *pdev)
 	if (IS_ERR(lvds->pllref_clk)) {
 		ret = PTR_ERR(lvds->pllref_clk);
 		dev_err(dev, "Unable to get reference clock: %d\n", ret);
-		goto err_lvds_probe;
+		return ret;
 	}
 
 	ret = lvds_pixel_clk_register(lvds);
 	if (ret) {
 		dev_err(dev, "Failed to register LVDS pixel clock: %d\n", ret);
-		goto err_lvds_probe;
+		return ret;
+	}
+
+	ret = clk_prepare_enable(lvds->pclk);
+	if (ret) {
+		lvds_pixel_clk_unregister(lvds);
+		dev_err(dev, "%s: Failed to enable peripheral clk\n", __func__);
+		return ret;
 	}
 
 	lvds->lvds_bridge.of_node = dev->of_node;
 	lvds->hw_version = lvds_read(lvds, LVDS_VERR);
 
+	clk_disable_unprepare(lvds->pclk);
+
 	dev_info(dev, "version 0x%02x initialized\n", lvds->hw_version);
 
+	pm_runtime_enable(lvds->dev);
 	drm_bridge_add(&lvds->lvds_bridge);
-
 	platform_set_drvdata(pdev, lvds);
 
-	clk_disable_unprepare(lvds->pclk);
-
 	return 0;
-
-err_lvds_probe:
-	clk_disable_unprepare(lvds->pclk);
-
-	return ret;
 }
 
 static void lvds_remove(struct platform_device *pdev)
 {
 	struct stm_lvds *lvds = platform_get_drvdata(pdev);
 
-	lvds_pixel_clk_unregister(lvds);
-
 	drm_bridge_remove(&lvds->lvds_bridge);
+	pm_runtime_disable(&pdev->dev);
+	lvds_pixel_clk_unregister(lvds);
+}
+
+static int __maybe_unused lvds_runtime_suspend(struct device *dev)
+{
+	struct stm_lvds *lvds = dev_get_drvdata(dev);
+
+	clk_disable_unprepare(lvds->pllref_clk);
+	clk_disable_unprepare(lvds->pclk);
+
+	return 0;
+}
+
+static int __maybe_unused lvds_runtime_resume(struct device *dev)
+{
+	struct stm_lvds *lvds = dev_get_drvdata(dev);
+	int ret;
+
+	ret = clk_prepare_enable(lvds->pclk);
+	if (ret) {
+		dev_err(dev, "Failed to enable pclk: %d\n", ret);
+		return ret;
+	}
+
+	ret = clk_prepare_enable(lvds->pllref_clk);
+	if (ret) {
+		clk_disable_unprepare(lvds->pclk);
+		dev_err(dev, "Failed to enable pllref_clk: %d\n", ret);
+	}
+
+	return ret;
 }
 
 static const struct of_device_id lvds_dt_ids[] = {
@@ -1202,12 +1213,18 @@ static const struct of_device_id lvds_dt_ids[] = {
 
 MODULE_DEVICE_TABLE(of, lvds_dt_ids);
 
+static const struct dev_pm_ops lvds_pm_ops = {
+	SET_LATE_SYSTEM_SLEEP_PM_OPS(pm_runtime_force_suspend, pm_runtime_force_resume)
+	SET_RUNTIME_PM_OPS(lvds_runtime_suspend, lvds_runtime_resume, NULL)
+};
+
 static struct platform_driver lvds_platform_driver = {
 	.probe = lvds_probe,
 	.remove = lvds_remove,
 	.driver = {
 		.name = "stm32-display-lvds",
 		.of_match_table = lvds_dt_ids,
+		.pm = &lvds_pm_ops,
 	},
 };
 
