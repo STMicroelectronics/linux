@@ -146,6 +146,13 @@
 		status = "okay";
 	};
 
+	sound: sound {
+		compatible = "audio-graph-card";
+		label = "STM32MP25-EV1";
+		dais = <&i2s2_port>;
+		status = "disabled";
+	};
+
 	vdiv_ana0: voltage-divider-ana0 {
 		compatible = "voltage-divider";
 		io-channels = <&adc1 0>;
@@ -503,6 +510,13 @@
 					remote-endpoint = <&hdmi_connector_in>;
 				};
 			};
+
+			port@2 {
+				reg = <2>;
+				adv753x_tx_endpoint: endpoint {
+					remote-endpoint = <&i2s2_endpoint>;
+				};
+			};
 		};
 	};
 
@@ -526,6 +540,21 @@
 	/* spare dmas for other usage */
 	/delete-property/dmas;
 	/delete-property/dma-names;
+};
+
+&i2s2 {
+	pinctrl-names = "default", "sleep";
+	pinctrl-0 = <&i2s2_pins_a>;
+	pinctrl-1 = <&i2s2_sleep_pins_a>;
+	status = "disabled";
+
+	i2s2_port: port {
+		i2s2_endpoint: endpoint {
+			remote-endpoint = <&adv753x_tx_endpoint>;
+			dai-format = "i2s";
+			mclk-fs = <256>;
+		};
+	};
 };
 
 &i3c4 {
