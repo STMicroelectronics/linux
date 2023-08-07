@@ -70,6 +70,7 @@ struct stm32_pinctrl_match_data {
 	bool secure_control;
 	bool io_sync_control;
 	bool rif_control;
+	bool need_syscon;
 };
 
 /**

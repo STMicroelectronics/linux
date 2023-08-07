@@ -1959,6 +1959,7 @@ static const struct stm32_desc_pin stm32h743_pins[] = {
 static struct stm32_pinctrl_match_data stm32h743_match_data = {
 	.pins = stm32h743_pins,
 	.npins = ARRAY_SIZE(stm32h743_pins),
+	.need_syscon = true,
 };
 
 static const struct of_device_id stm32h743_pctrl_match[] = {
