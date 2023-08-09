@@ -1961,7 +1961,7 @@
 		};
 
 		exti1: interrupt-controller@44220000 {
-			compatible = "st,stm32mp1-exti", "syscon";
+			compatible = "st,stm32mp1-exti";
 			interrupt-controller;
 			#interrupt-cells = <2>;
 			power-domains = <&ret_pd>;
@@ -2066,7 +2066,6 @@
 			compatible = "st,stm32mp257-pinctrl";
 			ranges = <0 0x44240000 0xa0400>;
 			interrupt-parent = <&exti1>;
-			st,syscfg = <&exti1 0x60 0xff>;
 			interrupts-extended =
 				<&exti1  0 0>, <&exti1  1 0>, <&exti1  2 0>, <&exti1  3 0>,
 				<&exti1  4 0>, <&exti1  5 0>, <&exti1  6 0>, <&exti1  7 0>,
@@ -2215,7 +2214,6 @@
 			compatible = "st,stm32mp257-z-pinctrl";
 			ranges = <0 0x46200000 0x400>;
 			interrupt-parent = <&exti1>;
-			st,syscfg = <&exti1 0x60 0xff>;
 			interrupts-extended =
 				<&exti1  0 0>, <&exti1  1 0>, <&exti1  2 0>, <&exti1  3 0>,
 				<&exti1  4 0>, <&exti1  5 0>, <&exti1  6 0>, <&exti1  7 0>,
@@ -2240,7 +2238,7 @@
 		};
 
 		exti2: interrupt-controller@46230000 {
-			compatible = "st,stm32mp1-exti", "syscon";
+			compatible = "st,stm32mp1-exti";
 			interrupt-controller;
 			#interrupt-cells = <2>;
 			reg = <0x46230000 0x400>;
