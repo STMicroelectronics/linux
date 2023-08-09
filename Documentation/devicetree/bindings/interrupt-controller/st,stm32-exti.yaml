@@ -12,16 +12,21 @@ maintainers:
 
 properties:
   compatible:
+    description:
+      Legacy syscon is allowed for backward compatibility with old devicetree.
+      Don't use it on new devicetree.
     oneOf:
       - items:
           - enum:
               - st,stm32-exti
               - st,stm32h7-exti
+              - st,stm32mp1-exti
       - items:
           - enum:
               - st,stm32mp1-exti
               - st,stm32mp13-exti
           - const: syscon
+        deprecated: true
 
   "#interrupt-cells":
     const: 2
@@ -85,7 +90,7 @@ examples:
   - |
     //Example 1
     exti1: interrupt-controller@5000d000 {
-        compatible = "st,stm32mp1-exti", "syscon";
+        compatible = "st,stm32mp1-exti";
         interrupt-controller;
         #interrupt-cells = <2>;
         reg = <0x5000d000 0x400>;
@@ -95,7 +100,7 @@ examples:
     //Example 2
     #include <dt-bindings/interrupt-controller/arm-gic.h>
     exti2: interrupt-controller@5000d000 {
-        compatible = "st,stm32mp1-exti", "syscon";
+        compatible = "st,stm32mp1-exti";
         interrupt-controller;
         #interrupt-cells = <2>;
         reg = <0x5000d000 0x400>;
