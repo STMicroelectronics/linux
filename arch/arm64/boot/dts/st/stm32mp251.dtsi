@@ -977,6 +977,45 @@
 				status = "disabled";
 			};
 
+			i3c1: i3c@40190000 {
+				#address-cells = <3>;
+				#size-cells = <0>;
+				compatible = "st,stm32mp25-i3c";
+				reg = <0x40190000 0x400>;
+				interrupts = <GIC_SPI 109 IRQ_TYPE_LEVEL_HIGH>;
+				clocks = <&rcc CK_KER_I3C1>;
+				resets = <&rcc I3C1_R>;
+				access-controllers = <&rifsc 114>;
+				power-domains = <&d1_pd>;
+				status = "disabled";
+			};
+
+			i3c2: i3c@401a0000 {
+				#address-cells = <3>;
+				#size-cells = <0>;
+				compatible = "st,stm32mp25-i3c";
+				reg = <0x401a0000 0x400>;
+				interrupts = <GIC_SPI 111 IRQ_TYPE_LEVEL_HIGH>;
+				clocks = <&rcc CK_KER_I3C2>;
+				resets = <&rcc I3C2_R>;
+				access-controllers = <&rifsc 115>;
+				power-domains = <&d1_pd>;
+				status = "disabled";
+			};
+
+			i3c3: i3c@401b0000 {
+				#address-cells = <3>;
+				#size-cells = <0>;
+				compatible = "st,stm32mp25-i3c";
+				reg = <0x401b0000 0x400>;
+				interrupts = <GIC_SPI 138 IRQ_TYPE_LEVEL_HIGH>;
+				clocks = <&rcc CK_KER_I3C3>;
+				resets = <&rcc I3C3_R>;
+				access-controllers = <&rifsc 116>;
+				power-domains = <&d1_pd>;
+				status = "disabled";
+			};
+
 			timers10: timer@401c0000 {
 				compatible = "st,stm32mp25-timers";
 				reg = <0x401c0000 0x400>;
@@ -1728,6 +1767,19 @@
 					reg = <4>;
 					status = "disabled";
 				};
+			};
+
+			i3c4: i3c@46080000 {
+				#address-cells = <3>;
+				#size-cells = <0>;
+				compatible = "st,stm32mp25-i3c";
+				reg = <0x46080000 0x400>;
+				interrupts = <GIC_SPI 213 IRQ_TYPE_LEVEL_HIGH>;
+				clocks = <&rcc CK_KER_I3C4>;
+				resets = <&rcc I3C4_R>;
+				access-controllers = <&rifsc 117>;
+				power-domains = <&d1_pd>;
+				status = "disabled";
 			};
 
 			ltdc: display-controller@48010000 {
