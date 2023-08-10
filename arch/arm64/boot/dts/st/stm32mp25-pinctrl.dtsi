@@ -838,6 +838,41 @@
 	};
 
 	/omit-if-no-ref/
+	i3c4_pins_a: i3c4-0 {
+		pins {
+			pinmux = <STM32_PINMUX('Z', 4, AF11)>, /* I3C4_SCL */
+				 <STM32_PINMUX('Z', 3, AF11)>; /* I3C4_SDA */
+			drive-push-pull;
+			bias-disable;
+			slew-rate = <3>;
+		};
+	};
+
+	/omit-if-no-ref/
+	i3c4_init_pins_a: i3c4-init-0 {
+		pins1 {
+			pinmux = <STM32_PINMUX('Z', 4, AF11)>; /* I3C4_SCL */
+			drive-push-pull;
+			bias-disable;
+			slew-rate = <1>;
+		};
+		pins2 {
+			pinmux = <STM32_PINMUX('Z', 3, AF11)>; /* I3C4_SDA */
+			drive-push-pull;
+			bias-pull-up;
+			slew-rate = <1>;
+		};
+	};
+
+	/omit-if-no-ref/
+	i3c4_sleep_pins_a: i3c4-sleep-0 {
+		pins {
+			pinmux = <STM32_PINMUX('Z', 4, ANALOG)>, /* I3C4_SCL */
+				 <STM32_PINMUX('Z', 3, ANALOG)>; /* I3C4_SDA */
+		};
+	};
+
+	/omit-if-no-ref/
 	lpuart1_pins_a: lpuart1-0 {
 		pins1 {
 			pinmux = <STM32_PINMUX('Z', 7, AF6)>, /* LPUART1_TX */
