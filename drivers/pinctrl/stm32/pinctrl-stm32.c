@@ -180,6 +180,7 @@ struct stm32_pinctrl {
 	u32 npins;
 	u32 pkg;
 	u16 irqmux_map;
+	bool has_irq_extended;
 	spinlock_t irqmux_lock;
 };
 
@@ -625,15 +626,30 @@ static int stm32_gpio_domain_select(struct irq_domain *dm,
 {
 	struct fwnode_handle *fwnode = fwspec->fwnode;
 	struct stm32_pinctrl *pctl = dm->host_data;
+	struct irq_fwspec parent_fwspec;
+	struct stm32_gpio_bank *bank;
 
 	if (!fwnode ||
 	    (bus_token != DOMAIN_BUS_ANY && dm->bus_token != bus_token))
 		return 0;
 
-	if (stm32_pctrl_fwnode_to_bank(pctl, fwnode))
+	bank = stm32_pctrl_fwnode_to_bank(pctl, fwnode);
+	if (!bank)
+		return 0;
+
+	if (!pctl->has_irq_extended)
 		return 1;
 
-	return 0;
+	if (!dm->parent->ops->select)
+		return 0;
+
+	parent_fwspec.fwnode = dm->parent->fwnode;
+	parent_fwspec.param_count = 2;
+	parent_fwspec.param[0] = fwspec->param[0];
+	parent_fwspec.param[1] = (fwspec->param[1] & IRQ_TYPE_SENSE_MASK) |
+				 FIELD_PREP(STM32_GPIO_BANK_MASK, bank->bank_ioport_nr);
+
+	return dm->parent->ops->select(dm->parent, &parent_fwspec, bus_token);
 }
 
 static int stm32_gpio_domain_match(struct irq_domain *dm,
@@ -1799,8 +1815,12 @@ static int stm32_gpiolib_register_bank(struct stm32_pinctrl *pctl, struct fwnode
 static void stm32_pctrl_remove_irq(void *data)
 {
 	struct irq_domain *domain = data;
+	struct fwnode_handle *fwnode = domain->fwnode;
 
 	irq_domain_remove(domain);
+
+	if (is_fwnode_irqchip(fwnode))
+		irq_domain_free_fwnode(fwnode);
 }
 
 static struct irq_domain *stm32_pctrl_get_irq_domain(struct stm32_pinctrl *pctl)
@@ -1808,7 +1828,63 @@ static struct irq_domain *stm32_pctrl_get_irq_domain(struct stm32_pinctrl *pctl)
 	struct device_node *np = pctl->dev->of_node;
 	struct device_node *parent;
 	struct irq_domain *parent_domain, *domain;
-	int ret;
+	struct of_phandle_args out_irq;
+	struct fwnode_handle *fwnode;
+	char *name;
+	int ret, i;
+
+	if (of_find_property(np, "interrupts-extended", &i)) {
+		if (i < 3) {
+			dev_err(pctl->dev, "incorrect interrupts-extended property\n");
+			return ERR_PTR(-EINVAL);
+		}
+
+		/*
+		 * Only check the first entry every 16.
+		 * Each entry has 3 values: <&phandle 0 0>
+		 */
+		i = DIV_ROUND_UP(i, 3 * STM32_GPIO_IRQ_LINE * sizeof(u32));
+
+		while (i--) {
+			ret = of_irq_parse_one(np, i * STM32_GPIO_IRQ_LINE, &out_irq);
+			if (ret)
+				return ERR_PTR(ret);
+
+			parent_domain = irq_find_host(out_irq.np);
+			of_node_put(out_irq.np);
+			if (!parent_domain)
+				return ERR_PTR(-EPROBE_DEFER);
+
+			/* as in __irq_domain_create() */
+			name = kasprintf(GFP_KERNEL, "%pOF-%d", np, i);
+			if (!name)
+				return ERR_PTR(-ENOMEM);
+			strreplace(name, '/', ':');
+
+			fwnode = irq_domain_alloc_named_fwnode(name);
+			kfree(name);
+			if (!fwnode)
+				return ERR_PTR(-ENOMEM);
+
+			domain = irq_domain_create_hierarchy(parent_domain, 0, STM32_GPIO_IRQ_LINE,
+							     fwnode, &stm32_gpio_domain_ops, pctl);
+			if (!domain) {
+				dev_err(pctl->dev, "Could not register pinctrl domain\n");
+				irq_domain_free_fwnode(fwnode);
+				return ERR_PTR(-ENXIO);
+			}
+
+			ret = devm_add_action_or_reset(pctl->dev, stm32_pctrl_remove_irq, domain);
+			if (ret) {
+				irq_domain_remove(domain);
+				irq_domain_free_fwnode(fwnode);
+				return ERR_PTR(ret);
+			}
+		}
+
+		pctl->has_irq_extended = true;
+		return domain;
+	}
 
 	if (!of_property_present(np, "interrupt-parent"))
 		return NULL;
