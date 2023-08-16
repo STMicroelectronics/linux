@@ -844,6 +844,18 @@ static enum drm_mode_status adv7511_bridge_mode_valid(struct drm_bridge *bridge,
 	return adv7533_mode_valid(adv, mode);
 }
 
+static bool adv7511_bridge_mode_fixup(struct drm_bridge *bridge,
+				      const struct drm_display_mode *mode,
+				      struct drm_display_mode *adjusted_mode)
+{
+	struct adv7511 *adv = bridge_to_adv7511(bridge);
+
+	if (adv->info->type == ADV7533 || adv->info->type == ADV7535)
+		return adv7533_mode_fixup(adv, mode, adjusted_mode);
+	else
+		return true;
+}
+
 static int adv7511_bridge_attach(struct drm_bridge *bridge,
 				 struct drm_encoder *encoder,
 				 enum drm_bridge_attach_flags flags)
@@ -975,6 +987,7 @@ static int adv7511_bridge_hdmi_write_infoframe(struct drm_bridge *bridge,
 
 static const struct drm_bridge_funcs adv7511_bridge_funcs = {
 	.mode_valid = adv7511_bridge_mode_valid,
+	.mode_fixup = adv7511_bridge_mode_fixup,
 	.attach = adv7511_bridge_attach,
 	.detect = adv7511_bridge_detect,
 	.edid_read = adv7511_bridge_edid_read,
