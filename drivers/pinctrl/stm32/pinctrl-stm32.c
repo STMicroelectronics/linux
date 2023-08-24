@@ -375,11 +375,16 @@ static int stm32_gpio_request(struct gpio_chip *chip, unsigned offset)
 static void stm32_gpio_free(struct gpio_chip *chip, unsigned int offset)
 {
 	struct stm32_gpio_bank *bank = gpiochip_get_data(chip);
+	unsigned int virq;
 
 	pinctrl_gpio_free(chip, offset);
 
 	if (bank->rif_control)
 		stm32_gpio_rif_release_semaphore(bank, offset);
+
+	virq = irq_find_mapping(bank->domain, offset);
+	if (virq)
+		irq_dispose_mapping(virq);
 }
 
 static int stm32_gpio_get(struct gpio_chip *chip, unsigned offset)
