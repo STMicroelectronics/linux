@@ -39,6 +39,19 @@ properties:
   "#clock-cells":
     const: 0
 
+  '#address-cells':
+    const: 1
+
+  '#size-cells':
+    const: 1
+
+  ranges: true
+
+patternProperties:
+  "^nvram@[0-9a-f]+$":
+    type: object
+    $ref: /schemas/nvmem/st,stm32-tamp-nvram.yaml#
+
 required:
   - compatible
   - reg
@@ -61,6 +74,15 @@ allOf:
     then:
       required:
         - "#clock-cells"
+  - if:
+      properties:
+        compatible:
+          const: st,stm32-tamp
+    then:
+      required:
+        - '#address-cells'
+        - '#size-cells'
+        - ranges
 
 additionalProperties: false
 
