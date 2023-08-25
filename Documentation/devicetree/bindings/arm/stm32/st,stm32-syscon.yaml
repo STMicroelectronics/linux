@@ -26,7 +26,9 @@ properties:
               - st,stm32mp25-syscfg
           - const: syscon
       - items:
-          - const: st,stm32-tamp
+          - enum:
+              - st,stm32-tamp
+              - st,stm32mp25-tamp
           - const: syscon
           - const: simple-mfd
 
@@ -77,7 +79,10 @@ allOf:
   - if:
       properties:
         compatible:
-          const: st,stm32-tamp
+          contains:
+            enum:
+              - st,stm32-tamp
+              - st,stm32mp25-tamp
     then:
       required:
         - '#address-cells'
