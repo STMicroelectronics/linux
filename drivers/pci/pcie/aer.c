@@ -138,6 +138,7 @@ bool pci_aer_available(void)
 {
 	return !pcie_aer_disable && pci_msi_enabled();
 }
+EXPORT_SYMBOL_GPL(pci_aer_available);
 
 #ifdef CONFIG_PCIE_ECRC
 
