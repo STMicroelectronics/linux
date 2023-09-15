@@ -11,6 +11,8 @@
 #ifndef _LTDC_H_
 #define _LTDC_H_
 
+#define LTDC_MAX_LAYER	4
+
 struct ltdc_caps {
 	u32 hw_version;		/* hardware version */
 	u32 nb_layers;		/* number of supported layers */
@@ -31,9 +33,8 @@ struct ltdc_caps {
 	bool dynamic_zorder;	/* dynamic z-order */
 	bool plane_rotation;	/* plane rotation */
 	bool fifo_threshold;	/* fifo underrun threshold supported */
+	bool plane_scaling[LTDC_MAX_LAYER];	/* plane scaling ability */
 };
-
-#define LTDC_MAX_LAYER	4
 
 struct fps_info {
 	unsigned int counter;

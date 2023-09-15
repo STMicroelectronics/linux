@@ -108,10 +108,16 @@
 #define LTDC_L1AFBLR	(ldev->caps.layer_regs[18])	/* L1 auxiliary frame buffer length */
 #define LTDC_L1AFBLNR	(ldev->caps.layer_regs[19])	/* L1 auxiliary frame buffer line number */
 #define LTDC_L1CLUTWR	(ldev->caps.layer_regs[20])	/* L1 CLUT write */
-#define LTDC_L1CYR0R	(ldev->caps.layer_regs[21])	/* L1 Conversion YCbCr RGB 0 */
-#define LTDC_L1CYR1R	(ldev->caps.layer_regs[22])	/* L1 Conversion YCbCr RGB 1 */
-#define LTDC_L1FPF0R	(ldev->caps.layer_regs[23])	/* L1 Flexible Pixel Format 0 */
-#define LTDC_L1FPF1R	(ldev->caps.layer_regs[24])	/* L1 Flexible Pixel Format 1 */
+#define LTDC_L1SISR	(ldev->caps.layer_regs[21])	/* L1 scaler input size */
+#define LTDC_L1SOSR	(ldev->caps.layer_regs[22])	/* L1 scaler output size */
+#define LTDC_L1SVSFR	(ldev->caps.layer_regs[23])	/* L1 scaler vertical scaling factor */
+#define LTDC_L1SVSPR	(ldev->caps.layer_regs[24])	/* L1 scaler vertical scaling phase */
+#define LTDC_L1SHSFR	(ldev->caps.layer_regs[25])	/* L1 scaler horizontal scaling factor */
+#define LTDC_L1SHSPR	(ldev->caps.layer_regs[26])	/* L1 scaler horizontal scaling phase */
+#define LTDC_L1CYR0R	(ldev->caps.layer_regs[27])	/* L1 Conversion YCbCr RGB 0 */
+#define LTDC_L1CYR1R	(ldev->caps.layer_regs[28])	/* L1 Conversion YCbCr RGB 1 */
+#define LTDC_L1FPF0R	(ldev->caps.layer_regs[29])	/* L1 Flexible Pixel Format 0 */
+#define LTDC_L1FPF1R	(ldev->caps.layer_regs[30])	/* L1 Flexible Pixel Format 1 */
 
 /* Bit definitions */
 #define SSCR_VSH	GENMASK(10, 0)	/* Vertical Synchronization Height */
@@ -192,7 +198,8 @@
 #define LXCR_COLKEN	BIT(1)		/* Color Keying Enable */
 #define LXCR_CLUTEN	BIT(4)		/* Color Look-Up Table ENable */
 #define LXCR_HMEN	BIT(8)		/* Horizontal Mirroring ENable */
-#define LXCR_MASK (LXCR_LEN | LXCR_COLKEN | LXCR_CLUTEN | LXCR_HMEN)
+#define LXCR_SCEN	BIT(10)		/* SCaler ENable */
+#define LXCR_MASK (LXCR_LEN | LXCR_COLKEN | LXCR_CLUTEN | LXCR_HMEN | LXCR_SCEN)
 
 #define LXWHPCR_WHSTPOS	GENMASK(11, 0)	/* Window Horizontal StarT POSition */
 #define LXWHPCR_WHSPPOS	GENMASK(27, 16)	/* Window Horizontal StoP POSition */
@@ -394,6 +401,12 @@ static const u32 ltdc_layer_regs_a0[] = {
 	0x00,	/* not available */
 	0x00,	/* not available */
 	0x00,	/* not available */
+	0x00,	/* not available */
+	0x00,	/* not available */
+	0x00,	/* not available */
+	0x00,	/* not available */
+	0x00,	/* not available */
+	0x00,	/* not available */
 	0x00	/* not available */
 };
 
@@ -422,6 +435,12 @@ static const u32 ltdc_layer_regs_a1[] = {
 	0x00,	/* not available */
 	0x00,	/* not available */
 	0x00,	/* not available */
+	0x00,	/* not available */
+	0x00,	/* not available */
+	0x00,	/* not available */
+	0x00,	/* not available */
+	0x00,	/* not available */
+	0x00,	/* not available */
 	0x00	/* not available */
 };
 
@@ -447,6 +466,12 @@ static const u32 ltdc_layer_regs_a2[] = {
 	0x148,	/* L1 auxiliary frame buffer length */
 	0x14c,	/* L1 auxiliary frame buffer line number */
 	0x150,	/* L1 CLUT write */
+	0x154,	/* L1 scaler input size */
+	0x158,	/* L1 scaler output size */
+	0x15c,	/* L1 scaler vertical scaling factor */
+	0x160,	/* L1 scaler vertical scaling phase */
+	0x164,	/* L1 scaler horizontal scaling factor */
+	0x168,	/* L1 scaler horizontal scaling phase */
 	0x16c,	/* L1 Conversion YCbCr RGB 0 */
 	0x170,	/* L1 Conversion YCbCr RGB 1 */
 	0x174,	/* L1 Flexible Pixel Format 0 */
@@ -1245,7 +1270,8 @@ static int ltdc_plane_atomic_check(struct drm_plane *plane,
 	struct drm_plane_state *new_plane_state = drm_atomic_get_new_plane_state(state,
 										 plane);
 	struct drm_framebuffer *fb = new_plane_state->fb;
-	u32 src_w, src_h;
+	struct ltdc_device *ldev = plane_to_ltdc(plane);
+	u32 src_w, src_h, crtc_w, crtc_h;
 
 	drm_dbg_driver(plane->dev, "\n");
 
@@ -1255,15 +1281,43 @@ static int ltdc_plane_atomic_check(struct drm_plane *plane,
 	/* convert src_ from 16:16 format */
 	src_w = new_plane_state->src_w >> 16;
 	src_h = new_plane_state->src_h >> 16;
+	crtc_w = new_plane_state->crtc_w;
+	crtc_h = new_plane_state->crtc_h;
 
-	/* Reject scaling */
-	if (src_w != new_plane_state->crtc_w || src_h != new_plane_state->crtc_h) {
-		drm_dbg_driver(plane->dev, "Scaling is not supported");
+	if (ldev->caps.plane_scaling[plane->index]) {
+		if (fb->format->is_yuv) {
+			if (src_w != crtc_w || src_h != crtc_h) {
+				drm_dbg_driver(plane->dev,
+					       "Scaling is not supported with yuv pixel format");
+				return -EINVAL;
+			}
+		}
 
-		return -EINVAL;
+		if (src_w > crtc_w || src_h > crtc_h) {
+			drm_dbg_driver(plane->dev, "Downscaling is not supported");
+			return -EINVAL;
+		}
+	} else {
+		if (src_w != crtc_w || src_h != crtc_h) {
+			drm_dbg_driver(plane->dev, "Scaling is not supported on layer %d",
+				       plane->index);
+			return -EINVAL;
+		}
 	}
 
 	return 0;
+}
+
+#define SCALER_FRACTION 12
+
+static u32 calculateScalingFactor(u32 in, u32 out)
+{
+	u32 factor = 0x1000;
+
+	if (out != 1)
+		factor = ((in - 1) << SCALER_FRACTION) / (out - 1);
+
+	return factor & 0xFFFF;
 }
 
 static void ltdc_plane_atomic_update(struct drm_plane *plane,
@@ -1274,28 +1328,23 @@ static void ltdc_plane_atomic_update(struct drm_plane *plane,
 									  plane);
 	struct drm_framebuffer *fb = newstate->fb;
 	u32 lofs = plane->index * LAY_OFS;
-	u32 x0 = newstate->crtc_x;
-	u32 x1 = newstate->crtc_x + newstate->crtc_w - 1;
-	u32 y0 = newstate->crtc_y;
-	u32 y1 = newstate->crtc_y + newstate->crtc_h - 1;
-	u32 src_x, src_y, src_w, src_h;
 	u32 val, pitch_in_bytes, line_length, line_number, ahbp, avbp, bpcr;
-	u32 paddr, paddr1, paddr2;
+	u32 paddr, paddr1, paddr2, lxcr;
 	enum ltdc_pix_fmt pf;
+	struct drm_rect dst, src;
 
 	ltdc_resume(ldev);
 
 	/* convert src_ from 16:16 format */
-	src_x = newstate->src_x >> 16;
-	src_y = newstate->src_y >> 16;
-	src_w = newstate->src_w >> 16;
-	src_h = newstate->src_h >> 16;
+	drm_rect_init(&src, newstate->src_x >> 16, newstate->src_y >> 16,
+		      newstate->src_w >> 16, newstate->src_h >> 16);
 
-	drm_dbg_driver(plane->dev, "plane:%d fb:%d (%dx%d)@(%d,%d) -> (%dx%d)@(%d,%d)\n",
-		       plane->base.id, fb->base.id,
-		       src_w, src_h, src_x, src_y,
-		       newstate->crtc_w, newstate->crtc_h,
-		       newstate->crtc_x, newstate->crtc_y);
+	drm_rect_init(&dst, newstate->crtc_x, newstate->crtc_y,
+		      newstate->crtc_w, newstate->crtc_h);
+
+	drm_dbg_driver(plane->dev,
+		       "plane:%d fb:%d src: " DRM_RECT_FMT " -> crtc: " DRM_RECT_FMT "\n",
+		       plane->base.id, fb->base.id, DRM_RECT_ARG(&src), DRM_RECT_ARG(&dst));
 
 	regmap_read(ldev->regmap, LTDC_BPCR, &bpcr);
 
@@ -1303,12 +1352,12 @@ static void ltdc_plane_atomic_update(struct drm_plane *plane,
 	avbp = bpcr & BPCR_AVBP;
 
 	/* Configures the horizontal start and stop position */
-	val = ((x1 + 1 + ahbp) << 16) + (x0 + 1 + ahbp);
+	val = ((dst.x2 + ahbp) << 16) + (dst.x1 + 1 + ahbp);
 	regmap_write_bits(ldev->regmap, LTDC_L1WHPCR + lofs,
 			  LXWHPCR_WHSTPOS | LXWHPCR_WHSPPOS, val);
 
 	/* Configures the vertical start and stop position */
-	val = ((y1 + 1 + avbp) << 16) + (y0 + 1 + avbp);
+	val = ((dst.y2 + avbp) << 16) + (dst.y1 + 1 + avbp);
 	regmap_write_bits(ldev->regmap, LTDC_L1WVPCR + lofs,
 			  LXWVPCR_WVSTPOS | LXWVPCR_WVSPPOS, val);
 
@@ -1356,17 +1405,16 @@ static void ltdc_plane_atomic_update(struct drm_plane *plane,
 	paddr = (u32)drm_fb_dma_get_gem_addr(fb, newstate, 0);
 
 	if (newstate->rotation & DRM_MODE_REFLECT_X)
-		paddr += (fb->format->cpp[0] * (x1 - x0 + 1)) - 1;
+		paddr += (fb->format->cpp[0] * drm_rect_width(&src)) - 1;
 
 	if (newstate->rotation & DRM_MODE_REFLECT_Y)
-		paddr += (fb->pitches[0] * (y1 - y0));
+		paddr += (fb->pitches[0] * (drm_rect_height(&src) - 1));
 
 	drm_dbg_driver(fb->dev, "fb: phys 0x%08x", paddr);
 	regmap_write(ldev->regmap, LTDC_L1CFBAR + lofs, paddr);
 
 	/* Configures the color frame buffer pitch in bytes & line length */
-	line_length = fb->format->cpp[0] *
-		      (x1 - x0 + 1) + (ldev->caps.bus_width >> 3) - 1;
+	line_length = fb->format->cpp[0] * drm_rect_width(&src) + (ldev->caps.bus_width >> 3) - 1;
 
 	if (newstate->rotation & DRM_MODE_REFLECT_Y)
 		/* Compute negative value (signed on 16 bits) for the picth */
@@ -1378,7 +1426,7 @@ static void ltdc_plane_atomic_update(struct drm_plane *plane,
 	regmap_write_bits(ldev->regmap, LTDC_L1CFBLR + lofs, LXCFBLR_CFBLL | LXCFBLR_CFBP, val);
 
 	/* Configures the frame buffer line number */
-	line_number = y1 - y0 + 1;
+	line_number = drm_rect_height(&src);
 	regmap_write_bits(ldev->regmap, LTDC_L1CFBLNR + lofs, LXCFBLNR_CFBLN, line_number);
 
 	if (ldev->caps.ycbcr_input) {
@@ -1390,10 +1438,10 @@ static void ltdc_plane_atomic_update(struct drm_plane *plane,
 			paddr1 = (u32)drm_fb_dma_get_gem_addr(fb, newstate, 1);
 
 			if (newstate->rotation & DRM_MODE_REFLECT_X)
-				paddr1 += ((fb->format->cpp[1] * (x1 - x0 + 1)) >> 1) - 1;
+				paddr1 += ((fb->format->cpp[1] * drm_rect_width(&src)) >> 1) - 1;
 
 			if (newstate->rotation & DRM_MODE_REFLECT_Y)
-				paddr1 += (fb->pitches[1] * (y1 - y0 - 1)) >> 1;
+				paddr1 += (fb->pitches[1] * (drm_rect_height(&src) - 1)) >> 1;
 
 			regmap_write(ldev->regmap, LTDC_L1AFBA0R + lofs, paddr1);
 			break;
@@ -1403,13 +1451,13 @@ static void ltdc_plane_atomic_update(struct drm_plane *plane,
 			paddr2 = (u32)drm_fb_dma_get_gem_addr(fb, newstate, 2);
 
 			if (newstate->rotation & DRM_MODE_REFLECT_X) {
-				paddr1 += ((fb->format->cpp[1] * (x1 - x0 + 1)) >> 1) - 1;
-				paddr2 += ((fb->format->cpp[2] * (x1 - x0 + 1)) >> 1) - 1;
+				paddr1 += ((fb->format->cpp[1] * drm_rect_width(&src)) >> 1) - 1;
+				paddr2 += ((fb->format->cpp[2] * drm_rect_width(&src)) >> 1) - 1;
 			}
 
 			if (newstate->rotation & DRM_MODE_REFLECT_Y) {
-				paddr1 += (fb->pitches[1] * (y1 - y0 - 1)) >> 1;
-				paddr2 += (fb->pitches[2] * (y1 - y0 - 1)) >> 1;
+				paddr1 += (fb->pitches[1] * (drm_rect_height(&src) - 1)) >> 1;
+				paddr2 += (fb->pitches[2] * (drm_rect_height(&src) - 1)) >> 1;
 			}
 
 			regmap_write(ldev->regmap, LTDC_L1AFBA0R + lofs, paddr1);
@@ -1421,13 +1469,14 @@ static void ltdc_plane_atomic_update(struct drm_plane *plane,
 			paddr2 = (u32)drm_fb_dma_get_gem_addr(fb, newstate, 1);
 
 			if (newstate->rotation & DRM_MODE_REFLECT_X) {
-				paddr1 += ((fb->format->cpp[1] * (x1 - x0 + 1)) >> 1) - 1;
-				paddr2 += ((fb->format->cpp[2] * (x1 - x0 + 1)) >> 1) - 1;
+				paddr1 += ((fb->format->cpp[1] * drm_rect_width(&src)) >> 1) - 1;
+				paddr2 += ((fb->format->cpp[2] * drm_rect_width(&src)) >> 1) - 1;
 			}
 
 			if (newstate->rotation & DRM_MODE_REFLECT_Y) {
-				paddr1 += (fb->pitches[1] * (y1 - y0 - 1)) >> 1;
-				paddr2 += (fb->pitches[2] * (y1 - y0 - 1)) >> 1;
+				paddr1 += (fb->pitches[1] * (drm_rect_height(&src) - 1)) >> 1;
+				paddr2 += (fb->pitches[2] * (drm_rect_height(&src) - 1)) >> 1;
+
 			}
 
 			regmap_write(ldev->regmap, LTDC_L1AFBA0R + lofs, paddr1);
@@ -1449,7 +1498,7 @@ static void ltdc_plane_atomic_update(struct drm_plane *plane,
 				else
 					pitch_in_bytes = fb->pitches[1];
 
-				line_length = ((fb->format->cpp[1] * (x1 - x0 + 1)) >> 1) +
+				line_length = ((fb->format->cpp[1] * drm_rect_width(&src)) >> 1) +
 					      (ldev->caps.bus_width >> 3) - 1;
 
 				/* Configure the auxiliary buffer length */
@@ -1473,14 +1522,42 @@ static void ltdc_plane_atomic_update(struct drm_plane *plane,
 	}
 
 	/* Enable layer and CLUT if needed */
-	val = fb->format->format == DRM_FORMAT_C8 ? LXCR_CLUTEN : 0;
-	val |= LXCR_LEN;
+	lxcr = fb->format->format == DRM_FORMAT_C8 ? LXCR_CLUTEN : 0;
+	lxcr |= LXCR_LEN;
 
 	/* Enable horizontal mirroring if requested */
 	if (newstate->rotation & DRM_MODE_REFLECT_X)
-		val |= LXCR_HMEN;
+		lxcr |= LXCR_HMEN;
 
-	regmap_write_bits(ldev->regmap, LTDC_L1CR + lofs, LXCR_MASK, val);
+	if (ldev->caps.plane_scaling[plane->index] &&
+	    (drm_rect_width(&src) != drm_rect_width(&dst) ||
+	     drm_rect_height(&src) != drm_rect_height(&dst))) {
+		lxcr |= LXCR_SCEN;
+
+		/* Configure the scaler input size */
+		val = (drm_rect_height(&src) << 16U) | drm_rect_width(&src);
+		regmap_write(ldev->regmap, LTDC_L1SISR + lofs, val);
+
+		/* Configure the scaler output size */
+		val = (drm_rect_height(&dst) << 16U) | drm_rect_width(&dst);
+		regmap_write(ldev->regmap, LTDC_L1SOSR + lofs, val);
+
+		/* Configure the vertical scaling factor */
+		val = calculateScalingFactor(drm_rect_height(&src), drm_rect_height(&dst));
+		regmap_write(ldev->regmap, LTDC_L1SVSFR + lofs, val);
+
+		/* Configure the vertical scaling phase */
+		regmap_write(ldev->regmap, LTDC_L1SHSPR + lofs, val);
+
+		/* Configure the horizontal scaling factor */
+		val = calculateScalingFactor(drm_rect_width(&src), drm_rect_width(&dst));
+		regmap_write(ldev->regmap, LTDC_L1SHSFR + lofs, val);
+
+		/* Configure the vertical scaling phase */
+		regmap_write(ldev->regmap, LTDC_L1SVSPR + lofs, val + (1 << SCALER_FRACTION));
+	}
+
+	regmap_write_bits(ldev->regmap, LTDC_L1CR + lofs, LXCR_MASK, lxcr);
 
 	/* Commit shadow registers = update plane at next vblank */
 	if (ldev->caps.plane_reg_shadow)
@@ -1796,7 +1873,7 @@ static int ltdc_encoder_init(struct drm_device *ddev, struct drm_bridge *bridge)
 static int ltdc_get_caps(struct drm_device *ddev)
 {
 	struct ltdc_device *ldev = ddev->dev_private;
-	u32 bus_width_log2, lcr, gc2r;
+	u32 bus_width_log2, lcr, gc2r, lxc1r;
 	const struct ltdc_plat_data *pdata = of_device_get_match_data(ddev->dev);
 
 	/*
@@ -1878,6 +1955,16 @@ static int ltdc_get_caps(struct drm_device *ddev)
 		ldev->caps.dynamic_zorder = true;
 		ldev->caps.plane_rotation = true;
 		ldev->caps.fifo_threshold = true;
+
+		for (int i = 0; i < lcr; i++) {
+			/* read 1st register of layer's configuration */
+			regmap_read(ldev->regmap, LTDC_L1C1R + i * LAY_OFS, &lxc1r);
+
+			if (lxc1r & LXCR_C1R_SCA)
+				ldev->caps.plane_scaling[i] = true;
+			else
+				ldev->caps.plane_scaling[i] = false;
+		}
 		break;
 	default:
 		return -ENODEV;
