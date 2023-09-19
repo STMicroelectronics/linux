@@ -612,7 +612,7 @@ static int stm32_gpio_domain_activate(struct irq_domain *d,
 {
 	struct stm32_gpio_bank *bank = d->host_data;
 	struct stm32_pinctrl *pctl = dev_get_drvdata(bank->gpio_chip.parent);
-	int ret = 0;
+	int ret;
 
 	if (pctl->hwlock) {
 		ret = hwspin_lock_timeout_in_atomic(pctl->hwlock,
@@ -628,7 +628,7 @@ static int stm32_gpio_domain_activate(struct irq_domain *d,
 	if (pctl->hwlock)
 		hwspin_unlock_in_atomic(pctl->hwlock);
 
-	return ret;
+	return 0;
 }
 
 static int stm32_gpio_domain_alloc(struct irq_domain *d,
