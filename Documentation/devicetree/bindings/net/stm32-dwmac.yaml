@@ -99,6 +99,9 @@ properties:
       encompases the glue register, the offset of the control register and
       the mask to set bitfield in control register
 
+  phy-supply:
+    description: PHY regulator
+
   st,ext-phyclk:
     description:
       set this property in RMII mode when you have PHY without crystal 50MHz and want to
