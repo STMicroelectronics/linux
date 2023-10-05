@@ -132,16 +132,12 @@ int hantro_h1_jpeg_enc_run(struct hantro_ctx *ctx)
 	hantro_h1_jpeg_enc_set_qtable(vpu, jpeg_ctx.hw_luma_qtable,
 				      jpeg_ctx.hw_chroma_qtable);
 
-	reg = H1_REG_AXI_CTRL_OUTPUT_SWAP16
-		| H1_REG_AXI_CTRL_INPUT_SWAP16
-		| H1_REG_AXI_CTRL_BURST_LEN(16)
-		| H1_REG_AXI_CTRL_OUTPUT_SWAP32
-		| H1_REG_AXI_CTRL_INPUT_SWAP32
-		| H1_REG_AXI_CTRL_OUTPUT_SWAP8
-		| H1_REG_AXI_CTRL_INPUT_SWAP8;
-	/* Make sure that all registers are written at this point. */
-	vepu_write(vpu, reg, H1_REG_AXI_CTRL);
+	hantro_h1_set_color_conv(vpu, ctx);
 
+	/* Make sure that all registers are written at this point. */
+	hantro_h1_set_axi_ctrl(vpu, ctx);
+
+	/* Start the hardware. */
 	reg = H1_REG_ENC_CTRL_WIDTH(MB_WIDTH(ctx->src_fmt.width))
 		| H1_REG_ENC_CTRL_HEIGHT(MB_HEIGHT(ctx->src_fmt.height))
 		| H1_REG_ENC_CTRL_ENC_MODE_JPEG

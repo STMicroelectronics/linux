@@ -473,12 +473,16 @@ struct hantro_codec_ops {
  * @ROCKCHIP_VPU_ENC_FMT_YUV420SP: Y/CbCr 4:2:0 semi-planar format
  * @ROCKCHIP_VPU_ENC_FMT_YUYV422: YUV 4:2:2 packed format (YUYV)
  * @ROCKCHIP_VPU_ENC_FMT_UYVY422: YUV 4:2:2 packed format (UYVY)
+ * @ROCKCHIP_VPU_ENC_FMT_RGB565:  RGB565 16 bits format
+ * @ROCKCHIP_VPU_ENC_FMT_RGB888:  RGB888 32 bits format
  */
 enum hantro_enc_fmt {
 	ROCKCHIP_VPU_ENC_FMT_YUV420P = 0,
 	ROCKCHIP_VPU_ENC_FMT_YUV420SP = 1,
 	ROCKCHIP_VPU_ENC_FMT_YUYV422 = 2,
 	ROCKCHIP_VPU_ENC_FMT_UYVY422 = 3,
+	ROCKCHIP_VPU_ENC_FMT_RGB565 = 4,
+	ROCKCHIP_VPU_ENC_FMT_RGB888 = 7,
 };
 
 extern const struct hantro_variant imx8mm_vpu_g1_variant;

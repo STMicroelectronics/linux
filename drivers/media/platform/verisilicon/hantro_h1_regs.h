@@ -190,8 +190,17 @@
 #define H1_REG_STABILIZATION_OUTPUT			0x0A0
 #define H1_REG_ADDR_CABAC_TBL				0x0cc
 #define H1_REG_ADDR_MV_OUT				0x0d0
-#define H1_REG_RGB_YUV_COEFF(i)				(0x0d4 + ((i) * 0x4))
-#define H1_REG_RGB_MASK_MSB				0x0dc
+#define H1_REG_RGB_YUV_COEFF_AB				0x0d4
+#define   H1_REG_RGB_YUV_COEFF_A(x)			(((x) & 0xffff) << 0)
+#define   H1_REG_RGB_YUV_COEFF_B(x)			(((x) & 0xffff) << 16)
+#define H1_REG_RGB_YUV_COEFF_CE				0x0d8
+#define   H1_REG_RGB_YUV_COEFF_C(x)			(((x) & 0xffff) << 0)
+#define   H1_REG_RGB_YUV_COEFF_E(x)			(((x) & 0xffff) << 16)
+#define H1_REG_RGB_YUV_COEFF_F_MASK			0x0dc
+#define   H1_REG_RGB_YUV_COEFF_F(x)			(((x) & 0xffff) << 0)
+#define   H1_REG_RGB_YUV_R_MASK_MSB(x)			(((x) & 0x1f) << 16)
+#define   H1_REG_RGB_YUV_G_MASK_MSB(x)			(((x) & 0x1f) << 21)
+#define   H1_REG_RGB_YUV_B_MASK_MSB(x)			(((x) & 0x1f) << 26)
 #define H1_REG_INTRA_AREA_CTRL				0x0e0
 #define H1_REG_CIR_INTRA_CTRL				0x0e4
 #define H1_REG_INTRA_SLICE_BITMAP(i)			(0x0e8 + ((i) * 0x4))

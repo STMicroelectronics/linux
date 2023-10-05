@@ -1317,10 +1317,6 @@ static void hantro_h1_vp8_enc_set_params(struct hantro_dev *vpu, struct hantro_c
 	vepu_write_relaxed(vpu, 0xffffffff, H1_REG_FIRST_ROI_AREA);
 	vepu_write_relaxed(vpu, 0xffffffff, H1_REG_SECOND_ROI_AREA);
 	vepu_write_relaxed(vpu, 0, H1_REG_STABILIZATION_OUTPUT);
-	vepu_write_relaxed(vpu, 0x962b4c85, H1_REG_RGB_YUV_COEFF(0));
-	vepu_write_relaxed(vpu, 0x90901d50, H1_REG_RGB_YUV_COEFF(1));
-	vepu_write_relaxed(vpu, 0x0000b694, H1_REG_RGB_YUV_COEFF(2));
-	vepu_write_relaxed(vpu, 0, H1_REG_RGB_MASK_MSB);
 	vepu_write_relaxed(vpu, 0, H1_REG_CIR_INTRA_CTRL);
 	vepu_write_relaxed(vpu, 0xffffffff, H1_REG_INTRA_AREA_CTRL);
 
@@ -1457,16 +1453,10 @@ int hantro_h1_vp8_enc_run(struct hantro_ctx *ctx)
 	hantro_h1_vp8_enc_set_src_img_ctrl(vpu, ctx);
 	hantro_h1_vp8_enc_set_buffers(vpu, ctx, qp, params);
 
-	//FIXME copied from h1_jpeg_enc.c
-	reg =     H1_REG_AXI_CTRL_OUTPUT_SWAP16
-		| H1_REG_AXI_CTRL_INPUT_SWAP16
-		| H1_REG_AXI_CTRL_BURST_LEN(16)
-		| H1_REG_AXI_CTRL_OUTPUT_SWAP32
-		| H1_REG_AXI_CTRL_INPUT_SWAP32
-		| H1_REG_AXI_CTRL_OUTPUT_SWAP8
-		| H1_REG_AXI_CTRL_INPUT_SWAP8;
+	hantro_h1_set_color_conv(vpu, ctx);
+
 	/* Make sure that all registers are written at this point. */
-	vepu_write(vpu, reg, H1_REG_AXI_CTRL);
+	hantro_h1_set_axi_ctrl(vpu, ctx);
 
 	/* Start the hardware. */
 	reg =     H1_REG_ENC_CTRL_TIMEOUT_EN

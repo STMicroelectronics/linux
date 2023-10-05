@@ -7,6 +7,7 @@ hantro-vpu-y += \
 		hantro_v4l2.o \
 		hantro_postproc.o \
 		hantro_boolenc.o \
+		hantro_h1.o \
 		hantro_h1_jpeg_enc.o \
 		hantro_h1_vp8_enc.o \
 		hantro_h1_h264_enc.o \
