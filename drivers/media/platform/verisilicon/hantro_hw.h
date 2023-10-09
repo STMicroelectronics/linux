@@ -426,6 +426,24 @@ struct hantro_vp8_enc_hw_ctx {
 	u8 copy_buffer_to_alternate;
 };
 
+#define HANTRO_H264_NUM_INTERNAL_FRAMES 4
+#define HANTRO_H264_CABAC_IDC_NUM	3
+#define HANTRO_H264_CABAC_CV_NUM	460
+
+struct hantro_h264_enc_hw_ctx {
+	struct hantro_aux_buf luma_internal[HANTRO_H264_NUM_INTERNAL_FRAMES];
+	struct hantro_aux_buf chroma_internal[HANTRO_H264_NUM_INTERNAL_FRAMES];
+	u64 reference_ts[HANTRO_H264_NUM_INTERNAL_FRAMES];
+	int last_idx;
+	int last_prev_idx;
+	int reconstr_idx;
+	int ltr_idx;
+	struct hantro_aux_buf nal_table;
+	struct hantro_aux_buf cabac_ctx[HANTRO_H264_CABAC_IDC_NUM];
+	struct hantro_aux_buf mv_buf;
+	struct hantro_aux_buf segment_map;
+};
+
 /**
  * struct hantro_codec_ops - codec mode specific operations
  *
@@ -676,5 +694,10 @@ void hantro_vp8_enc_exit(struct hantro_ctx *ctx);
 
 int hantro_h1_vp8_enc_run(struct hantro_ctx *ctx);
 void hantro_h1_vp8_enc_done(struct hantro_ctx *ctx);
+
+int hantro_h1_h264_enc_run(struct hantro_ctx *ctx);
+int hantro_h264_enc_init(struct hantro_ctx *ctx);
+void hantro_h1_h264_enc_done(struct hantro_ctx *ctx);
+void hantro_h264_enc_exit(struct hantro_ctx *ctx);
 
 #endif /* HANTRO_HW_H_ */

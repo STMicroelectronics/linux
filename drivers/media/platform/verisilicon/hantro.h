@@ -33,6 +33,7 @@ struct hantro_postproc_ops;
 
 #define HANTRO_JPEG_ENCODER	BIT(0)
 #define HANTRO_VP8_ENCODER	BIT(1)
+#define HANTRO_H264_ENCODER	BIT(2)
 #define HANTRO_ENCODERS		0x0000ffff
 #define HANTRO_MPEG2_DECODER	BIT(16)
 #define HANTRO_VP8_DECODER	BIT(17)
@@ -115,6 +116,7 @@ struct hantro_variant {
  * @HANTRO_MODE_VP9_DEC: VP9 decoder.
  * @HANTRO_MODE_AV1_DEC: AV1 decoder
  * @HANTRO_MODE_VP8_ENC: VP8 encoder.
+ * @HANTRO_MODE_H264_ENC: H264 encoder.
  */
 enum hantro_codec_mode {
 	HANTRO_MODE_NONE = -1,
@@ -126,6 +128,7 @@ enum hantro_codec_mode {
 	HANTRO_MODE_VP9_DEC,
 	HANTRO_MODE_AV1_DEC,
 	HANTRO_MODE_VP8_ENC,
+	HANTRO_MODE_H264_ENC,
 };
 
 /*
@@ -278,6 +281,7 @@ struct hantro_ctx {
 		struct hantro_vp9_dec_hw_ctx vp9_dec;
 		struct hantro_av1_dec_hw_ctx av1_dec;
 		struct hantro_vp8_enc_hw_ctx vp8_enc;
+		struct hantro_h264_enc_hw_ctx h264_enc;
 	};
 };
 
