@@ -1241,6 +1241,9 @@ const char *v4l2_ctrl_get_name(u32 id)
 	case V4L2_CID_STATELESS_VP8_ENCODE_PARAMS:		return "VP8 Encode Parameters";
 	case V4L2_CID_STATELESS_VP8_ENCODE_QP:			return "VP8 Encode QP";
 
+	case V4L2_CID_STATELESS_H264_ENCODE_PARAMS:             return "H264 Encode Parameters";
+	case V4L2_CID_STATELESS_H264_ENCODE_RC:                 return "H264 Encode Rate-Control";
+
 	/* Colorimetry controls */
 	/* Keep the order of the 'case's the same as in v4l2-controls.h! */
 	case V4L2_CID_COLORIMETRY_CLASS:	return "Colorimetry Controls";
@@ -1612,6 +1615,12 @@ void v4l2_ctrl_fill(u32 id, const char **name, enum v4l2_ctrl_type *type,
 		break;
 	case V4L2_CID_COLORIMETRY_HDR10_MASTERING_DISPLAY:
 		*type = V4L2_CTRL_TYPE_HDR10_MASTERING_DISPLAY;
+		break;
+	case V4L2_CID_STATELESS_H264_ENCODE_PARAMS:
+		*type = V4L2_CTRL_TYPE_H264_ENCODE_PARAMS;
+		break;
+	case V4L2_CID_STATELESS_H264_ENCODE_RC:
+		*type = V4L2_CTRL_TYPE_H264_ENCODE_RC;
 		break;
 	default:
 		*type = V4L2_CTRL_TYPE_INTEGER;
