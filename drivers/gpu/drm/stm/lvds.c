@@ -21,6 +21,7 @@
 #include <linux/of_device.h>
 #include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
+#include <linux/regulator/consumer.h>
 #include <linux/reset.h>
 
 /* LVDS Host registers */
@@ -272,6 +273,9 @@ struct stm_lvds {
 
 	u32 hw_version;
 	u32 link_type;
+
+	struct regulator *vdd_supply;
+	struct regulator *vdda18_supply;
 };
 
 #define bridge_to_stm_lvds(b) \
@@ -979,9 +983,24 @@ static void lvds_atomic_enable(struct drm_bridge *bridge,
 	if (!conn_state)
 		return;
 
+	ret = regulator_enable(lvds->vdda18_supply);
+	if (ret) {
+		drm_err(bridge->dev, "Failed to enable regulator vdda18: %d\n", ret);
+		return;
+	}
+
+	ret = regulator_enable(lvds->vdd_supply);
+	if (ret) {
+		regulator_disable(lvds->vdda18_supply);
+		drm_err(bridge->dev, "Failed to enable regulator vdd: %d\n", ret);
+		return;
+	}
+
 	ret = pm_runtime_resume_and_get(lvds->dev);
 	if (ret < 0) {
 		drm_err(bridge->dev, "Failed to enable lvds, cannot resume pm\n");
+		regulator_disable(lvds->vdd_supply);
+		regulator_disable(lvds->vdda18_supply);
 		return;
 	}
 
@@ -1013,6 +1032,9 @@ static void lvds_atomic_disable(struct drm_bridge *bridge,
 	lvds_clear(lvds, LVDS_CR, CR_LVDSEN);
 
 	pm_runtime_put(lvds->dev);
+
+	regulator_disable(lvds->vdd_supply);
+	regulator_disable(lvds->vdda18_supply);
 }
 
 static const struct drm_bridge_funcs lvds_bridge_funcs = {
@@ -1066,6 +1088,18 @@ static int lvds_probe(struct platform_device *pdev)
 	if (IS_ERR(rstc)) {
 		ret = PTR_ERR(rstc);
 		return ret;
+	}
+
+	lvds->vdd_supply = devm_regulator_get(dev, "vdd");
+	if (IS_ERR(lvds->vdd_supply)) {
+		dev_err_probe(dev, ret, "Failed to request regulator\n");
+		return PTR_ERR(lvds->vdd_supply);
+	}
+
+	lvds->vdda18_supply = devm_regulator_get(dev, "vdda18");
+	if (IS_ERR(lvds->vdda18_supply)) {
+		dev_err_probe(dev, ret, "Failed to request regulator\n");
+		return  PTR_ERR(lvds->vdda18_supply);
 	}
 
 	reset_control_assert(rstc);
