@@ -224,6 +224,11 @@
 	bootph-all;
 };
 
+&combophy {
+	st,ssc-on;
+	status = "okay";
+};
+
 &cryp1 {
 	status = "okay";
 };
@@ -737,6 +742,23 @@
 		#address-cells = <1>;
 		#size-cells = <0>;
 		status = "okay";
+
+		typec@35 {
+			compatible = "st,stm32mp25-typec";
+			reg = <0x35>;
+			interrupts-extended = <&intc_rpmsg 0>;
+			status = "okay";
+			connector {
+				compatible = "usb-c-connector";
+				label = "USB-C";
+
+				port {
+					typec_ep: endpoint {
+						remote-endpoint = <&dwc3_ep>;
+					};
+				};
+			};
+		};
 	};
 };
 
@@ -965,6 +987,21 @@
 &usb2_phy2 {
 	vdd33-supply = <&scmi_vdd3v3_usb>;
 	status = "okay";
+};
+
+&usb3dr {
+	status = "okay";
+
+	dwc3: usb@48300000 {
+		phys = <&usb2_phy2>, <&combophy PHY_TYPE_USB3>;
+		phy-names = "usb2-phy", "usb3-phy";
+		usb-role-switch;
+		port {
+			dwc3_ep: endpoint {
+				remote-endpoint = <&typec_ep>;
+			};
+		};
+	};
 };
 
 &usbh {
