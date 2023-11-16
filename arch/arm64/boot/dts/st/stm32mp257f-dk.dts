@@ -391,6 +391,15 @@
 	status = "okay";
 };
 
+&mlahb {
+	intc_rpmsg: interrupt-controller@1 {
+		compatible = "rpmsg,intc";
+		reg = <1 0>;
+		#interrupt-cells = <1>;
+		interrupt-controller;
+	};
+};
+
 &optee {
 	bootph-all;
 };
