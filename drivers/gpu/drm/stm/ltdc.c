@@ -818,25 +818,6 @@ static irqreturn_t ltdc_irq(int irq, void *arg)
  * DRM_CRTC
  */
 
-static void ltdc_crtc_update_clut(struct drm_crtc *crtc)
-{
-	struct ltdc_device *ldev = crtc_to_ltdc(crtc);
-	struct drm_color_lut *lut;
-	u32 val;
-	int i;
-
-	if (!crtc->state->color_mgmt_changed || !crtc->state->gamma_lut)
-		return;
-
-	lut = (struct drm_color_lut *)crtc->state->gamma_lut->data;
-
-	for (i = 0; i < CLUT_SIZE; i++, lut++) {
-		val = ((lut->red << 8) & 0xff0000) | (lut->green & 0xff00) |
-			(lut->blue >> 8) | (i << 24);
-		regmap_write(ldev->regmap, LTDC_L1CLUTWR, val);
-	}
-}
-
 static void ltdc_crtc_atomic_enable(struct drm_crtc *crtc,
 				    struct drm_atomic_state *state)
 {
@@ -1122,8 +1103,6 @@ static void ltdc_crtc_atomic_flush(struct drm_crtc *crtc,
 
 	drm_dbg_atomic(crtc->dev, "\n");
 
-	ltdc_crtc_update_clut(crtc);
-
 	/* Commit shadow registers = update planes at next vblank */
 	if (!ldev->caps.plane_reg_shadow)
 		regmap_set_bits(ldev->regmap, LTDC_SRCR, SRCR_VBR);
@@ -1364,6 +1343,35 @@ static u32 calculateScalingFactor(u32 in, u32 out)
 		factor = ((in - 1) << SCALER_FRACTION) / (out - 1);
 
 	return factor & 0xFFFF;
+}
+
+static void ltdc_plane_update_clut(struct drm_plane *plane,
+				   struct drm_plane_state *state)
+{
+	struct ltdc_device *ldev = plane_to_ltdc(plane);
+	struct drm_crtc *crtc = state->crtc;
+	struct drm_color_lut *lut;
+	u32 lofs = plane->index * LAY_OFS;
+	u32 val;
+	int lut_size;
+	int i;
+
+	if (!crtc || !crtc->state)
+		return;
+
+	if (!crtc->state->color_mgmt_changed || !crtc->state->gamma_lut)
+		return;
+
+	lut = (struct drm_color_lut *)crtc->state->gamma_lut->data;
+	lut_size = drm_color_lut_size(crtc->state->gamma_lut);
+	if (lut_size > CLUT_SIZE)
+		return;
+
+	for (i = 0; i < CLUT_SIZE; i++, lut++) {
+		val = ((lut->red << 8) & 0xff0000) | (lut->green & 0xff00) |
+		      (lut->blue >> 8) | (i << 24);
+		regmap_write(ldev->regmap, LTDC_L1CLUTWR + lofs, val);
+	}
 }
 
 static void ltdc_plane_update(struct drm_plane *plane, struct drm_atomic_state *state)
@@ -1685,6 +1693,10 @@ static void ltdc_plane_update(struct drm_plane *plane, struct drm_atomic_state *
 			regmap_write(ldev->regmap, LTDC_L1PCR + lofs, 0);
 		}
 	}
+
+	/* set color look-up table */
+	if (fb->format->format == DRM_FORMAT_C8)
+		ltdc_plane_update_clut(plane, newstate);
 
 	/* Enable layer and CLUT if needed */
 	lxcr = fb->format->format == DRM_FORMAT_C8 ? LXCR_CLUTEN : 0;
