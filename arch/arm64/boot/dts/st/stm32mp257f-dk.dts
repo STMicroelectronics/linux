@@ -966,3 +966,22 @@
 	vdd33-supply = <&scmi_vdd3v3_usb>;
 	status = "okay";
 };
+
+&usbh {
+	status = "okay";
+
+	usbh_ehci: usb@482f0000 {
+		#address-cells = <1>;
+		#size-cells = <0>;
+		/* onboard HUB */
+		hub@1 {
+			compatible = "usb424,2422";
+			reg = <1>;
+			vdd-supply = <&scmi_v3v3>;
+		};
+	};
+
+	usbh_ohci: usb@482e0000 {
+		status = "disabled";
+	};
+};
