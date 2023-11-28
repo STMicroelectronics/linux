@@ -764,6 +764,41 @@ static int pvt_set_temp_coeff(struct device *dev, struct pvt_device *pvt)
 	return 0;
 }
 
+#ifdef CONFIG_PM_SLEEP
+static int mr75203_suspend(struct device *dev)
+{
+	struct pvt_device *pvt = dev_get_drvdata(dev);
+
+	clk_disable_unprepare(pvt->clk);
+
+	return 0;
+}
+
+static int mr75203_resume(struct device *dev)
+{
+	struct pvt_device *pvt = dev_get_drvdata(dev);
+	int ret;
+
+	ret = clk_prepare_enable(pvt->clk);
+	if (ret) {
+		dev_err(dev, "failed to enable clock: %d\n", ret);
+		return ret;
+	}
+
+	ret = pvt_init(pvt);
+	if (ret) {
+		dev_err(dev, "failed to init pvt: %d\n", ret);
+		return ret;
+	}
+
+	return ret;
+}
+#endif /* CONFIG_PM_SLEEP */
+
+static const struct dev_pm_ops mr75203_pm_ops = {
+	SET_SYSTEM_SLEEP_PM_OPS(mr75203_suspend, mr75203_resume)
+};
+
 static int mr75203_probe(struct platform_device *pdev)
 {
 	u32 ts_num, vm_num, pd_num, ch_num, val, index, i;
@@ -907,6 +942,8 @@ static int mr75203_probe(struct platform_device *pdev)
 							 &pvt_chip_info,
 							 NULL);
 
+	platform_set_drvdata(pdev, pvt);
+
 	return PTR_ERR_OR_ZERO(hwmon_dev);
 }
 
@@ -920,6 +957,7 @@ static struct platform_driver moortec_pvt_driver = {
 	.driver = {
 		.name = "moortec-pvt",
 		.of_match_table = moortec_pvt_of_match,
+		.pm = &mr75203_pm_ops,
 	},
 	.probe = mr75203_probe,
 };
