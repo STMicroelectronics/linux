@@ -1952,6 +1952,7 @@ static struct clk_stm32_clock_data stm32mp25_clock_data = {
 static struct clk_stm32_reset_data stm32mp25_reset_data = {
 	.reset_lines	= stm32mp25_reset_cfg,
 	.nr_lines	= ARRAY_SIZE(stm32mp25_reset_cfg),
+	.reset_us	= 2,
 };
 
 static const struct stm32_rcc_match_data stm32mp25_data = {
