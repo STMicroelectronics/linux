@@ -19,6 +19,7 @@ struct stm32_reset_data {
 	struct reset_controller_dev	rcdev;
 	void __iomem			*membase;
 	u32				clear_offset;
+	unsigned int			reset_us;
 	const struct stm32_reset_cfg	**reset_lines;
 };
 
@@ -119,9 +120,49 @@ static int stm32_reset_status(struct reset_controller_dev *rcdev,
 	return !!(reg & BIT(ptr_line->bit_idx));
 }
 
+static int stm32_check_deassert(struct reset_controller_dev *rcdev,
+				unsigned long id)
+{
+	struct stm32_reset_data *data = to_stm32_reset_data(rcdev);
+	struct stm32_reset_cfg line_reset;
+	const struct stm32_reset_cfg *ptr_line;
+	u32 reg;
+
+	ptr_line = stm32_get_reset_line(rcdev, id, &line_reset);
+	if (!ptr_line)
+		return -EPERM;
+
+	return readl_poll_timeout(data->membase + ptr_line->offset, reg,
+				  !(reg & BIT(ptr_line->bit_idx)), 10, 10 * USEC_PER_MSEC);
+}
+
+static int stm32_reset(struct reset_controller_dev *rcdev, unsigned long id)
+{
+	struct stm32_reset_data *data = to_stm32_reset_data(rcdev);
+	int ret;
+
+	ret = stm32_reset_assert(rcdev, id);
+	if (ret)
+		return ret;
+
+	if (data->reset_us)
+		usleep_range(data->reset_us, data->reset_us * 2);
+
+	ret = stm32_reset_deassert(rcdev, id);
+	if (ret)
+		return ret;
+
+	ret = stm32_check_deassert(rcdev, id);
+	if (ret)
+		return ret;
+
+	return 0;
+}
+
 static const struct reset_control_ops stm32_reset_ops = {
 	.assert		= stm32_reset_assert,
 	.deassert	= stm32_reset_deassert,
+	.reset		= stm32_reset,
 	.status		= stm32_reset_status,
 };
 
@@ -143,6 +184,7 @@ int stm32_rcc_reset_init(struct device *dev, struct clk_stm32_reset_data *data,
 	reset_data->rcdev.nr_resets = data->nr_lines;
 	reset_data->reset_lines = data->reset_lines;
 	reset_data->clear_offset = data->clear_offset;
+	reset_data->reset_us = data->reset_us;
 
 	return reset_controller_register(&reset_data->rcdev);
 }

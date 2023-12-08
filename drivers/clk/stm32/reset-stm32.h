@@ -15,6 +15,7 @@ struct clk_stm32_reset_data {
 	const struct stm32_reset_cfg **reset_lines;
 	unsigned int nr_lines;
 	u32 clear_offset;
+	u32 reset_us;
 };
 
 int stm32_rcc_reset_init(struct device *dev, struct clk_stm32_reset_data *data,
