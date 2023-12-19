@@ -64,12 +64,6 @@ struct stm32_rproc_mem {
 	size_t size;
 };
 
-struct stm32_rproc_mem_ranges {
-	u32 dev_addr;
-	u32 bus_addr;
-	u32 size;
-};
-
 struct stm32_mbox {
 	const unsigned char name[10];
 	struct mbox_chan *chan;
@@ -143,20 +137,40 @@ static int stm32_rproc_mem_release(struct rproc *rproc,
 	return 0;
 }
 
+static int read_dma_range(struct stm32_rproc_mem *p_mem, const u32 *cell)
+{
+	int is_64 = sizeof(phys_addr_t) / sizeof(u64);
+	int nb_cell = 0;
+
+	p_mem->dev_addr = cell[nb_cell++];
+	p_mem->bus_addr = cell[nb_cell++];
+	if (is_64) /* 32-bit*/
+		p_mem->bus_addr = ((u64)p_mem->bus_addr << 32) | cell[nb_cell++];
+	p_mem->size = cell[nb_cell++];
+
+	return nb_cell;
+}
+
 static int stm32_rproc_of_memory_translations(struct platform_device *pdev,
 					      struct stm32_rproc *ddata)
 {
 	struct device *parent, *dev = &pdev->dev;
 	struct device_node *np;
 	struct stm32_rproc_mem *p_mems;
-	struct stm32_rproc_mem_ranges *mem_range;
-	int cnt, array_size, i, ret = 0;
+	const u32 *mem_range;
+	int cnt, array_size, elt_size, i, j, ret = 0;
 
 	parent = dev->parent;
 	np = parent->of_node;
 
-	cnt = of_property_count_elems_of_size(np, "dma-ranges",
-					      sizeof(*mem_range));
+	/* A dma-ranges element is construct with:
+	 *  - the 32-bit remote processor address
+	 *  - the cpu address which depends on the cup arch (32-bit or 64-bit)
+	 *  - the 32-bit remote processor memory mapping size
+	 */
+	elt_size = sizeof(p_mems->dev_addr) + sizeof(p_mems->bus_addr) + sizeof(u32);
+
+	cnt = of_property_count_elems_of_size(np, "dma-ranges", elt_size);
 	if (cnt <= 0) {
 		dev_err(dev, "%s: dma-ranges property not defined\n", __func__);
 		return -EINVAL;
@@ -165,11 +179,11 @@ static int stm32_rproc_of_memory_translations(struct platform_device *pdev,
 	p_mems = devm_kcalloc(dev, cnt, sizeof(*p_mems), GFP_KERNEL);
 	if (!p_mems)
 		return -ENOMEM;
-	mem_range = kcalloc(cnt, sizeof(*mem_range), GFP_KERNEL);
+	mem_range = kcalloc(cnt, elt_size, GFP_KERNEL);
 	if (!mem_range)
 		return -ENOMEM;
 
-	array_size = cnt * sizeof(struct stm32_rproc_mem_ranges) / sizeof(u32);
+	array_size = cnt * elt_size / sizeof(u32);
 
 	ret = of_property_read_u32_array(np, "dma-ranges",
 					 (u32 *)mem_range, array_size);
@@ -178,10 +192,8 @@ static int stm32_rproc_of_memory_translations(struct platform_device *pdev,
 		goto free_mem;
 	}
 
-	for (i = 0; i < cnt; i++) {
-		p_mems[i].bus_addr = mem_range[i].bus_addr;
-		p_mems[i].dev_addr = mem_range[i].dev_addr;
-		p_mems[i].size     = mem_range[i].size;
+	for (i = 0, j = 0; i < cnt; i++) {
+		j += read_dma_range(&p_mems[i], &mem_range[j]);
 
 		dev_dbg(dev, "memory range[%i]: da %#x, pa %pa, size %#zx:\n",
 			i, p_mems[i].dev_addr, &p_mems[i].bus_addr,
