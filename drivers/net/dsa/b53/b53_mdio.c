@@ -377,6 +377,7 @@ static const struct of_device_id b53_of_match[] = {
 	{ .compatible = "brcm,bcm53115" },
 	{ .compatible = "brcm,bcm53125" },
 	{ .compatible = "brcm,bcm53128" },
+	{ .compatible = "brcm,bcm53134" },
 	{ .compatible = "brcm,bcm5365" },
 	{ .compatible = "brcm,bcm5389" },
 	{ .compatible = "brcm,bcm5395" },

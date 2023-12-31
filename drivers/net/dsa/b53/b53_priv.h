@@ -84,6 +84,7 @@ enum {
 	BCM583XX_DEVICE_ID = 0x58300,
 	BCM7445_DEVICE_ID = 0x7445,
 	BCM7278_DEVICE_ID = 0x7278,
+	BCM53134_DEVICE_ID = 0x5075,
 };
 
 #define B53_N_PORTS	9
@@ -182,7 +183,8 @@ static inline int is531x5(struct b53_device *dev)
 {
 	return dev->chip_id == BCM53115_DEVICE_ID ||
 		dev->chip_id == BCM53125_DEVICE_ID ||
-		dev->chip_id == BCM53128_DEVICE_ID;
+		dev->chip_id == BCM53128_DEVICE_ID ||
+		dev->chip_id == BCM53134_DEVICE_ID;
 }
 
 static inline int is63xx(struct b53_device *dev)
@@ -204,7 +206,8 @@ static inline int is58xx(struct b53_device *dev)
 	return dev->chip_id == BCM58XX_DEVICE_ID ||
 		dev->chip_id == BCM583XX_DEVICE_ID ||
 		dev->chip_id == BCM7445_DEVICE_ID ||
-		dev->chip_id == BCM7278_DEVICE_ID;
+		dev->chip_id == BCM7278_DEVICE_ID ||
+		dev->chip_id == BCM53134_DEVICE_ID;
 }
 
 #define B53_CPU_PORT_25	5
