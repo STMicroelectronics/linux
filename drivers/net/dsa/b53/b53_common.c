@@ -2587,7 +2587,7 @@ static const struct b53_chip_data b53_switch_chips[] = {
 		.jumbo_pm_reg = B53_JUMBO_PORT_MASK,
 		.jumbo_size_reg = B53_JUMBO_MAX_SIZE,
 	},
-	
+
 };
 
 static int b53_switch_init(struct b53_device *dev)

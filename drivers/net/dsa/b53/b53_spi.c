@@ -345,6 +345,7 @@ static const struct of_device_id b53_spi_of_match[] = {
 	{ .compatible = "brcm,bcm53115" },
 	{ .compatible = "brcm,bcm53125" },
 	{ .compatible = "brcm,bcm53128" },
+	{ .compatible = "brcm,bcm53134" },
 	{ /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, b53_spi_of_match);
@@ -355,9 +356,10 @@ static const struct spi_device_id b53_spi_ids[] = {
 	{ .name = "bcm5395" },
 	{ .name = "bcm5397" },
 	{ .name = "bcm5398" },
-	{ .name = "bcm53115" },
+{ .name = "bcm53115" },
 	{ .name = "bcm53125" },
 	{ .name = "bcm53128" },
+	{ .name = "bcm53134" },
 	{ /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(spi, b53_spi_ids);
