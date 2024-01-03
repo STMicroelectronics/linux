@@ -138,10 +138,10 @@ properties:
           - description: The offset of the power setting register
           - description: The field mask of the PDDS selection
 
-  st,syscfg-m4-state:
+  st,syscfg-cm-state:
     $ref: /schemas/types.yaml#/definitions/phandle-array
     description: |
-      Reference to the tamp register which exposes the Cortex-M4 state.
+      Reference to the register which exposes the Cortex-M state.
     items:
       - items:
           - description: Phandle of syscon block with the tamp register
@@ -246,7 +246,7 @@ examples:
       /* Hold boot managed using system config*/
       st,syscfg-holdboot = <&rcc 0x10C 0x1>;
       st,syscfg-rsc-tbl = <&tamp 0x144 0xFFFFFFFF>;
-      st,syscfg-m4-state = <&tamp 0x148 0xFFFFFFFF>;
+      st,syscfg-cm-state = <&tamp 0x148 0xFFFFFFFF>;
     };
   - |
     #include <dt-bindings/reset/stm32mp1-resets.h>
@@ -259,7 +259,7 @@ examples:
       resets = <&scmi MCU_R>, <&scmi MCU_HOLD_BOOT_R>;
       reset-names = "mcu_rst", "hold_boot";
       st,syscfg-rsc-tbl = <&tamp 0x144 0xFFFFFFFF>;
-      st,syscfg-m4-state = <&tamp 0x148 0xFFFFFFFF>;
+      st,syscfg-cm-state = <&tamp 0x148 0xFFFFFFFF>;
     };
   - |
     #include <dt-bindings/reset/stm32mp1-resets.h>
@@ -269,7 +269,7 @@ examples:
             <0x30000000 0x40000>,
             <0x38000000 0x10000>;
       st,syscfg-rsc-tbl = <&tamp 0x144 0xFFFFFFFF>;
-      st,syscfg-m4-state = <&tamp 0x148 0xFFFFFFFF>;
+      st,syscfg-cm-state = <&tamp 0x148 0xFFFFFFFF>;
     };
 
 ...
