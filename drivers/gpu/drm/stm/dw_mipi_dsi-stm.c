@@ -146,6 +146,7 @@ struct dw_mipi_dsi_stm {
 	struct regulator *vdda18_supply;
 	unsigned int lane_mbps;
 	u32 format;
+	bool probe_done;
 };
 
 static inline void dsi_write(struct dw_mipi_dsi_stm *dsi, u32 reg, u32 val)
@@ -488,6 +489,9 @@ static void dw_mipi_dsi_clk_disable(struct clk_hw *clk)
 
 	DRM_DEBUG_DRIVER("\n");
 
+	if (!dsi->probe_done)
+		return;
+
 	/* Disable the DSI PLL */
 	dsi_clear(dsi, DSI_WRPCR, WRPCR_PLLEN);
 
@@ -502,6 +506,9 @@ static int dw_mipi_dsi_clk_enable(struct clk_hw *clk)
 	int ret;
 
 	DRM_DEBUG_DRIVER("\n");
+
+	if (!dsi->probe_done)
+		return 0;
 
 	/* Enable the regulator */
 	dsi_set(dsi, DSI_WRPCR, WRPCR_REGEN | WRPCR_BGREN);
@@ -636,6 +643,9 @@ static void dw_mipi_dsi_phy_141_clk_disable(struct clk_hw *clk)
 
 	DRM_DEBUG_DRIVER("\n");
 
+	if (!dsi->probe_done)
+		return;
+
 	/* Disable the DSI PLL */
 	dsi_clear(dsi, DSI_WRPCR2, WRPCR2_PLLEN);
 }
@@ -647,6 +657,9 @@ static int dw_mipi_dsi_phy_141_clk_enable(struct clk_hw *clk)
 	int ret;
 
 	DRM_DEBUG_DRIVER("\n");
+
+	if (!dsi->probe_done)
+		return 0;
 
 	ret = readl_poll_timeout_atomic(dsi->base + DSI_PSR, val, val & PSR_PSSC,
 					SLEEP_US, TIMEOUT_US);
@@ -1280,6 +1293,7 @@ static int dw_mipi_dsi_stm_probe(struct platform_device *pdev)
 	struct dw_mipi_dsi_stm *dsi;
 	const struct dw_mipi_dsi_plat_data *pdata = of_device_get_match_data(dev);
 	int ret;
+	u32 pwr;
 
 	dsi = devm_kzalloc(dev, sizeof(*dsi), GFP_KERNEL);
 	if (!dsi)
@@ -1388,6 +1402,21 @@ static int dw_mipi_dsi_stm_probe(struct platform_device *pdev)
 		goto err;
 	}
 
+	dsi->probe_done = true;
+
+	/*
+	 * To obtain a continuous display after the probe,
+	 * the txbyte clock must remain enabled if the DSI bridge is powered on.
+	 */
+	pwr = dsi_read(dsi, DSI_PWR_UP);
+	if (pwr == POWERUP) {
+		ret = clk_prepare_enable(dsi->txbyte_clk.clk);
+		if (ret) {
+			DRM_ERROR("Failed to enable DSI pixel clock: %d\n", ret);
+			goto err;
+		}
+	}
+
 err:
 	clk_disable_unprepare(dsi->pclk);
 
@@ -1397,6 +1426,9 @@ err:
 static void dw_mipi_dsi_stm_remove(struct platform_device *pdev)
 {
 	struct dw_mipi_dsi_stm *dsi = platform_get_drvdata(pdev);
+
+	if (clk_hw_is_enabled(&dsi->txbyte_clk))
+		clk_disable_unprepare(dsi->txbyte_clk.clk);
 
 	dw_mipi_dsi_remove(dsi->dsi);
 	dw_mipi_dsi_clk_unregister(dsi);
