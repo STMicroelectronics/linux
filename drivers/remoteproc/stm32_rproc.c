@@ -778,32 +778,6 @@ static void stm32_rproc_kick(struct rproc *rproc, int vqid)
 	}
 }
 
-static int stm32_rproc_da_to_pa(struct rproc *rproc,
-				u64 da, phys_addr_t *pa)
-{
-	struct stm32_rproc *ddata = rproc->priv;
-	struct device *dev = rproc->dev.parent;
-	struct stm32_rproc_mem *p_mem;
-	unsigned int i;
-
-	for (i = 0; i < ddata->nb_rmems; i++) {
-		p_mem = &ddata->rmems[i];
-
-		if (da < p_mem->dev_addr ||
-		    da >= p_mem->dev_addr + p_mem->size)
-			continue;
-
-		*pa = da - p_mem->dev_addr + p_mem->bus_addr;
-		dev_dbg(dev, "da %llx to pa %pap\n", da, pa);
-
-		return 0;
-	}
-
-	dev_err(dev, "can't translate da %llx\n", da);
-
-	return -EINVAL;
-}
-
 static struct resource_table *
 stm32_rproc_get_loaded_rsc_table(struct rproc *rproc, size_t *table_sz)
 {
@@ -845,8 +819,7 @@ static int stm32_rproc_get_m4_info(struct rproc *rproc)
 {
 	struct stm32_rproc *ddata = rproc->priv;
 	struct device *dev = rproc->dev.parent;
-	phys_addr_t rsc_pa;
-	u32 rsc_da;
+	u32 rsc_pa;
 	unsigned int state;
 	int ret;
 
@@ -869,19 +842,15 @@ static int stm32_rproc_get_m4_info(struct rproc *rproc)
 	rproc->state = RPROC_DETACHED;
 
 	/* Get the resource table information */
-	ret = regmap_read(ddata->rsctbl.map, ddata->rsctbl.reg, &rsc_da);
+	ret = regmap_read(ddata->rsctbl.map, ddata->rsctbl.reg, &rsc_pa);
 	if (ret) {
 		dev_err(dev, "failed to read rsc tbl addr\n");
 		return -EINVAL;
 	}
 
-	if (!rsc_da)
+	if (!rsc_pa)
 		/* no rsc table */
 		return 0;
-
-	ret = stm32_rproc_da_to_pa(rproc, rsc_da, &rsc_pa);
-	if (ret)
-		return ret;
 
 	ddata->rsc_va = devm_ioremap_wc(dev, rsc_pa, RSC_TBL_SIZE);
 	if (IS_ERR_OR_NULL(ddata->rsc_va)) {
@@ -905,8 +874,7 @@ static int stm32_rproc_get_m33_info(struct rproc *rproc)
 	struct stm32_rproc *ddata = rproc->priv;
 	struct device *dev = rproc->dev.parent;
 	unsigned int cm_state;
-	phys_addr_t rsc_pa;
-	u32 rsc_da;
+	u32 rsc_pa;
 	u32 size;
 	int ret;
 
@@ -936,19 +904,15 @@ static int stm32_rproc_get_m33_info(struct rproc *rproc)
 	}
 
 	/* Get the resource table information */
-	ret = nvmem_cell_read_u32(dev, "rsc-tbl-addr", &rsc_da);
+	ret = nvmem_cell_read_u32(dev, "rsc-tbl-addr", &rsc_pa);
 	if (ret) {
 		dev_err(dev, "failed to read rsc tbl addr\n");
 		return -EINVAL;
 	}
 
-	if (!rsc_da)
+	if (!rsc_pa)
 		/* no rsc table */
 		return 0;
-
-	ret = stm32_rproc_da_to_pa(rproc, rsc_da, &rsc_pa);
-	if (ret)
-		return ret;
 
 	ddata->rsc_va = devm_ioremap_wc(dev, rsc_pa, RSC_TBL_SIZE);
 	if (IS_ERR_OR_NULL(ddata->rsc_va)) {
