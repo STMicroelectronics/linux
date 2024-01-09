@@ -59,6 +59,14 @@
 			gpios = <&gpiog 8 GPIO_ACTIVE_HIGH>;
 			status = "disabled";
 		};
+
+		button-wake-up {
+			label = "wake-up";
+			linux,code = <KEY_WAKEUP>;
+			interrupts-extended = <&optee 0>;
+			wakeup-source;
+			status = "okay";
+		};
 	};
 
 	imx335_2v9: regulator-2v9 {
