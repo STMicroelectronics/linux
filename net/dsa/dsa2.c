@@ -1242,11 +1242,15 @@ static enum dsa_tag_protocol dsa_get_tag_protocol(struct dsa_port *dp,
 		mdp_upstream = dsa_upstream_port(mds, mdp->index);
 		tag_protocol = mds->ops->get_tag_protocol(mds, mdp_upstream,
 							  DSA_TAG_PROTO_NONE);
+		printk("dsi-dsa_get_tag_protocol_slave tag_protocol=%d\n", tag_protocol);
 	}
 
 	/* If the master device is not itself a DSA slave in a disjoint DSA
 	 * tree, then return immediately.
 	 */
+	tag_protocol =  ds->ops->get_tag_protocol(ds, dp->index, tag_protocol);
+	printk("dsi-dsa_get_tag_protocol tag_protocol=%d\n", tag_protocol);
+
 	return ds->ops->get_tag_protocol(ds, dp->index, tag_protocol);
 }
 
@@ -1369,6 +1373,7 @@ static int dsa_switch_parse_ports_of(struct dsa_switch *ds,
 	struct dsa_port *dp;
 	int err = 0;
 	u32 reg;
+	int np = 0;
 
 	ports = of_get_child_by_name(dn, "ports");
 	if (!ports) {
@@ -1382,6 +1387,7 @@ static int dsa_switch_parse_ports_of(struct dsa_switch *ds,
 
 	for_each_available_child_of_node(ports, port) {
 		err = of_property_read_u32(port, "reg", &reg);
+		printk("dsi-for_each_available_child_of_node-of_property_read_u32 err=%d (%d)\n", err, np);
 		if (err) {
 			of_node_put(port);
 			goto out_put_node;
@@ -1398,10 +1404,12 @@ static int dsa_switch_parse_ports_of(struct dsa_switch *ds,
 		dp = dsa_to_port(ds, reg);
 
 		err = dsa_port_parse_of(dp, port);
+		printk("dsi-dsa_port_parse_of err=%d (%d)\n", err, np);
 		if (err) {
 			of_node_put(port);
 			goto out_put_node;
 		}
+		np++;
 	}
 
 out_put_node:
@@ -1414,9 +1422,10 @@ static int dsa_switch_parse_member_of(struct dsa_switch *ds,
 {
 	u32 m[2] = { 0, 0 };
 	int sz;
-
+	printk("dsi-dsa_switch_parse_member_of\n");
 	/* Don't error out if this optional property isn't found */
 	sz = of_property_read_variable_u32_array(dn, "dsa,member", m, 2, 2);
+	printk("dsi-of_property_read_variable_u32_array sz=%d\n", sz);
 	if (sz < 0 && sz != -EINVAL)
 		return sz;
 
@@ -1456,16 +1465,20 @@ static int dsa_switch_touch_ports(struct dsa_switch *ds)
 static int dsa_switch_parse_of(struct dsa_switch *ds, struct device_node *dn)
 {
 	int err;
-
+	printk("dsi-dsa_switch_parse_of\n");
 	err = dsa_switch_parse_member_of(ds, dn);
+	printk("dsi-dsa_switch_parse_member_of err=%d\n", err);
 	if (err)
 		return err;
 
 	err = dsa_switch_touch_ports(ds);
+	printk("dsi-dsa_switch_touch_ports err=%d\n", err);
 	if (err)
 		return err;
 
-	return dsa_switch_parse_ports_of(ds, dn);
+	err = dsa_switch_parse_ports_of(ds, dn);
+	printk("dsi-dsa_switch_parse_ports_of err=%d\n", err);
+	return err;
 }
 
 static int dsa_port_parse(struct dsa_port *dp, const char *name,
@@ -1560,7 +1573,7 @@ static int dsa_switch_probe(struct dsa_switch *ds)
 	struct dsa_chip_data *pdata;
 	struct device_node *np;
 	int err;
-
+	printk("dsi-dsa_switch_probe\n");
 	if (!ds->dev)
 		return -ENODEV;
 
@@ -1569,25 +1582,30 @@ static int dsa_switch_probe(struct dsa_switch *ds)
 
 	if (!ds->num_ports)
 		return -EINVAL;
+	printk("dsi-dsa_switch_probe ds->num_ports=%d\n", ds->num_ports);
 
 	if (np) {
 		err = dsa_switch_parse_of(ds, np);
+		printk("dsi-dsa_switch_parse_of err=%d\n", err);
 		if (err)
 			dsa_switch_release_ports(ds);
 	} else if (pdata) {
 		err = dsa_switch_parse(ds, pdata);
+		printk("dsi-dsa_switch_parse err=%d\n", err);
 		if (err)
 			dsa_switch_release_ports(ds);
 	} else {
 		err = -ENODEV;
 	}
 
+	printk("dsi-dsa_err=%d\n", err);
 	if (err)
 		return err;
 
 	dst = ds->dst;
 	dsa_tree_get(dst);
 	err = dsa_tree_setup(dst);
+	printk("dsi-dsa_tree_setup err=%d\n", err);
 	if (err) {
 		dsa_switch_release_ports(ds);
 		dsa_tree_put(dst);
@@ -1600,8 +1618,10 @@ int dsa_register_switch(struct dsa_switch *ds)
 {
 	int err;
 
+	printk("dsi-dsa_register_switch\n");
 	mutex_lock(&dsa2_mutex);
 	err = dsa_switch_probe(ds);
+	printk("dsi-dsa_switch_probe err=%d\n", err);
 	dsa_tree_put(ds->dst);
 	mutex_unlock(&dsa2_mutex);
 

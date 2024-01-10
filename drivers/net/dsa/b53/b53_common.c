@@ -624,7 +624,8 @@ void b53_brcm_hdr_setup(struct dsa_switch *ds, int port)
 	bool tag_en = !(dev->tag_protocol == DSA_TAG_PROTO_NONE);
 	u8 hdr_ctl, val;
 	u16 reg;
-
+	dev->tag_protocol = DSA_TAG_PROTO_NONE;
+	tag_en = 0;
 	/* Resolve which bit controls the Broadcom tag */
 	switch (port) {
 	case 8:
@@ -640,7 +641,7 @@ void b53_brcm_hdr_setup(struct dsa_switch *ds, int port)
 		val = 0;
 		break;
 	}
-
+	printk("dsi-b53_brcm_hdr_setup: port=%d, tag_en=%d, val=%d\n", port, tag_en, val);
 	/* Enable management mode if tagging is requested */
 	b53_read8(dev, B53_CTRL_PAGE, B53_SWITCH_MODE, &hdr_ctl);
 	if (tag_en)
@@ -694,7 +695,7 @@ EXPORT_SYMBOL(b53_brcm_hdr_setup);
 static void b53_enable_cpu_port(struct b53_device *dev, int port)
 {
 	u8 port_ctrl;
-
+	printk("dsi-b53_enable_cpu_port: port=%d\n", port);
 	/* BCM5325 CPU port is at 8 */
 	if ((is5325(dev) || is5365(dev)) && port == B53_CPU_PORT_25)
 		port = B53_CPU_PORT;
@@ -1101,7 +1102,7 @@ static int b53_setup(struct dsa_switch *ds)
 	struct b53_device *dev = ds->priv;
 	unsigned int port;
 	int ret;
-
+	printk("dsi-b53_setup\n");
 	/* Request bridge PVID untagged when DSA_TAG_PROTO_NONE is set
 	 * which forces the CPU port to be tagged in all VLANs.
 	 */
@@ -1142,7 +1143,7 @@ static void b53_teardown(struct dsa_switch *ds)
 static void b53_force_link(struct b53_device *dev, int port, int link)
 {
 	u8 reg, val, off;
-
+	printk("dsi-b53_force_link: port=%d, link=%d\n", port, link);
 	/* Override the port settings */
 	if (port == dev->imp_port) {
 		off = B53_PORT_OVERRIDE_CTRL;
@@ -1166,7 +1167,7 @@ static void b53_force_port_config(struct b53_device *dev, int port,
 				  bool tx_pause, bool rx_pause)
 {
 	u8 reg, val, off;
-
+	printk("dsi-b53_force_port_config: port=%d, speed=%d, duplex=%d, tx_pause=%d, rx_pause=%d\n", port, speed, duplex, tx_pause, rx_pause);
 	/* Override the port settings */
 	if (port == dev->imp_port) {
 		off = B53_PORT_OVERRIDE_CTRL;
@@ -1264,13 +1265,18 @@ static void b53_adjust_link(struct dsa_switch *ds, int port,
 		 */
 		if (phydev->interface == PHY_INTERFACE_MODE_RGMII_TXID)
 			rgmii_ctrl |= RGMII_CTRL_DLL_TXC;
+		if (phydev->interface == PHY_INTERFACE_MODE_RGMII_RXID)
+			rgmii_ctrl |= RGMII_CTRL_DLL_RXC;
 		if (phydev->interface == PHY_INTERFACE_MODE_RGMII)
-			rgmii_ctrl |= RGMII_CTRL_DLL_TXC | RGMII_CTRL_DLL_RXC;
-		rgmii_ctrl |= RGMII_CTRL_TIMING_SEL;
+			rgmii_ctrl |= (RGMII_CTRL_DLL_TXC | RGMII_CTRL_DLL_RXC);
+		//rgmii_ctrl |= RGMII_CTRL_TIMING_SEL;
+		rgmii_ctrl = (RGMII_CTRL_DLL_TXC | RGMII_CTRL_DLL_RXC);
+		//rgmii_ctrl = RGMII_CTRL_DLL_TXC;
+		//rgmii_ctrl = RGMII_CTRL_DLL_RXC;
 		b53_write8(dev, B53_CTRL_PAGE, off, rgmii_ctrl);
 
-		dev_info(ds->dev, "Configured port %d for %s\n", port,
-			 phy_modes(phydev->interface));
+		dev_info(ds->dev, "Configured port %d for %s (reg=0x%02x)\n", port,
+			 phy_modes(phydev->interface), rgmii_ctrl);
 	}
 
 	/* configure MII port if necessary */
@@ -2047,7 +2053,8 @@ static bool b53_can_enable_brcm_tags(struct dsa_switch *ds, int port,
 	case DSA_TAG_PROTO_BRCM_PREPEND:
 		dev_warn(ds->dev,
 			 "Port %d is stacked to Broadcom tag switch\n", port);
-		ret = false;
+		//ret = false;
+		ret = true;
 		break;
 	default:
 		ret = true;
@@ -2061,14 +2068,16 @@ enum dsa_tag_protocol b53_get_tag_protocol(struct dsa_switch *ds, int port,
 					   enum dsa_tag_protocol mprot)
 {
 	struct b53_device *dev = ds->priv;
-
+	printk("dsi-b53_get_tag_protocol: port=%d, mprot=%d\n", port, mprot);
 	if (!b53_can_enable_brcm_tags(ds, port, mprot)) {
+		printk("dsi-brcm_notags\n");
 		dev->tag_protocol = DSA_TAG_PROTO_NONE;
 		goto out;
 	}
 
 	/* Older models require a different 6 byte tag */
 	if (is5325(dev) || is5365(dev) || is63xx(dev)) {
+		printk("dsi-brcm_legacy\n");
 		dev->tag_protocol = DSA_TAG_PROTO_BRCM_LEGACY;
 		goto out;
 	}
@@ -2077,12 +2086,15 @@ enum dsa_tag_protocol b53_get_tag_protocol(struct dsa_switch *ds, int port,
 	 * which requires us to use the prepended Broadcom tag type
 	 */
 	if (dev->chip_id == BCM58XX_DEVICE_ID && port == B53_CPU_PORT) {
+		printk("dsi-brcm_prepend\n");
 		dev->tag_protocol = DSA_TAG_PROTO_BRCM_PREPEND;
 		goto out;
 	}
 
 	dev->tag_protocol = DSA_TAG_PROTO_BRCM;
+	printk("dsi-brcm_enable\n");
 out:
+	dev->tag_protocol = DSA_TAG_PROTO_NONE;
 	return dev->tag_protocol;
 }
 EXPORT_SYMBOL(b53_get_tag_protocol);
@@ -2579,7 +2591,7 @@ static const struct b53_chip_data b53_switch_chips[] = {
 		.vlans = 4096,
 		.enabled_ports = 0x12f,
 		.imp_port = 8,
-		.cpu_port = B53_CPU_PORT,
+		.cpu_port = B53_CPU_PORT_25, /* TODO: auto detect */
 		.vta_regs = B53_VTA_REGS,
 		.arl_bins = 4,
 		.arl_buckets = 1024,
@@ -2692,7 +2704,7 @@ struct b53_device *b53_switch_alloc(struct device *base,
 {
 	struct dsa_switch *ds;
 	struct b53_device *dev;
-
+	printk("dsi-b53_switch_alloc()\n");
 	ds = devm_kzalloc(base, sizeof(*ds), GFP_KERNEL);
 	if (!ds)
 		return NULL;
@@ -2796,7 +2808,7 @@ EXPORT_SYMBOL(b53_switch_detect);
 int b53_switch_register(struct b53_device *dev)
 {
 	int ret;
-
+	printk("dsi-b53_switch_register()\n");
 	if (dev->pdata) {
 		dev->chip_id = dev->pdata->chip_id;
 		dev->enabled_ports = dev->pdata->enabled_ports;
@@ -2804,8 +2816,10 @@ int b53_switch_register(struct b53_device *dev)
 
 	if (!dev->chip_id && b53_switch_detect(dev))
 		return -EINVAL;
+	printk("dsi-b53_switch_detect()\n");
 
 	ret = b53_switch_init(dev);
+	printk("dsi-b53_switch_init() ret=%d\n", ret);
 	if (ret)
 		return ret;
 

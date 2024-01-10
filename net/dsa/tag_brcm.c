@@ -5,6 +5,7 @@
  * Copyright (C) 2014 Broadcom Corporation
  */
 
+#include <linux/printk.h>
 #include <linux/dsa/brcm.h>
 #include <linux/etherdevice.h>
 #include <linux/if_vlan.h>
@@ -85,6 +86,7 @@ static struct sk_buff *brcm_tag_xmit_ll(struct sk_buff *skb,
 	u16 queue = skb_get_queue_mapping(skb);
 	u8 *brcm_tag;
 
+	//printk("brcm_tag_xmit_ll()\n");
 	/* The Ethernet switch we are interfaced with needs packets to be at
 	 * least 64 bytes (including FCS) otherwise they will be discarded when
 	 * they enter the switch port logic. When Broadcom tags are enabled, we
@@ -140,8 +142,9 @@ static struct sk_buff *brcm_tag_rcv_ll(struct sk_buff *skb,
 				       unsigned int offset)
 {
 	int source_port;
+	int i;
 	u8 *brcm_tag;
-
+	//printk("brcm_tag_rcv_ll()\n");
 	if (unlikely(!pskb_may_pull(skb, BRCM_TAG_LEN)))
 		return NULL;
 
@@ -150,6 +153,10 @@ static struct sk_buff *brcm_tag_rcv_ll(struct sk_buff *skb,
 	/* The opcode should never be different than 0b000 */
 	if (unlikely((brcm_tag[0] >> BRCM_OPCODE_SHIFT) & BRCM_OPCODE_MASK))
 		return NULL;
+
+	// for( i = 0; i < 16; i++)
+	// 	printk("%02x, ", brcm_tag[i]);
+	// printk("\n");
 
 	/* We should never see a reserved reason code without knowing how to
 	 * handle it

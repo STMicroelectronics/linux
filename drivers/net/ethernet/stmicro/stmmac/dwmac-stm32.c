@@ -409,6 +409,7 @@ static int stm32_dwmac_probe(struct platform_device *pdev)
 	const struct stm32_ops *data;
 	int ret;
 
+	printk("stm32_dwmac_probe()\n");
 	ret = stmmac_get_platform_resources(pdev, &stmmac_res);
 	if (ret)
 		return ret;
