@@ -127,15 +127,23 @@
 
 #define STM32_AUTOSUSPEND_DELAY -1
 
+#define MACRONIX_ID		0xc2
+
 struct stm32_ospi_flash {
 	struct spi_device *spi;
 	u32 presc;
-	u32 dlyb_cr;
+	u32 dlyb_cr_str;
+	u32 dlyb_cr_dtr;
 	u32 dcr_reg;
 	u64 str_idcode;
+	u64 dtr_idcode;
 	bool is_spi_nor;
-	bool is_calibrated;
+	bool octal_dtr;
+	bool is_str_calibration;
+	bool dtr_calibration_done_once;
 	bool sample_later;
+	bool str_sample_later;
+	bool dtr_mode;
 };
 
 struct stm32_ospi {
@@ -627,13 +635,15 @@ static int stm32_ospi_tx_dma(struct stm32_ospi *ospi,
 			     const struct spi_mem_op *op)
 {
 	struct dma_async_tx_descriptor *desc;
+	struct stm32_ospi_flash *flash = &ospi->flash[ospi->last_cs];
 	void __iomem *regs_base = ospi->regs_base;
 	enum dma_transfer_direction dma_dir;
 	struct dma_chan *dma_ch;
 	struct sg_table sgt;
 	dma_cookie_t cookie;
 	u32 cr, t_out;
-	int err;
+	int err, ret;
+	u8 dummy = 0xff;
 
 	if (op->data.dir == SPI_MEM_DATA_IN) {
 		dma_dir = DMA_DEV_TO_MEM;
@@ -641,6 +651,13 @@ static int stm32_ospi_tx_dma(struct stm32_ospi *ospi,
 	} else {
 		dma_dir = DMA_MEM_TO_DEV;
 		dma_ch = ospi->dma_chtx;
+	}
+
+	if (flash->octal_dtr && op->addr.val % 2) {
+		/* Read/write dummy byte */
+		ret = stm32_ospi_poll(ospi, &dummy, 1, op->data.dir == SPI_MEM_DATA_IN);
+		if (ret)
+			return ret;
 	}
 
 	/*
@@ -685,12 +702,23 @@ out:
 out_unmap:
 	spi_controller_dma_unmap_mem_op_data(ospi->ctrl, op, &sgt);
 
+	if (flash->octal_dtr && !err && (op->addr.val + op->data.nbytes) % 2) {
+		/* Read/write dummy byte */
+		ret = stm32_ospi_poll(ospi, &dummy, 1,
+				      op->data.dir == SPI_MEM_DATA_IN);
+		if (ret)
+			return ret;
+	}
+
 	return err;
 }
 
 static int stm32_ospi_xfer(struct stm32_ospi *ospi, const struct spi_mem_op *op)
 {
+	struct stm32_ospi_flash *flash = &ospi->flash[ospi->last_cs];
 	u8 *buf;
+	int ret;
+	u8 dummy = 0xff;
 
 	if (!op->data.nbytes)
 		return 0;
@@ -708,8 +736,28 @@ static int stm32_ospi_xfer(struct stm32_ospi *ospi, const struct spi_mem_op *op)
 	else
 		buf = (void *)op->data.buf.out;
 
-	return stm32_ospi_poll(ospi, buf, op->data.nbytes,
-			       op->data.dir == SPI_MEM_DATA_IN);
+	if (flash->octal_dtr && op->addr.val % 2) {
+		/* Read/write dummy byte */
+		ret = stm32_ospi_poll(ospi, &dummy, 1,
+				      op->data.dir == SPI_MEM_DATA_IN);
+		if (ret)
+			return ret;
+	}
+
+	ret = stm32_ospi_poll(ospi, buf, op->data.nbytes,
+			      op->data.dir == SPI_MEM_DATA_IN);
+	if (ret)
+		return ret;
+
+	if (flash->octal_dtr && (op->addr.val + op->data.nbytes) % 2) {
+		/* Read/write dummy byte */
+		ret = stm32_ospi_poll(ospi, &dummy, 1,
+				      op->data.dir == SPI_MEM_DATA_IN);
+		if (ret)
+			return ret;
+	}
+
+	return ret;
 }
 
 static int stm32_ospi_wait_poll_status(struct stm32_ospi *ospi,
@@ -766,12 +814,14 @@ static int stm32_ospi_send(struct spi_device *spi, const struct spi_mem_op *op)
 	struct stm32_ospi_flash *flash;
 	void __iomem *regs_base = ospi->regs_base;
 	u32 ccr, cr, tcr = 0;
+	u64 addr = op->addr.val;
+	unsigned int nbytes = op->data.nbytes;
 	int timeout, err = 0, err_poll_status = 0;
 	u8 cs = spi->chip_select[ffs(spi->cs_index_mask) - 1];
 
-	dev_dbg(ospi->dev, "cmd:%#x mode:%d.%d.%d.%d addr:%#llx len:%#x\n",
-		op->cmd.opcode, op->cmd.buswidth, op->addr.buswidth,
-		op->dummy.buswidth, op->data.buswidth,
+	dev_dbg(ospi->dev, "cmd:%#x dtr:%d mode:%d.%d.%d.%d addr:%#llx len:%#x\n",
+		op->cmd.opcode, op->cmd.dtr, op->cmd.buswidth,
+		op->addr.buswidth, op->dummy.buswidth, op->data.buswidth,
 		op->addr.val, op->data.nbytes);
 
 	cr = readl_relaxed(ospi->regs_base + OSPI_CR);
@@ -782,12 +832,47 @@ static int stm32_ospi_send(struct spi_device *spi, const struct spi_mem_op *op)
 	writel_relaxed(cr, regs_base + OSPI_CR);
 
 	flash = &ospi->flash[cs];
+	/*
+	 * When DTR mode and indirect read/write mode are set, there is a
+	 * constraint on the address and the number of bytes read or write
+	 * that should be even.
+	 */
+	if (flash->octal_dtr && ospi->fmode != CR_FMODE_MM && op->data.nbytes) {
+		if (op->addr.val % 2) {
+			addr--;
+			nbytes++;
+		}
+
+		if ((op->addr.val + op->data.nbytes) % 2)
+			nbytes++;
+	}
 	writel_relaxed(flash->dcr_reg, regs_base + OSPI_DCR1);
 
 	if (op->data.nbytes && ospi->fmode != CR_FMODE_MM)
-		writel_relaxed(op->data.nbytes - 1, regs_base + OSPI_DLR);
+		writel_relaxed(nbytes - 1, regs_base + OSPI_DLR);
 
 	ccr = FIELD_PREP(CCR_IMODE_MASK, stm32_ospi_get_mode(op->cmd.buswidth));
+	ccr |= FIELD_PREP(CCR_ISIZE_MASK, op->cmd.nbytes - 1);
+
+	if (op->cmd.dtr) {
+		ccr |= CCR_IDTR;
+		ccr |= CCR_DQSE;
+
+		if (FIELD_GET(DCR2_PRESC_MASK,
+			      readl_relaxed(regs_base + OSPI_DCR2)))
+			tcr |= TCR_DHQC;
+	}
+
+	if (op->addr.dtr)
+		ccr |= CCR_ADDTR;
+
+	if (op->data.dtr)
+		ccr |= CCR_DDTR;
+
+	if (op->data.swap16)
+		writel_relaxed(flash->dcr_reg |
+			       FIELD_PREP(DCR1_MTYP_MASK, DCR1_MTYP_MX_MODE),
+			       regs_base + OSPI_DCR1);
 
 	if (op->addr.nbytes) {
 		ccr |= FIELD_PREP(CCR_ADMODE_MASK,
@@ -800,6 +885,9 @@ static int stm32_ospi_send(struct spi_device *spi, const struct spi_mem_op *op)
 
 	if (op->dummy.buswidth && op->dummy.nbytes) {
 		u8 dcyc = op->dummy.nbytes * 8 / op->dummy.buswidth;
+
+		if (op->dummy.dtr)
+			dcyc /= 2;
 
 		tcr |= FIELD_PREP(TCR_DCYC_MASK, dcyc);
 	}
@@ -816,7 +904,7 @@ static int stm32_ospi_send(struct spi_device *spi, const struct spi_mem_op *op)
 	writel_relaxed(op->cmd.opcode, regs_base + OSPI_IR);
 
 	if (op->addr.nbytes && ospi->fmode != CR_FMODE_MM)
-		writel_relaxed(op->addr.val, regs_base + OSPI_AR);
+		writel_relaxed(addr, regs_base + OSPI_AR);
 
 	if (ospi->fmode == CR_FMODE_APM)
 		err_poll_status = stm32_ospi_wait_poll_status(ospi, op);
@@ -862,13 +950,50 @@ static int stm32_ospi_readid(struct stm32_ospi *ospi)
 	u8 nb_dummy_bytes = flash->is_spi_nor ? 0 : 1;
 
 	ospi->fmode = CR_FMODE_INDR;
+	if (flash->is_str_calibration) {
+		readid_op = (struct spi_mem_op)
+			    SPI_MEM_OP(SPI_MEM_OP_CMD(0x9f, 1),
+				       SPI_MEM_OP_NO_ADDR,
+				       SPI_MEM_OP_DUMMY(nb_dummy_bytes, 1),
+				       SPI_MEM_OP_DATA_IN(sizeof(*rx_buf),
+							  (u8 *)rx_buf, 1));
+	} else {
+		if (flash->octal_dtr && flash->is_spi_nor) {
+			u16 opcode;
+			u8 nb_addr_bytes;
+			u8 nb_dummy_bytes;
 
-	readid_op = (struct spi_mem_op)
-		    SPI_MEM_OP(SPI_MEM_OP_CMD(0x9f, 1),
-			       SPI_MEM_OP_NO_ADDR,
-			       SPI_MEM_OP_DUMMY(nb_dummy_bytes, 1),
-			       SPI_MEM_OP_DATA_IN(sizeof(*rx_buf),
-						  (u8 *)rx_buf, 1));
+			if ((flash->dtr_idcode & 0xff) == MACRONIX_ID) {
+				opcode = 0x9f60;
+				nb_addr_bytes = 4;
+				nb_dummy_bytes = 8;
+			} else {
+				/*
+				 * All memory providers are not currently
+				 * supported, feel free to add them
+				 */
+				return -EOPNOTSUPP;
+			}
+
+			readid_op = (struct spi_mem_op)
+				    SPI_MEM_OP(SPI_MEM_OP_CMD(opcode, 8),
+					       SPI_MEM_OP_ADDR(nb_addr_bytes, 0, 8),
+					       SPI_MEM_OP_DUMMY(nb_dummy_bytes, 8),
+					       SPI_MEM_OP_DATA_IN(sizeof(*rx_buf),
+								  (u8 *)rx_buf, 8));
+			readid_op.cmd.dtr = true;
+			readid_op.addr.dtr = true;
+			readid_op.dummy.dtr = true;
+			readid_op.data.dtr = true;
+			readid_op.cmd.nbytes = 2;
+		} else {
+			/*
+			 * Only OCTAL DTR calibration on SPI NOR devices
+			 * is currently supported
+			 */
+			return -EOPNOTSUPP;
+		}
+	}
 
 	if (cs_gpiod)
 		gpiod_set_value_cansleep(cs_gpiod, true);
@@ -883,6 +1008,7 @@ static int stm32_ospi_readid(struct stm32_ospi *ospi)
 
 	dev_dbg(ospi->dev, "Flash ID 0x%08llx\n", *rx_buf);
 
+	if (flash->is_str_calibration) {
 	/*
 	 * On stm32_ospi_readid() first execution, save the golden
 	 * read id
@@ -890,8 +1016,32 @@ static int stm32_ospi_readid(struct stm32_ospi *ospi)
 	if (!flash->str_idcode)
 		flash->str_idcode = *rx_buf;
 
+			if (flash->is_spi_nor) {
+				/* Build DTR id code */
+				if ((*rx_buf & 0xff) == MACRONIX_ID) {
+					/*
+					 * Retrieve odd array and re-sort id
+					 * because of read id format will be
+					 * A-A-B-B-C-C after enter into octal
+					 * dtr mode for Macronix flashes.
+					 */
+					flash->dtr_idcode = *rx_buf & 0xff;
+					flash->dtr_idcode |= (*rx_buf & 0xff) << 8;
+					flash->dtr_idcode |= (*rx_buf & 0xff00) << 8;
+					flash->dtr_idcode |= (*rx_buf & 0xff00) << 16;
+					flash->dtr_idcode |= (*rx_buf & 0xff0000) << 16;
+					flash->dtr_idcode |= (*rx_buf & 0xff0000) << 24;
+					flash->dtr_idcode |= (*rx_buf & 0xff000000) << 24;
+					flash->dtr_idcode |= (*rx_buf & 0xff000000) << 32;
+				} else {
+					flash->dtr_idcode = *rx_buf;
+				}
+			}
 	if (*rx_buf == flash->str_idcode)
 		return 0;
+	} else if (*rx_buf == flash->dtr_idcode) {
+		return 0;
+	}
 
 	return -EIO;
 }
@@ -945,7 +1095,7 @@ static int stm32_ospi_str_calibration(struct stm32_ospi *ospi)
 		 * Save flash delay block configuration, will be restored
 		 * each time this flash is addressed
 		 */
-		stm32_ospi_dlyb_get_cr(ospi, &flash->dlyb_cr);
+		stm32_ospi_dlyb_get_cr(ospi, &flash->dlyb_cr_str);
 
 	stm32_ospi_dlyb_stop(ospi);
 	ret = stm32_ospi_dlyb_init(ospi, false, 0);
@@ -963,16 +1113,64 @@ static int stm32_ospi_str_calibration(struct stm32_ospi *ospi)
 		flash->sample_later = false;
 		stm32_ospi_dlyb_stop(ospi);
 
-		ret = stm32_ospi_dlyb_set_cr(ospi, flash->dlyb_cr);
+		ret = stm32_ospi_dlyb_set_cr(ospi, flash->dlyb_cr_str);
 		if (ret)
 			return ret;
 	} else {
-		stm32_ospi_dlyb_get_cr(ospi, &flash->dlyb_cr);
+		stm32_ospi_dlyb_get_cr(ospi, &flash->dlyb_cr_str);
 	}
 
-	flash->is_calibrated = true;
+	flash->str_sample_later = flash->sample_later;
 
 	return 0;
+}
+
+static int stm32_ospi_dtr_calibration(struct stm32_ospi *ospi)
+{
+	struct stm32_ospi_flash *flash = &ospi->flash[ospi->last_cs];
+	void __iomem *regs_base = ospi->regs_base;
+	u32 prescaler, bus_freq;
+	u16 period_ps = 0;
+	u8 window_len = 0;
+	int ret;
+	bool bypass_mode = false;
+
+	flash->dcr_reg &= ~DCR1_DLYBYP;
+	writel_relaxed(flash->dcr_reg, regs_base + OSPI_DCR1);
+
+	prescaler = FIELD_GET(DCR2_PRESC_MASK,
+			      readl_relaxed(regs_base + OSPI_DCR2));
+	bus_freq = DIV_ROUND_UP(ospi->clk_rate, prescaler + 1);
+
+	if (bus_freq <= STM32_DLYB_FREQ_THRESHOLD) {
+		bypass_mode = true;
+		period_ps = NSEC_PER_SEC / (bus_freq / 1000);
+	}
+
+	ret = stm32_ospi_dlyb_init(ospi, bypass_mode, period_ps);
+	if (ret) {
+		dev_err(ospi->dev, "Can't enable delay block\n");
+		return 0;
+	}
+
+	if (bypass_mode || prescaler)
+		/* Perform only RX TAP selection */
+		ret = stm32_ospi_dlyb_find_tap(ospi, true, &window_len);
+	else
+		/* Perform RX/TX TAP selection */
+		ret = stm32_ospi_dlyb_find_tap(ospi, false, &window_len);
+
+	if (ret) {
+		dev_err(ospi->dev, "Calibration failed\n");
+		if (!bypass_mode)
+			/* Stop delay block when configured in lock mode */
+			stm32_ospi_dlyb_stop(ospi);
+	} else {
+		stm32_ospi_dlyb_get_cr(ospi, &flash->dlyb_cr_dtr);
+		flash->dtr_calibration_done_once = true;
+	}
+
+	return ret;
 }
 
 static int stm32_ospi_prepare_to_send(struct spi_device *spi,
@@ -982,6 +1180,7 @@ static int stm32_ospi_prepare_to_send(struct spi_device *spi,
 	struct stm32_ospi_flash *flash;
 	int ret = 0;
 	u8 cs = spi->chip_select[ffs(spi->cs_index_mask) - 1];
+	bool set_dlyb = false;
 
 	flash = &ospi->flash[cs];
 
@@ -990,11 +1189,45 @@ static int stm32_ospi_prepare_to_send(struct spi_device *spi,
 
 		stm32_ospi_dlyb_stop(ospi);
 		stm32_ospi_set_prescaler(ospi, flash->presc);
+		set_dlyb = true;
+	};
 
-		if (flash->is_calibrated) {
-			ret = stm32_ospi_dlyb_set_cr(ospi, flash->dlyb_cr);
-			if (ret)
-				return ret;
+	if (op->cmd.dtr && !flash->dtr_calibration_done_once) {
+		stm32_ospi_dlyb_stop(ospi);
+		flash->sample_later = false;
+		flash->octal_dtr = (op->cmd.nbytes == 2);
+
+		ret = stm32_ospi_dtr_calibration(ospi);
+		if (ret)
+			return ret;
+
+		flash->dtr_mode = true;
+	}
+
+	/*
+	 * if flash is switched from DTR to STR or from STR to DTR
+	 * restore the correct calibration value
+	 */
+	if ((flash->dtr_mode && !op->cmd.dtr) ||
+	    (!flash->dtr_mode && op->cmd.dtr)) {
+		flash->dtr_mode = !flash->dtr_mode;
+		stm32_ospi_dlyb_stop(ospi);
+		set_dlyb = true;
+	}
+
+	/*
+	 * restore DLYB CR register depending on simple or
+	 * double transfer rate
+	 */
+	if (set_dlyb) {
+		if (op->cmd.dtr) {
+			ret = stm32_ospi_dlyb_set_cr(ospi, flash->dlyb_cr_dtr);
+			flash->sample_later = false;
+			flash->octal_dtr = (op->cmd.nbytes == 2);
+		} else {
+			ret = stm32_ospi_dlyb_set_cr(ospi, flash->dlyb_cr_str);
+			flash->sample_later = flash->str_sample_later;
+			flash->octal_dtr = false;
 		}
 	}
 
@@ -1241,6 +1474,7 @@ static int stm32_ospi_setup(struct spi_device *spi)
 	stm32_ospi_set_prescaler(ospi, flash->presc);
 
 	ospi->last_cs = cs;
+	flash->is_str_calibration = true;
 
 	ret = stm32_ospi_str_calibration(ospi);
 	if (ret) {
@@ -1259,10 +1493,55 @@ static int stm32_ospi_setup(struct spi_device *spi)
 		writel_relaxed(flash->dcr_reg, regs_base + OSPI_DCR1);
 	}
 
+	flash->is_str_calibration = false;
 	mutex_unlock(&ospi->lock);
 	pm_runtime_put_autosuspend(ospi->dev);
 
 	return 0;
+}
+
+static bool stm32_ospi_supports_mem_op(struct spi_mem *mem,
+				       const struct spi_mem_op *op)
+{
+	bool all_true, all_false;
+
+	/*
+	 * Op->dummy.dtr is required for converting nbytes into ncycles.
+	 * Also, don't check the dtr field of the op phase having zero nbytes.
+	 */
+	all_true = op->cmd.dtr &&
+		   (!op->addr.nbytes || op->addr.dtr) &&
+		   (!op->dummy.nbytes || op->dummy.dtr) &&
+		   (!op->data.nbytes || op->data.dtr);
+
+	all_false = !op->cmd.dtr && !op->addr.dtr && !op->dummy.dtr &&
+		    !op->data.dtr;
+
+	if (all_true) {
+		/* Right now we only support 8-8-8 DTR mode. */
+		if (op->cmd.nbytes && op->cmd.buswidth != 8)
+			return false;
+		if (op->addr.nbytes && op->addr.buswidth != 8)
+			return false;
+		if (op->data.nbytes && op->data.buswidth != 8)
+			return false;
+	} else if (!all_false) {
+		/* Mixed DTR modes are not supported. */
+		return false;
+	}
+
+	if (op->data.buswidth > 8 || op->addr.buswidth > 8 ||
+	    op->dummy.buswidth > 8 || op->cmd.buswidth > 8)
+		return false;
+
+	if (op->cmd.nbytes > 4 || op->addr.nbytes > 4)
+		return false;
+
+	if ((!op->dummy.dtr && op->dummy.nbytes > 32) ||
+	    (op->dummy.dtr && op->dummy.nbytes > 64))
+		return false;
+
+	return spi_mem_default_supports_op(mem, op);
 }
 
 /*
@@ -1274,6 +1553,12 @@ static const struct spi_controller_mem_ops stm32_ospi_mem_ops = {
 	.dirmap_create	= stm32_ospi_dirmap_create,
 	.dirmap_read	= stm32_ospi_dirmap_read,
 	.poll_status	= stm32_ospi_poll_status,
+	.supports_op = stm32_ospi_supports_mem_op,
+};
+
+static const struct spi_controller_mem_caps stm32_ospi_mem_caps = {
+	.dtr = true,
+	.swap16 = true,
 };
 
 static int stm32_ospi_get_resources(struct platform_device *pdev)
@@ -1440,6 +1725,7 @@ static int stm32_ospi_probe(struct platform_device *pdev)
 	ctrl->setup = stm32_ospi_setup;
 	ctrl->bus_num = -1;
 	ctrl->mem_ops = &stm32_ospi_mem_ops;
+	ctrl->mem_caps = &stm32_ospi_mem_caps;
 	ctrl->use_gpio_descriptors = true;
 	ctrl->transfer_one_message = stm32_ospi_transfer_one_message;
 	ctrl->num_chipselect = STM32_OSPI_MAX_NORCHIP;
