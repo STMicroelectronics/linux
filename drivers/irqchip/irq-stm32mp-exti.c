@@ -86,6 +86,7 @@ struct stm32mp_exti_host_data {
 	bool dt_has_irqs_desc;
 	/* using old DT; keep backward compatibility */
 	bool has_syscon;
+	struct raw_spinlock gpio_mux_lock;
 	DECLARE_BITMAP(gpio_mux_used, STM32MP_GPIO_IRQ_LINES);
 	u8 gpio_mux_pos[STM32MP_GPIO_IRQ_LINES];
 };
@@ -618,13 +619,13 @@ static int stm32mp_exti_gpio_bank_alloc(struct irq_domain *dm, struct irq_fwspec
 		return -EBUSY;
 	}
 
-	raw_spin_lock(&host_data->chips_data[0].rlock);
+	raw_spin_lock(&host_data->gpio_mux_lock);
 
 	if (hwlock) {
 		ret = hwspin_lock_timeout_in_atomic(hwlock, HWSPNLCK_TIMEOUT);
 		if (ret) {
 			pr_err("%s can't get hwspinlock (%d)\n", __func__, ret);
-			raw_spin_unlock(&host_data->chips_data[0].rlock);
+			raw_spin_unlock(&host_data->gpio_mux_lock);
 			return ret;
 		}
 	}
@@ -637,7 +638,7 @@ static int stm32mp_exti_gpio_bank_alloc(struct irq_domain *dm, struct irq_fwspec
 	if (hwlock)
 		hwspin_unlock_in_atomic(hwlock);
 
-	raw_spin_unlock(&host_data->chips_data[0].rlock);
+	raw_spin_unlock(&host_data->gpio_mux_lock);
 
 	set_bit(hwirq, host_data->gpio_mux_used);
 	host_data->gpio_mux_pos[hwirq] = gpio_bank;
@@ -830,6 +831,7 @@ static int stm32mp_exti_probe(struct platform_device *pdev)
 
 	dev_set_drvdata(dev, host_data);
 	host_data->dev = dev;
+	raw_spin_lock_init(&host_data->gpio_mux_lock);
 
 	if (of_device_is_compatible(np, "syscon"))
 		host_data->has_syscon = true;
