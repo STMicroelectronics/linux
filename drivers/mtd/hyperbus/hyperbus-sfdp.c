@@ -64,8 +64,7 @@ static int __xipram hyperbus_sfdp_present(struct map_info *map, __u32 base,
 	return 1; /* "SFDP" found */
 }
 
-static int __xipram hyperbus_sfdp_mode_on(u32 base, struct map_info *map,
-					  struct cfi_private *cfi)
+int __xipram hyperbus_sfdp_mode_on(u32 base, struct map_info *map, struct cfi_private *cfi)
 {
 	hyperbus_write(HYPERBUS_CMD_ASOEXT, 0, map, cfi);
 	hyperbus_write(HYPERBUS_CMD_UNLOCK1, HYPERBUS_ADDR_UNLOCK1, map, cfi);
@@ -73,12 +72,13 @@ static int __xipram hyperbus_sfdp_mode_on(u32 base, struct map_info *map,
 	hyperbus_write(HYPERBUS_CMD_RDSFDP, HYPERBUS_ADDR_UNLOCK1, map, cfi);
 	return hyperbus_sfdp_present(map, 0, cfi);
 }
+EXPORT_SYMBOL_GPL(hyperbus_sfdp_mode_on);
 
-static void __xipram hyperbus_sfdp_mode_off(u32 base, struct map_info *map,
-					    struct cfi_private *cfi)
+void __xipram hyperbus_sfdp_mode_off(u32 base, struct map_info *map, struct cfi_private *cfi)
 {
 	hyperbus_write(HYPERBUS_CMD_ASOEXT, 0, map, cfi);
 }
+EXPORT_SYMBOL_GPL(hyperbus_sfdp_mode_off);
 
 static u16 __xipram hyperbus_s26hx_rdvcr1(struct map_info *map,
 					  struct cfi_private *cfi)
