@@ -102,7 +102,8 @@ static int __xipram hyperbus_s26hx_chip_setup(struct map_info *map,
 					      struct cfi_private *cfi)
 {
 	u16 mfr_id, dev_id1, dev_id2, cfr1v, cfr2v;
-	u8 nregions, nbtm4ks, ntop4ks, n256ks;
+	u8 nregions, nbtm4ks, ntop4ks;
+	u16 n256ks;
 	u32 *erase;
 
 	/* Read manufacturer and Device ID */
