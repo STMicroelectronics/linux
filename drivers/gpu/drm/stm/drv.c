@@ -73,14 +73,7 @@ static const struct drm_driver drv_driver = {
 static int drv_load(struct drm_device *ddev)
 {
 	struct platform_device *pdev = to_platform_device(ddev->dev);
-	struct ltdc_device *ldev;
 	int ret;
-
-	ldev = drmm_kzalloc(ddev, sizeof(*ldev), GFP_KERNEL);
-	if (!ldev)
-		return -ENOMEM;
-
-	ddev->dev_private = (void *)ldev;
 
 	ret = drmm_mode_config_init(ddev);
 	if (ret)
@@ -157,9 +150,10 @@ static __maybe_unused int drv_resume(struct device *dev)
 static __maybe_unused int drv_runtime_suspend(struct device *dev)
 {
 	struct drm_device *ddev = dev_get_drvdata(dev);
+	struct ltdc_device *ldev = ddev->dev_private;
 
 	drm_dbg_driver(ddev, "\n");
-	ltdc_suspend(ddev);
+	ltdc_suspend(ldev);
 
 	return 0;
 }
@@ -167,9 +161,10 @@ static __maybe_unused int drv_runtime_suspend(struct device *dev)
 static __maybe_unused int drv_runtime_resume(struct device *dev)
 {
 	struct drm_device *ddev = dev_get_drvdata(dev);
+	struct ltdc_device *ldev = ddev->dev_private;
 
 	drm_dbg_driver(ddev, "\n");
-	return ltdc_resume(ddev);
+	return ltdc_resume(ldev);
 }
 
 static const struct dev_pm_ops drv_pm_ops = {
@@ -182,17 +177,39 @@ static int stm_drm_platform_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 	struct drm_device *ddev;
+	struct ltdc_device *ldev;
 	int ret;
+
+	ldev = devm_kzalloc(dev, sizeof(*ldev), GFP_KERNEL);
+	if (!ldev)
+		return -ENOMEM;
+
+	ret = ltdc_parse_device_tree(dev);
+	if (ret)
+		return ret;
+
+	ret = ltdc_get_clk(dev, ldev);
+	if (ret)
+		return ret;
+
+	/* Resume device to enable the clocks */
+	ret = ltdc_resume(ldev);
+	if (ret)
+		return ret;
 
 	ret = aperture_remove_all_conflicting_devices(drv_driver.name);
 	if (ret)
-		return ret;
+		goto err_suspend;
 
 	dma_set_coherent_mask(dev, DMA_BIT_MASK(32));
 
 	ddev = drm_dev_alloc(&drv_driver, dev);
-	if (IS_ERR(ddev))
-		return PTR_ERR(ddev);
+	if (IS_ERR(ddev)) {
+		ret =  PTR_ERR(ddev);
+		goto err_suspend;
+	}
+
+	ddev->dev_private = (void *)ldev;
 
 	ret = drv_load(ddev);
 	if (ret)
@@ -210,6 +227,8 @@ err_unload:
 	drv_unload(ddev);
 err_put:
 	drm_dev_put(ddev);
+err_suspend:
+	ltdc_suspend(ldev);
 
 	return ret;
 }

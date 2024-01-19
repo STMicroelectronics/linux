@@ -1877,11 +1877,8 @@ static int ltdc_get_caps(struct drm_device *ddev)
 	return 0;
 }
 
-void ltdc_suspend(struct drm_device *ddev)
+void ltdc_suspend(struct ltdc_device *ldev)
 {
-	struct ltdc_device *ldev = ddev->dev_private;
-
-	drm_dbg_driver(ddev, "\n");
 	clk_disable_unprepare(ldev->pixel_clk);
 	if (ldev->bus_clk)
 		clk_disable_unprepare(ldev->bus_clk);
@@ -1889,32 +1886,22 @@ void ltdc_suspend(struct drm_device *ddev)
 		clk_disable_unprepare(ldev->lvds_clk);
 }
 
-int ltdc_resume(struct drm_device *ddev)
+int ltdc_resume(struct ltdc_device *ldev)
 {
-	struct ltdc_device *ldev = ddev->dev_private;
 	int ret;
 
-	drm_dbg_driver(ddev, "\n");
-
 	ret = clk_prepare_enable(ldev->pixel_clk);
-	if (ret) {
-		drm_err(ddev, "failed to enable pixel clock (%d)\n", ret);
+	if (ret)
 		return ret;
-	}
 
 	if (ldev->bus_clk) {
-		ret = clk_prepare_enable(ldev->bus_clk);
-		if (ret) {
-			drm_err(ddev, "failed to enable bus clock (%d)\n", ret);
-			return ret;
-		}
+		ret =  clk_prepare_enable(ldev->bus_clk);
+		if (ret)
+			return -ENODEV;
 	}
 
-	if (ldev->lvds_clk) {
+	if (ldev->lvds_clk)
 		ret = clk_prepare_enable(ldev->lvds_clk);
-		if (ret)
-			drm_err(ddev, "failed to prepare lvds clock\n");
-	}
 
 	return ret;
 }
@@ -1939,31 +1926,6 @@ int ltdc_load(struct drm_device *ddev)
 	if (!nb_endpoints)
 		return -ENODEV;
 
-	ldev->pixel_clk = devm_clk_get(dev, "lcd");
-	if (IS_ERR(ldev->pixel_clk)) {
-		if (PTR_ERR(ldev->pixel_clk) != -EPROBE_DEFER)
-			drm_err(ddev, "Unable to get lcd clock\n");
-		return PTR_ERR(ldev->pixel_clk);
-	}
-
-	if (clk_prepare_enable(ldev->pixel_clk)) {
-		drm_err(ddev, "Unable to prepare pixel clock\n");
-		return -ENODEV;
-	}
-
-	if (of_device_is_compatible(np, "st,stm32mp251-ltdc") ||
-	    of_device_is_compatible(np, "st,stm32mp255-ltdc")) {
-		ldev->bus_clk = devm_clk_get(dev, "bus");
-		if (IS_ERR(ldev->bus_clk))
-			return dev_err_probe(dev, PTR_ERR(ldev->bus_clk),
-					     "Unable to get bus clock\n");
-
-		ret = clk_prepare_enable(ldev->bus_clk);
-		if (ret) {
-			drm_err(ddev, "Unable to prepare bus clock\n");
-			return ret;
-		}
-	}
 
 	/* Get endpoints if any */
 	for (i = 0; i < nb_endpoints; i++) {
@@ -1997,10 +1959,6 @@ int ltdc_load(struct drm_device *ddev)
 			}
 		}
 	}
-
-	ldev->lvds_clk = devm_clk_get(dev, "lvds");
-	if (IS_ERR(ldev->lvds_clk))
-		ldev->lvds_clk = NULL;
 
 	rstc = devm_reset_control_get_exclusive(dev, NULL);
 
@@ -2079,22 +2037,12 @@ int ltdc_load(struct drm_device *ddev)
 		goto err;
 	}
 
-	clk_disable_unprepare(ldev->pixel_clk);
-
-	if (ldev->bus_clk)
-		clk_disable_unprepare(ldev->bus_clk);
-
 	pinctrl_pm_select_sleep_state(ddev->dev);
 
 	pm_runtime_enable(ddev->dev);
 
 	return 0;
 err:
-	clk_disable_unprepare(ldev->pixel_clk);
-
-	if (ldev->bus_clk)
-		clk_disable_unprepare(ldev->bus_clk);
-
 	return ret;
 }
 
@@ -2103,6 +2051,79 @@ void ltdc_unload(struct drm_device *ddev)
 	drm_dbg_driver(ddev, "\n");
 
 	pm_runtime_disable(ddev->dev);
+}
+
+int ltdc_parse_device_tree(struct device *dev)
+{
+	struct device_node *np = dev->of_node;
+	struct drm_bridge *bridge;
+	struct drm_panel *panel;
+	int i, nb_endpoints;
+	int ret = -ENODEV;
+
+	/* Get number of endpoints */
+	nb_endpoints = of_graph_get_endpoint_count(np);
+	if (!nb_endpoints)
+		return -ENODEV;
+
+	/* Get endpoints if any */
+	for (i = 0; i < nb_endpoints; i++) {
+		ret = drm_of_find_panel_or_bridge(np, 0, i, &panel, &bridge);
+
+		/*
+		 * If at least one endpoint is -ENODEV, continue probing,
+		 * else if at least one endpoint returned an error
+		 * (ie -EPROBE_DEFER) then stop probing.
+		 */
+		if (ret == -ENODEV)
+			continue;
+		else if (ret)
+			return ret;
+	}
+
+	return 0;
+}
+
+int ltdc_get_clk(struct device *dev, struct ltdc_device *ldev)
+{
+	struct device_node *node;
+
+	ldev->pixel_clk = devm_clk_get(dev, "lcd");
+	if (IS_ERR(ldev->pixel_clk)) {
+		if (PTR_ERR(ldev->pixel_clk) != -EPROBE_DEFER)
+			dev_err_probe(dev, PTR_ERR(ldev->pixel_clk),
+				      "Unable to get lcd clock\n");
+		return PTR_ERR(ldev->pixel_clk);
+	}
+
+	if (of_device_is_compatible(dev->of_node, "st,stm32mp251-ltdc") ||
+	    of_device_is_compatible(dev->of_node, "st,stm32mp255-ltdc")) {
+		ldev->bus_clk = devm_clk_get(dev, "bus");
+		if (IS_ERR(ldev->bus_clk))
+			return dev_err_probe(dev, PTR_ERR(ldev->bus_clk),
+					     "Unable to get bus clock\n");
+	}
+
+	if (of_device_is_compatible(dev->of_node, "st,stm32mp255-ltdc")) {
+		/*
+		 * The lvds output clock is not available if the lvds is not probed.
+		 * This is a usual case, it is necessary to check the node to avoid
+		 * looking for a clock that will never be available.
+		 */
+		node = of_find_compatible_node(NULL, NULL, "st,stm32mp25-lvds");
+		if (!IS_ERR(node)) {
+			if (of_device_is_available(node)) {
+				ldev->lvds_clk = devm_clk_get(dev, "lvds");
+				if (IS_ERR(ldev->lvds_clk)) {
+					return dev_err_probe(dev, PTR_ERR(ldev->lvds_clk),
+							     "Unable to get lvds clock\n");
+				}
+			}
+			of_node_put(node);
+		}
+	}
+
+	return 0;
 }
 
 MODULE_AUTHOR("Philippe Cornu <philippe.cornu@st.com>");

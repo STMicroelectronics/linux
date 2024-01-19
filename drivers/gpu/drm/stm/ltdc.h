@@ -63,9 +63,11 @@ struct ltdc_device {
 	bool crc_active;
 };
 
+int ltdc_parse_device_tree(struct device *dev);
+int ltdc_get_clk(struct device *dev, struct ltdc_device *ldev);
 int ltdc_load(struct drm_device *ddev);
 void ltdc_unload(struct drm_device *ddev);
-void ltdc_suspend(struct drm_device *ddev);
-int ltdc_resume(struct drm_device *ddev);
+void ltdc_suspend(struct ltdc_device *ldev);
+int ltdc_resume(struct ltdc_device *ldev);
 
 #endif
