@@ -110,6 +110,7 @@ static void bcm_sf2_imp_setup(struct dsa_switch *ds, int port)
 	struct bcm_sf2_priv *priv = bcm_sf2_to_priv(ds);
 	unsigned int i;
 	u32 reg, offset;
+	printk("dsi-bcm_sf2_imp_setup(): port=%d\n", port);
 
 	/* Enable the port memories */
 	reg = core_readl(priv, CORE_MEM_PSM_VDD_CTRL);

@@ -912,6 +912,13 @@ struct dsa_switch_ops {
 	 */
 	 int	(*port_change_pvlan)(struct dsa_switch *ds, int port, u16 mask);
 	 int	(*port_get_pvlan)(struct dsa_switch *ds, int port, u16 *mask);
+
+	/*
+	 * Switch low level register read/write
+	 */
+	 int 	(*switch_setup_get_reg)(struct dsa_switch *ds, u8 page, u8 reg, u8 size);
+	 int	(*switch_get_reg)(struct dsa_switch *ds, u64 *value);
+	 int	(*switch_set_reg)(struct dsa_switch *ds, u8 page, u8 reg, u8 size, u64 value);
 };
 
 #define DSA_DEVLINK_PARAM_DRIVER(_id, _name, _type, _cmodes)		\

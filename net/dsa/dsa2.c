@@ -990,11 +990,13 @@ static int dsa_tree_setup_switches(struct dsa_switch_tree *dst)
 	}
 
 	list_for_each_entry(dp, &dst->ports, list) {
+		printk("dsi-dsa_tree_setup_ports dp->index=%d\n", dp->index);
 		err = dsa_port_setup(dp);
 		if (err) {
 			err = dsa_port_reinit_as_unused(dp);
 			if (err)
 				goto teardown;
+			printk("dsi-dsa_port_reinit_as_unused dp->index=%d\n", dp->index);
 		}
 	}
 
@@ -1015,6 +1017,7 @@ static int dsa_tree_setup_master(struct dsa_switch_tree *dst)
 
 	list_for_each_entry(dp, &dst->ports, list) {
 		if (dsa_port_is_cpu(dp)) {
+			printk("dsi-dsa_tree_setup_master (is cpu) dp->index=%d\n", dp->index);
 			err = dsa_master_setup(dp->master, dp);
 			if (err)
 				return err;
@@ -1264,6 +1267,7 @@ static int dsa_port_parse_cpu(struct dsa_port *dp, struct net_device *master,
 	struct dsa_switch_tree *dst = ds->dst;
 	enum dsa_tag_protocol default_proto;
 
+	printk("dsi-dsa_port_parse_cpu: index=%d\n", dp->index);
 	/* Find out which protocol the switch would prefer. */
 	default_proto = dsa_get_tag_protocol(dp, master);
 	if (dst->default_proto) {
@@ -1341,14 +1345,16 @@ static int dsa_port_parse_cpu(struct dsa_port *dp, struct net_device *master,
 	return 0;
 }
 
+
 static int dsa_port_parse_of(struct dsa_port *dp, struct device_node *dn)
 {
 	struct device_node *ethernet = of_parse_phandle(dn, "ethernet", 0);
 	const char *name = of_get_property(dn, "label", NULL);
 	bool link = of_property_read_bool(dn, "link");
+	bool port_imp = of_property_read_bool(dn, "port-imp");
 
 	dp->dn = dn;
-
+	printk("dsi-dsa_port_parse_of: index=%d, ethernet=%p, name=%s, link=%d\n", dp->index, ethernet, name, link);
 	if (ethernet) {
 		struct net_device *master;
 		const char *user_protocol;
@@ -1367,6 +1373,7 @@ static int dsa_port_parse_of(struct dsa_port *dp, struct device_node *dn)
 
 	return dsa_port_parse_user(dp, name);
 }
+
 
 static int dsa_switch_parse_ports_of(struct dsa_switch *ds,
 				     struct device_node *dn)

@@ -122,6 +122,11 @@ struct b53_device {
 	u16 num_arl_buckets;
 	enum dsa_tag_protocol tag_protocol;
 
+	/* raw register read data*/
+	u8 page;
+	u8 reg;
+	u8 size;
+
 	/* used ports mask */
 	u16 enabled_ports;
 	unsigned int imp_port;

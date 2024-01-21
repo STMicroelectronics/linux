@@ -271,7 +271,7 @@ static void dsa_master_set_promiscuity(struct net_device *dev, int inc)
 	rtnl_unlock();
 }
 
-static ssize_t tagging_show(struct device *d, struct device_attribute *attr,
+static ssize_t tagging_cpu_show(struct device *d, struct device_attribute *attr,
 			    char *buf)
 {
 	struct net_device *dev = to_net_dev(d);
@@ -281,7 +281,7 @@ static ssize_t tagging_show(struct device *d, struct device_attribute *attr,
 		       dsa_tag_protocol_to_str(cpu_dp->tag_ops));
 }
 
-static ssize_t tagging_store(struct device *d, struct device_attribute *attr,
+static ssize_t tagging_cpu_store(struct device *d, struct device_attribute *attr,
 			     const char *buf, size_t count)
 {
 	const struct dsa_device_ops *new_tag_ops, *old_tag_ops;
@@ -317,7 +317,55 @@ out:
 	dsa_tag_driver_put(old_tag_ops);
 	return count;
 }
-static DEVICE_ATTR_RW(tagging);
+static DEVICE_ATTR_RW(tagging_cpu);
+
+static ssize_t tagging_imp_show(struct device *d, struct device_attribute *attr,
+			    char *buf)
+{
+	struct net_device *dev = to_net_dev(d);
+	struct dsa_port *cpu_dp = dev->dsa_ptr;
+
+	return sprintf(buf, "%s\n",
+		       dsa_tag_protocol_to_str(cpu_dp->tag_ops));
+}
+
+static ssize_t tagging_imp_store(struct device *d, struct device_attribute *attr,
+			     const char *buf, size_t count)
+{
+	const struct dsa_device_ops *new_tag_ops, *old_tag_ops;
+	struct net_device *dev = to_net_dev(d);
+	struct dsa_port *cpu_dp = dev->dsa_ptr;
+	int err;
+
+	old_tag_ops = cpu_dp->tag_ops;
+	new_tag_ops = dsa_find_tagger_by_name(buf);
+	/* Bad tagger name, or module is not loaded? */
+	if (IS_ERR(new_tag_ops))
+		return PTR_ERR(new_tag_ops);
+
+	if (new_tag_ops == old_tag_ops)
+		/* Drop the temporarily held duplicate reference, since
+		 * the DSA switch tree uses this tagger.
+		 */
+		goto out;
+
+	err = dsa_tree_change_tag_proto(cpu_dp->ds->dst, dev, new_tag_ops,
+					old_tag_ops);
+	if (err) {
+		/* On failure the old tagger is restored, so we don't need the
+		 * driver for the new one.
+		 */
+		dsa_tag_driver_put(new_tag_ops);
+		return err;
+	}
+
+	/* On success we no longer need the module for the old tagging protocol
+	 */
+out:
+	dsa_tag_driver_put(old_tag_ops);
+	return count;
+}
+static DEVICE_ATTR_RW(tagging_imp);
 
 static ssize_t pvlan_show(struct device *d, struct device_attribute *attr,
 			  char *buf)
@@ -326,7 +374,7 @@ static ssize_t pvlan_show(struct device *d, struct device_attribute *attr,
 	struct dsa_port *cpu_dp = dev->dsa_ptr;
 	struct dsa_switch_tree *dst = cpu_dp->ds->dst;
 	struct dsa_port *dp;
-	int i, len = 0;
+	int len = 0;
 	u16 value;
 
 	list_for_each_entry(dp, &dst->ports, list) {
@@ -334,8 +382,8 @@ static ssize_t pvlan_show(struct device *d, struct device_attribute *attr,
 			if(!dp->ds->ops->port_change_pvlan)
 				return -EOPNOTSUPP;
 			dp->ds->ops->port_get_pvlan(dp->ds, dp->index, &value);
-			len += sprintf(buf + len, "%d:%02hx ", dp->index,  value);
-			printk("dsi-pvlan_show %d:%02hx\n", dp->index,  dp->index);
+			len += sprintf(buf + len, "%d:%03hx ", dp->index,  value);
+			printk("dsi-pvlan_show %d:%03hx\n", dp->index,  dp->index);
 		}
 	}
 
@@ -378,9 +426,103 @@ static ssize_t pvlan_store(struct device *d, struct device_attribute *attr,
 	
 static DEVICE_ATTR_RW(pvlan);
 
+static ssize_t rdreg_show(struct device *d, struct device_attribute *attr,
+			char *buf)
+{
+	struct net_device *dev = to_net_dev(d);
+	struct dsa_port *cpu_dp = dev->dsa_ptr;
+	struct dsa_switch *ds = cpu_dp->ds;
+	u8 size;
+	u64 value;
+	int len = 0;
+
+	if(ds->ops->switch_get_reg(ds, &size, &value))
+		return -EIO;
+	switch(size) {
+		case 1:
+			len += sprintf(buf + len, "%hhx\n", (u8)value);
+			break;
+		case 2:
+			len += sprintf(buf + len, "%hx\n", (u16)value);
+			break;
+		case 4:
+			len += sprintf(buf + len, "%x\n", (u32)value);	
+			break;
+		case 6:
+			len += sprintf(buf + len, "%llx\n", value);
+			break;
+		case 8:
+			len += sprintf(buf + len, "%llx\n", value);
+			break;
+		default:
+			return -EIO;
+	}
+	return len;
+}
+
+static ssize_t rdreg_store(struct device *d, struct device_attribute *attr,
+			 const char *buf, size_t count)
+{
+	struct net_device *dev = to_net_dev(d);
+	struct dsa_port *cpu_dp = dev->dsa_ptr;
+	struct dsa_switch *ds = cpu_dp->ds;
+	u8 page;
+	u8 reg;
+	u8 size;
+	int err;
+
+	// Parse the input
+	err = sscanf(buf, "%hhx:%hhx:%hhx" , &page, &reg, &size);
+	if (err != 3)
+		return -EINVAL;  // Invalid format
+
+	// Write the value to the switch
+	if(ds->ops->switch_setup_get_reg(ds, page, reg, size))
+		return -EIO;
+
+	return count;
+}
+
+static DEVICE_ATTR_RW(rdreg);
+
+static ssize_t wrreg_show(struct device *d, struct device_attribute *attr,
+			char *buf)
+{
+	return -EPERM;
+}
+
+static_ wrreg_store(struct device *d, struct device_attribute *attr,
+			const char *buf, size_t count)
+{
+	struct net_device *dev = to_net_dev(d);
+	struct dsa_port *cpu_dp = dev->dsa_ptr;
+	struct dsa_switch *ds = cpu_dp->ds;
+	u8 page;
+	u8 reg;
+	u8 size;
+	u64 value;
+	int err;
+
+	// Parse the input
+	err = sscanf(buf, %hhx:%hhx:%hhx:%llx , &page, &reg, &size, &value);
+	if (err != 4)
+		return -EINVAL;  // Invalid format
+
+	// Write the value to the switch
+	if(ds->ops->switch_setup_set_reg(ds, page, reg, size, value))
+		return -EIO;
+
+	return count;
+}
+
+static DEVICE_ATTR_RW(wrreg);
+
 static struct attribute *dsa_slave_attrs[] = {
-	&dev_attr_tagging.attr,
+	&dev_attr_tagging_cpu.attr,
+	&dev_attr_tagging_imp.attr,
 	&dev_attr_pvlan.attr,
+	&dev_attr_rdreg.attr,
+	&dev_attr_wrreg.attr,
 	NULL
 };
 
