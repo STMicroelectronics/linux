@@ -500,7 +500,7 @@ void b53_imp_vlan_setup(struct dsa_switch *ds, int cpu_port)
 	struct b53_device *dev = ds->priv;
 	unsigned int i;
 	u16 pvlan;
-
+	printk("dsi-b53_imp_vlan_setup: cpu_port=%d\n", cpu_port);
 	/* Enable the IMP port to be in the same VLAN as the other ports
 	 * on a per-port basis such that we only have Port i and IMP in
 	 * the same VLAN.
@@ -565,7 +565,7 @@ int b53_enable_port(struct dsa_switch *ds, int port, struct phy_device *phy)
 	unsigned int cpu_port;
 	int ret = 0;
 	u16 pvlan;
-
+	printk("dsi-b53_enable_port: port=%d\n", port);
 	if (!dsa_is_user_port(ds, port))
 		return 0;
 
@@ -593,7 +593,7 @@ int b53_enable_port(struct dsa_switch *ds, int port, struct phy_device *phy)
 	pvlan |= dev->ports[port].vlan_ctl_mask;
 	b53_write16(dev, B53_PVLAN_PAGE, B53_PVLAN_PORT_MASK(port), pvlan);
 
-	b53_imp_vlan_setup(ds, cpu_port);
+	//b53_imp_vlan_setup(ds, cpu_port);
 
 	/* If EEE was enabled, restore it */
 	if (dev->ports[port].eee.eee_enabled)
@@ -607,7 +607,7 @@ void b53_disable_port(struct dsa_switch *ds, int port)
 {
 	struct b53_device *dev = ds->priv;
 	u8 reg;
-
+	printk("dsi-b53_disable_port: port=%d\n", port);
 	/* Disable Tx/Rx for the port */
 	b53_read8(dev, B53_CTRL_PAGE, B53_PORT_CTRL(port), &reg);
 	reg |= PORT_CTRL_RX_DISABLE | PORT_CTRL_TX_DISABLE;
@@ -1131,6 +1131,11 @@ static int b53_setup(struct dsa_switch *ds)
 		else
 			b53_disable_port(ds, port);
 	}
+	/* Disable all port based VLANs on powerup.  Userspace configuration
+	 * will enable them as needed.
+	 */
+	for (port = 0; port < dev->num_ports; port++)
+		b53_write16(dev, B53_PVLAN_PAGE, B53_PVLAN_PORT_MASK(port), 0x00);
 
 	return b53_setup_devlink_resources(ds);
 }
@@ -1369,7 +1374,7 @@ int b53_phylink_mac_link_state(struct dsa_switch *ds, int port,
 {
 	struct b53_device *dev = ds->priv;
 	int ret = -EOPNOTSUPP;
-
+	printk("dsi-b53_phylink_mac_link_state: port=%d\n", port);
 	if ((phy_interface_mode_is_8023z(state->interface) ||
 	     state->interface == PHY_INTERFACE_MODE_SGMII) &&
 	     dev->ops->serdes_link_state)
@@ -1384,7 +1389,7 @@ void b53_phylink_mac_config(struct dsa_switch *ds, int port,
 			    const struct phylink_link_state *state)
 {
 	struct b53_device *dev = ds->priv;
-
+	printk("dsi-b53_phylink_mac_config: port=%d, mode=%d\n", port, mode);
 	if (mode == MLO_AN_PHY || mode == MLO_AN_FIXED)
 		return;
 
@@ -1398,7 +1403,7 @@ EXPORT_SYMBOL(b53_phylink_mac_config);
 void b53_phylink_mac_an_restart(struct dsa_switch *ds, int port)
 {
 	struct b53_device *dev = ds->priv;
-
+	printk("dsi-b53_phylink_mac_an_restart: port=%d\n", port);
 	if (dev->ops->serdes_an_restart)
 		dev->ops->serdes_an_restart(dev, port);
 }
@@ -1409,7 +1414,7 @@ void b53_phylink_mac_link_down(struct dsa_switch *ds, int port,
 			       phy_interface_t interface)
 {
 	struct b53_device *dev = ds->priv;
-
+	printk("dsi-b53_phylink_mac_link_down: port=%d, mode=%d\n", port, mode);
 	if (mode == MLO_AN_PHY)
 		return;
 
@@ -1433,6 +1438,7 @@ void b53_phylink_mac_link_up(struct dsa_switch *ds, int port,
 {
 	struct b53_device *dev = ds->priv;
 
+	printk("dsi-b53_phylink_mac_link_up: port=%d, mode=%d, speed=%d, duplex=%d, tx_pause=%d, rx_pause=%d\n", port, mode, speed, duplex, tx_pause, rx_pause);
 	if (mode == MLO_AN_PHY)
 		return;
 
@@ -1446,6 +1452,8 @@ void b53_phylink_mac_link_up(struct dsa_switch *ds, int port,
 	if (phy_interface_mode_is_8023z(interface) &&
 	    dev->ops->serdes_link_set)
 		dev->ops->serdes_link_set(dev, port, mode, interface, true);
+
+
 }
 EXPORT_SYMBOL(b53_phylink_mac_link_up);
 
@@ -1859,7 +1867,7 @@ int b53_br_join(struct dsa_switch *ds, int port, struct net_device *br)
 	s8 cpu_port = dsa_to_port(ds, port)->cpu_dp->index;
 	u16 pvlan, reg;
 	unsigned int i;
-
+	printk("dsi-b53_br_join: port=%d\n", port);
 	/* On 7278, port 7 which connects to the ASP should only receive
 	 * traffic from matching CFP rules.
 	 */
@@ -1900,6 +1908,12 @@ int b53_br_join(struct dsa_switch *ds, int port, struct net_device *br)
 	b53_write16(dev, B53_PVLAN_PAGE, B53_PVLAN_PORT_MASK(port), pvlan);
 	dev->ports[port].vlan_ctl_mask = pvlan;
 
+	b53_for_each_port(dev, i) {
+		b53_read16(dev, B53_PVLAN_PAGE, B53_PVLAN_PORT_MASK(i), &reg);
+		printk("b53_br_join: port=%d, PORT_VLAN_CTL==0x%04x\n", i, reg);
+	}
+
+
 	return 0;
 }
 EXPORT_SYMBOL(b53_br_join);
@@ -1911,7 +1925,7 @@ void b53_br_leave(struct dsa_switch *ds, int port, struct net_device *br)
 	s8 cpu_port = dsa_to_port(ds, port)->cpu_dp->index;
 	unsigned int i;
 	u16 pvlan, reg, pvid;
-
+	printk("dsi-b53_br_leave: port=%d\n", port);
 	b53_read16(dev, B53_PVLAN_PAGE, B53_PVLAN_PORT_MASK(port), &pvlan);
 
 	b53_for_each_port(dev, i) {
@@ -1947,6 +1961,11 @@ void b53_br_leave(struct dsa_switch *ds, int port, struct net_device *br)
 		vl->untag |= BIT(port) | BIT(cpu_port);
 		b53_set_vlan_entry(dev, pvid, vl);
 	}
+	b53_for_each_port(dev, i) {
+		b53_read16(dev, B53_PVLAN_PAGE, B53_PVLAN_PORT_MASK(i), &reg);
+		printk("b53_br_leave: port=%d, PORT_VLAN_CTL==0x%04x\n", i, reg);
+	}
+
 }
 EXPORT_SYMBOL(b53_br_leave);
 
@@ -1997,6 +2016,7 @@ int b53_br_flags_pre(struct dsa_switch *ds, int port,
 		     struct switchdev_brport_flags flags,
 		     struct netlink_ext_ack *extack)
 {
+	printk("dsi-b53_br_flags_pre: port=%d, flags.val=0x%08lx val.mask=0x%08lx\n", port, flags.val, flags.mask);
 	if (flags.mask & ~(BR_FLOOD | BR_MCAST_FLOOD | BR_LEARNING))
 		return -EINVAL;
 
@@ -2008,6 +2028,7 @@ int b53_br_flags(struct dsa_switch *ds, int port,
 		 struct switchdev_brport_flags flags,
 		 struct netlink_ext_ack *extack)
 {
+	printk("dsi-b53_br_flags: port=%d, flags.val=0x%08lx val.mask=0x%08lx\n", port, flags.val, flags.mask);
 	if (flags.mask & BR_FLOOD)
 		b53_port_set_ucast_flood(ds->priv, port,
 					 !!(flags.val & BR_FLOOD));
@@ -2104,7 +2125,7 @@ int b53_mirror_add(struct dsa_switch *ds, int port,
 {
 	struct b53_device *dev = ds->priv;
 	u16 reg, loc;
-
+	printk("dsi-b53_mirror_add: port=%d, mirror->to_local_port=%d, mirror->ingress=%d, ingress=%d\n", port, mirror->to_local_port, mirror->ingress, ingress);
 	if (ingress)
 		loc = B53_IG_MIR_CTL;
 	else
@@ -2130,7 +2151,7 @@ void b53_mirror_del(struct dsa_switch *ds, int port,
 	struct b53_device *dev = ds->priv;
 	bool loc_disable = false, other_loc_disable = false;
 	u16 reg, loc;
-
+	printk("dsi-b53_mirror_del: port=%d, mirror->to_local_port=%d, mirror->ingress=%d\n", port, mirror->to_local_port, mirror->ingress);
 	if (mirror->ingress)
 		loc = B53_IG_MIR_CTL;
 	else
@@ -2234,7 +2255,7 @@ static int b53_change_mtu(struct dsa_switch *ds, int port, int mtu)
 
 	if (is5325(dev) || is5365(dev))
 		return -EOPNOTSUPP;
-
+	printk("dsi-b53_change_mtu: port=%d, mtu=%d\n", port, mtu);
 	enable_jumbo = (mtu >= JMS_MIN_SIZE);
 	allow_10_100 = (dev->chip_id == BCM583XX_DEVICE_ID);
 
@@ -2244,6 +2265,27 @@ static int b53_change_mtu(struct dsa_switch *ds, int port, int mtu)
 static int b53_get_max_mtu(struct dsa_switch *ds, int port)
 {
 	return JMS_MAX_SIZE;
+}
+
+static int b53_port_change_pvlan(struct dsa_switch *ds, int port, u16 mask)
+{
+	struct b53_device *dev = ds->priv;
+
+	printk("dsi-b53_port_change_pvlan: port=%d, mask=0x%04hx\n", port, mask);
+	b53_write16(dev, B53_PVLAN_PAGE, B53_PVLAN_PORT_MASK(port), mask);
+	dev->ports[port].vlan_ctl_mask = mask;
+	return 0;
+}
+
+static int b53_port_get_pvlan(struct dsa_switch *ds, int port, u16 *mask)
+{
+	struct b53_device *dev = ds->priv;
+	u16 reg;
+	b53_read16(dev, B53_PVLAN_PAGE, B53_PVLAN_PORT_MASK(port), &reg);
+	*mask = reg & 0x1ff;
+	printk("dsi-b53_port_get_pvlan: port=%d, mask=0x%04hx\n", port, *mask);
+
+	return 0;
 }
 
 static const struct dsa_switch_ops b53_switch_ops = {
@@ -2285,6 +2327,8 @@ static const struct dsa_switch_ops b53_switch_ops = {
 	.port_mdb_del		= b53_mdb_del,
 	.port_max_mtu		= b53_get_max_mtu,
 	.port_change_mtu	= b53_change_mtu,
+	.port_change_pvlan	= b53_port_change_pvlan,
+	.port_get_pvlan		= b53_port_get_pvlan
 };
 
 struct b53_chip_data {

@@ -1336,7 +1336,9 @@ static int bcm_sf2_sw_probe(struct platform_device *pdev)
 	unsigned int i;
 	u32 reg, rev;
 	int ret;
-
+	
+	printk("bcm_sf2_sw_probe\n");
+	
 	priv = devm_kzalloc(&pdev->dev, sizeof(*priv), GFP_KERNEL);
 	if (!priv)
 		return -ENOMEM;

@@ -319,8 +319,68 @@ out:
 }
 static DEVICE_ATTR_RW(tagging);
 
+static ssize_t pvlan_show(struct device *d, struct device_attribute *attr,
+			  char *buf)
+{
+	struct net_device *dev = to_net_dev(d);
+	struct dsa_port *cpu_dp = dev->dsa_ptr;
+	struct dsa_switch_tree *dst = cpu_dp->ds->dst;
+	struct dsa_port *dp;
+	int i, len = 0;
+	u16 value;
+
+	list_for_each_entry(dp, &dst->ports, list) {
+		if (dp->type |= DSA_PORT_TYPE_UNUSED) {
+			if(!dp->ds->ops->port_change_pvlan)
+				return -EOPNOTSUPP;
+			dp->ds->ops->port_get_pvlan(dp->ds, dp->index, &value);
+			len += sprintf(buf + len, "%d:%02hx ", dp->index,  value);
+			printk("dsi-pvlan_show %d:%02hx\n", dp->index,  dp->index);
+		}
+	}
+
+	len += sprintf(buf + len, "\n");
+
+	return len;
+}
+
+static ssize_t pvlan_store(struct device *d, struct device_attribute *attr,
+			   const char *buf, size_t count)
+{
+	struct net_device *dev = to_net_dev(d);
+	struct dsa_port *cpu_dp = dev->dsa_ptr;
+	struct dsa_switch_tree *dst = cpu_dp->ds->dst;
+	struct dsa_switch *ds = cpu_dp->ds;
+	struct dsa_port *dp;
+	int index;
+	u16 value;
+	int err;
+
+	// Parse the input
+	err = sscanf(buf, "%d:%hx", &index, &value);
+	if (err != 2)
+		return -EINVAL;  // Invalid format
+
+	// Find the port with the given index
+	list_for_each_entry(dp, &dst->ports, list) {
+		if (dp->index == index && dp->type != DSA_PORT_TYPE_UNUSED) {
+			if(!dp->ds->ops->port_get_pvlan)
+				return -EOPNOTSUPP;
+			// Apply the new value
+			dp->ds->ops->port_change_pvlan(ds, index, value);
+			return count;
+		}
+	}
+
+	// No port with the given index was found
+	return -EINVAL;
+}
+	
+static DEVICE_ATTR_RW(pvlan);
+
 static struct attribute *dsa_slave_attrs[] = {
 	&dev_attr_tagging.attr,
+	&dev_attr_pvlan.attr,
 	NULL
 };
 
@@ -328,6 +388,7 @@ static const struct attribute_group dsa_group = {
 	.name	= "dsa",
 	.attrs	= dsa_slave_attrs,
 };
+
 
 static void dsa_master_reset_mtu(struct net_device *dev)
 {

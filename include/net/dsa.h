@@ -906,6 +906,12 @@ struct dsa_switch_ops {
 	int	(*tag_8021q_vlan_add)(struct dsa_switch *ds, int port, u16 vid,
 				      u16 flags);
 	int	(*tag_8021q_vlan_del)(struct dsa_switch *ds, int port, u16 vid);
+
+	/*
+	 * Port-based VLAN operations
+	 */
+	 int	(*port_change_pvlan)(struct dsa_switch *ds, int port, u16 mask);
+	 int	(*port_get_pvlan)(struct dsa_switch *ds, int port, u16 *mask);
 };
 
 #define DSA_DEVLINK_PARAM_DRIVER(_id, _name, _type, _cmodes)		\

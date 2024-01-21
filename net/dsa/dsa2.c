@@ -858,6 +858,7 @@ static int dsa_switch_setup(struct dsa_switch *ds)
 	 * setup() can register regions etc, against the ports
 	 */
 	list_for_each_entry(dp, &ds->dst->ports, list) {
+		printk("dsi-dsa_switch_setup dp->index=%d\n", dp->index);
 		if (dp->ds == ds) {
 			err = dsa_port_devlink_setup(dp);
 			if (err)
@@ -982,6 +983,7 @@ static int dsa_tree_setup_switches(struct dsa_switch_tree *dst)
 	int err;
 
 	list_for_each_entry(dp, &dst->ports, list) {
+		printk("dsi-dsa_tree_setup_switches dp->index=%d\n", dp->index);
 		err = dsa_switch_setup(dp->ds);
 		if (err)
 			goto teardown;
@@ -1516,6 +1518,7 @@ static int dsa_switch_parse_ports(struct dsa_switch *ds,
 		name = cd->port_names[i];
 		dev = cd->netdev[i];
 		dp = dsa_to_port(ds, i);
+		printk("dsi-dsa_switch_parse_ports i=%d name=%s dev=%p\n", i, name, dev);
 
 		if (!name)
 			continue;
@@ -1582,7 +1585,7 @@ static int dsa_switch_probe(struct dsa_switch *ds)
 
 	if (!ds->num_ports)
 		return -EINVAL;
-	printk("dsi-dsa_switch_probe ds->num_ports=%d\n", ds->num_ports);
+	printk("dsi-dsa_switch_probe entry ds->num_ports=%d\n", ds->num_ports);
 
 	if (np) {
 		err = dsa_switch_parse_of(ds, np);
@@ -1598,7 +1601,7 @@ static int dsa_switch_probe(struct dsa_switch *ds)
 		err = -ENODEV;
 	}
 
-	printk("dsi-dsa_err=%d\n", err);
+	printk("dsi-dsa_switch_probe mid err=%d\n", err);
 	if (err)
 		return err;
 
@@ -1610,7 +1613,7 @@ static int dsa_switch_probe(struct dsa_switch *ds)
 		dsa_switch_release_ports(ds);
 		dsa_tree_put(dst);
 	}
-
+	printk("dsi-dsa_switch_probe exit err=%d\n", err);
 	return err;
 }
 
