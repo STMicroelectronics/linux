@@ -2299,17 +2299,18 @@ static int b53_switch_setup_get_reg(struct dsa_switch *ds, u8 page, u8 reg, u8 s
 	return 0;
 }
 
-static int b53_switch_get_reg(struct dsa_switch *ds, u64 *value)
+static int b53_switch_get_reg(struct dsa_switch *ds, u8 *size, u64 *value)
 {
 	struct b53_device *dev = ds->priv;
 	
+	*size = dev->size;
 	switch(dev->size) {
 		case 1: 
-			return b53_read8(dev, dev->page, dev->reg, value);
+			return b53_read8(dev, dev->page, dev->reg, (u8 *)value);
 		case 2:
-			return b53_read16(dev, dev->page, dev->reg, value);
+			return b53_read16(dev, dev->page, dev->reg, (u16 *)value);
 		case 4:
-			return b53_read32(dev, dev->page, dev->reg, value);
+			return b53_read32(dev, dev->page, dev->reg, (u32 *)value);
 		case 6:
 			return b53_read48(dev, dev->page, dev->reg, value);
 		case 8:	
@@ -2383,7 +2384,7 @@ static const struct dsa_switch_ops b53_switch_ops = {
 	.port_max_mtu		= b53_get_max_mtu,
 	.port_change_mtu	= b53_change_mtu,
 	.port_change_pvlan	= b53_port_change_pvlan,
-	.port_get_pvlan		= b53_port_get_pvlan
+	.port_get_pvlan		= b53_port_get_pvlan,
 	.switch_setup_get_reg	= b53_switch_setup_get_reg,
 	.switch_get_reg 	= b53_switch_get_reg,
 	.switch_set_reg		= b53_switch_set_reg

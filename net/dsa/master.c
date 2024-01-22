@@ -476,7 +476,7 @@ static ssize_t rdreg_store(struct device *d, struct device_attribute *attr,
 	if (err != 3)
 		return -EINVAL;  // Invalid format
 
-	// Write the value to the switch
+	// Write the value to the private data
 	if(ds->ops->switch_setup_get_reg(ds, page, reg, size))
 		return -EIO;
 
@@ -491,7 +491,7 @@ static ssize_t wrreg_show(struct device *d, struct device_attribute *attr,
 	return -EPERM;
 }
 
-static_ wrreg_store(struct device *d, struct device_attribute *attr,
+static ssize_t wrreg_store(struct device *d, struct device_attribute *attr,
 			const char *buf, size_t count)
 {
 	struct net_device *dev = to_net_dev(d);
@@ -504,12 +504,12 @@ static_ wrreg_store(struct device *d, struct device_attribute *attr,
 	int err;
 
 	// Parse the input
-	err = sscanf(buf, %hhx:%hhx:%hhx:%llx , &page, &reg, &size, &value);
+	err = sscanf(buf, "%hhx:%hhx:%hhx:%llx" , &page, &reg, &size, &value);
 	if (err != 4)
 		return -EINVAL;  // Invalid format
 
 	// Write the value to the switch
-	if(ds->ops->switch_setup_set_reg(ds, page, reg, size, value))
+	if(ds->ops->switch_set_reg(ds, page, reg, size, value))
 		return -EIO;
 
 	return count;
