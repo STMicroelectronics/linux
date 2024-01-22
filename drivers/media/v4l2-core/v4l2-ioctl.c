@@ -1486,6 +1486,8 @@ static void v4l_fill_fmtdesc(struct v4l2_fmtdesc *fmt)
 	case V4L2_META_FMT_GENERIC_CSI2_16:	descr = "8-bit Generic Meta, 16b CSI-2"; break;
 	case V4L2_META_FMT_GENERIC_CSI2_20:	descr = "8-bit Generic Meta, 20b CSI-2"; break;
 	case V4L2_META_FMT_GENERIC_CSI2_24:	descr = "8-bit Generic Meta, 24b CSI-2"; break;
+	case V4L2_META_FMT_ST_DCMIPP_ISP_PARAMS:descr = "STM32 DCMIPP ISP Parameters"; break;
+	case V4L2_META_FMT_ST_DCMIPP_ISP_STAT:	descr = "STM32 DCMIPP ISP Statistics"; break;
 
 	default:
 		/* Compressed formats */
