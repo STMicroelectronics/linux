@@ -69,6 +69,8 @@ struct ltdc_device {
 	struct drm_atomic_state *suspend_state;
 	int crc_skip_count;
 	bool crc_active;
+	bool vblank_active;
+	u32 crc;
 	struct reserved_mem *rot_mem;
 	struct stm32_firewall firewall[LTDC_MAX_FIREWALL];
 	bool plane_enabled[LTDC_MAX_LAYER];

@@ -749,26 +749,6 @@ static inline void ltdc_set_ycbcr_coeffs(struct drm_plane *plane)
 		     ltdc_ycbcr2rgb_coeffs[enc][ran][1]);
 }
 
-static inline void ltdc_irq_crc_handle(struct ltdc_device *ldev,
-				       struct drm_crtc *crtc)
-{
-	u32 crc;
-	int ret;
-
-	if (ldev->crc_skip_count < CRC_SKIP_FRAMES) {
-		ldev->crc_skip_count++;
-		return;
-	}
-
-	/* Get the CRC of the frame */
-	ret = regmap_read(ldev->regmap, LTDC_CCRCR, &crc);
-	if (ret)
-		return;
-
-	/* Report to DRM the CRC (hw dependent feature) */
-	drm_crtc_add_crc_entry(crtc, true, drm_crtc_accurate_vblank_count(crtc), &crc);
-}
-
 static irqreturn_t ltdc_irq_thread(int irq, void *arg)
 {
 	struct drm_device *ddev = arg;
@@ -777,11 +757,18 @@ static irqreturn_t ltdc_irq_thread(int irq, void *arg)
 
 	/* Line IRQ : trigger the vblank event */
 	if (ldev->irq_status & ISR_LIF) {
-		drm_crtc_handle_vblank(crtc);
+		if (ldev->vblank_active)
+			drm_crtc_handle_vblank(crtc);
 
-		/* Early return if CRC is not active */
-		if (ldev->crc_active)
-			ltdc_irq_crc_handle(ldev, crtc);
+		if (ldev->crc_active) {
+			if (ldev->crc_skip_count < CRC_SKIP_FRAMES)
+				ldev->crc_skip_count++;
+			else
+				/* Report to DRM the CRC (hw dependent feature) */
+				drm_crtc_add_crc_entry(crtc, true,
+						       drm_crtc_accurate_vblank_count(crtc),
+						       &ldev->crc);
+		}
 	}
 
 	mutex_lock(&ldev->err_lock);
@@ -810,6 +797,8 @@ static irqreturn_t ltdc_irq(int irq, void *arg)
 	 */
 	ldev->irq_status = readl_relaxed(ldev->regs + LTDC_ISR);
 	writel_relaxed(ldev->irq_status, ldev->regs + LTDC_ICR);
+	if (ldev->crc_active)
+		ldev->crc = readl_relaxed(ldev->regs + LTDC_CCRCR);
 
 	return IRQ_WAKE_THREAD;
 }
@@ -1186,10 +1175,12 @@ static int ltdc_crtc_enable_vblank(struct drm_crtc *crtc)
 
 	drm_dbg_driver(crtc->dev, "\n");
 
-	if (state->enable)
+	if (state->enable) {
+		ldev->vblank_active = true;
 		regmap_set_bits(ldev->regmap, LTDC_IER, IER_LIE);
-	else
+	} else {
 		return -EPERM;
+	}
 
 	return 0;
 }
@@ -1199,7 +1190,11 @@ static void ltdc_crtc_disable_vblank(struct drm_crtc *crtc)
 	struct ltdc_device *ldev = crtc_to_ltdc(crtc);
 
 	drm_dbg_driver(crtc->dev, "\n");
-	regmap_clear_bits(ldev->regmap, LTDC_IER, IER_LIE);
+
+	ldev->vblank_active = false;
+
+	if (!ldev->vblank_active && !ldev->crc_active)
+		regmap_clear_bits(ldev->regmap, LTDC_IER, IER_LIE);
 }
 
 static int ltdc_crtc_set_crc_source(struct drm_crtc *crtc, const char *source)
@@ -1216,9 +1211,12 @@ static int ltdc_crtc_set_crc_source(struct drm_crtc *crtc, const char *source)
 
 	if (source && strcmp(source, "auto") == 0) {
 		ldev->crc_active = true;
+		regmap_set_bits(ldev->regmap, LTDC_IER, IER_LIE);
 		ret = regmap_set_bits(ldev->regmap, LTDC_GCR, GCR_CRCEN);
 	} else if (!source) {
 		ldev->crc_active = false;
+		if (!ldev->vblank_active && !ldev->crc_active)
+			regmap_clear_bits(ldev->regmap, LTDC_IER, IER_LIE);
 		ret = regmap_clear_bits(ldev->regmap, LTDC_GCR, GCR_CRCEN);
 	} else {
 		ret = -EINVAL;
@@ -2441,6 +2439,10 @@ int ltdc_load(struct drm_device *ddev)
 	ldev->fifo_warn = 0;
 	ldev->fifo_rot = 0;
 	ldev->fifo_threshold = FUT_DFT;
+
+	/* initialize default value for vblank & crc active flags */
+	ldev->crc_active = false;
+	ldev->vblank_active = false;
 
 	for (i = 0; i < ldev->caps.nb_irq; i++) {
 		irq = platform_get_irq(pdev, i);
