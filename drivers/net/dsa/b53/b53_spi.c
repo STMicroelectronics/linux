@@ -300,6 +300,7 @@ static int b53_spi_probe(struct spi_device *spi)
 	struct b53_device *dev;
 	int ret;
 	struct net_device *ndev = dev_get_by_name(&init_net, "eth0");
+
 	printk("dsi-b53_spi_probe\n");
 	if(!ndev)
 	{
@@ -365,7 +366,7 @@ static const struct spi_device_id b53_spi_ids[] = {
 	{ .name = "bcm5395" },
 	{ .name = "bcm5397" },
 	{ .name = "bcm5398" },
-{ .name = "bcm53115" },
+	{ .name = "bcm53115" },
 	{ .name = "bcm53125" },
 	{ .name = "bcm53128" },
 	{ .name = "bcm53134" },

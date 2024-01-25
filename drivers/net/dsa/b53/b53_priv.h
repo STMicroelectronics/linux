@@ -109,6 +109,7 @@ struct b53_device {
 	struct mutex reg_mutex;
 	struct mutex stats_mutex;
 	const struct b53_io_ops *ops;
+	struct gpio_desc *reset_gpiod;
 
 	/* chip specific data */
 	u32 chip_id;

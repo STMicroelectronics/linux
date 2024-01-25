@@ -20,6 +20,7 @@
 #include <linux/delay.h>
 #include <linux/export.h>
 #include <linux/gpio.h>
+#include <linux/gpio/consumer.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/platform_data/b53.h>
@@ -607,6 +608,7 @@ void b53_disable_port(struct dsa_switch *ds, int port)
 {
 	struct b53_device *dev = ds->priv;
 	u8 reg;
+
 	printk("dsi-b53_disable_port: port=%d\n", port);
 	/* Disable Tx/Rx for the port */
 	b53_read8(dev, B53_CTRL_PAGE, B53_PORT_CTRL(port), &reg);
@@ -805,6 +807,27 @@ static void b53_switch_reset_gpio(struct b53_device *dev)
 
 	dev->current_page = 0xff;
 }
+
+static void b53_switch_reset_gpiod(struct b53_device *dev)
+{
+	struct gpio_desc *gpiod = dev->reset_gpiod;
+
+	if (IS_ERR(gpiod))
+		return;
+
+	printk("dsi-b53_switch_reset_gpiod\n");
+
+	/* Reset sequence: RESET low(5ms)->high(10ms)
+	 */
+	gpiod_set_value(gpiod, 1);		// Reset Asserted (Voltage Low)
+	mdelay(5);
+
+	gpiod_set_value(gpiod, 0);		// Reset De-Asserted (Voltage High)
+	mdelay(10);
+
+	dev->current_page = 0xff;
+}
+
 
 static int b53_switch_reset(struct b53_device *dev)
 {
@@ -1333,6 +1356,7 @@ void b53_phylink_validate(struct dsa_switch *ds, int port,
 	struct b53_device *dev = ds->priv;
 	__ETHTOOL_DECLARE_LINK_MODE_MASK(mask) = { 0, };
 
+	printk("dsi-b53_phylink_validate: port=%d\n", port);
 	if (dev->ops->serdes_phylink_validate)
 		dev->ops->serdes_phylink_validate(dev, port, mask, state);
 
@@ -2709,6 +2733,7 @@ static int b53_switch_init(struct b53_device *dev)
 {
 	unsigned int i;
 	int ret;
+	u16 phyreg;
 
 	for (i = 0; i < ARRAY_SIZE(b53_switch_chips); i++) {
 		const struct b53_chip_data *chip = &b53_switch_chips[i];
@@ -2777,12 +2802,26 @@ static int b53_switch_init(struct b53_device *dev)
 				dev->ds->phys_mii_mask |= BIT(i);
 		}
 	}
-
 	dev->ports = devm_kcalloc(dev->dev,
 				  dev->num_ports, sizeof(struct b53_port),
 				  GFP_KERNEL);
 	if (!dev->ports)
 		return -ENOMEM;
+
+	/* Disable integrated PHY ports */
+	for(i = 0; i < dev->num_ports; i++)
+	{
+		if((dev->enabled_ports & BIT(i)) && (i != dev->cpu_port) && (i != dev->imp_port))
+		{
+			ret = b53_read16(dev, B53_PORT_MII_PAGE(i), B53_GMII_CTL, &phyreg);
+			if(ret)
+				return ret;
+			phyreg |= GMII_PWR_DOWN;
+			ret = b53_write16(dev, B53_PORT_MII_PAGE(i), B53_GMII_CTL, phyreg);
+			if(ret)
+				return ret;
+		}
+	}
 
 	dev->vlans = devm_kcalloc(dev->dev,
 				  dev->num_vlans, sizeof(struct b53_vlan),
@@ -2827,7 +2866,7 @@ struct b53_device *b53_switch_alloc(struct device *base,
 	ds->ops = &b53_switch_ops;
 	dev->vlan_enabled = true;
 	/* Let DSA handle the case were multiple bridges span the same switch
-	 * device and different VLAN awareness settings are requested, which
+	 * device and different VLAN awareness settings are requested, whichdev
 	 * would be breaking filtering semantics for any of the other bridge
 	 * devices. (not hardware supported)
 	 */
@@ -2910,8 +2949,19 @@ EXPORT_SYMBOL(b53_switch_detect);
 
 int b53_switch_register(struct b53_device *dev)
 {
+	
+	int i;
 	int ret;
+	u16 phyreg;
+
 	printk("dsi-b53_switch_register()\n");
+	dev->reset_gpiod = devm_gpiod_get(dev->dev, "reset", GPIOD_OUT_HIGH);		// Reset Asserted (Voltage Low)
+	if (IS_ERR(dev->reset_gpiod)) {
+		dev_err(dev->ds->dev, "Failed to get reset GPIO\n");
+		return PTR_ERR(dev->reset_gpiod);
+	}
+	b53_switch_reset_gpiod(dev);
+
 	if (dev->pdata) {
 		dev->chip_id = dev->pdata->chip_id;
 		dev->enabled_ports = dev->pdata->enabled_ports;
@@ -2919,17 +2969,26 @@ int b53_switch_register(struct b53_device *dev)
 
 	if (!dev->chip_id && b53_switch_detect(dev))
 		return -EINVAL;
-	printk("dsi-b53_switch_detect()\n");
 
 	ret = b53_switch_init(dev);
-	printk("dsi-b53_switch_init() ret=%d\n", ret);
 	if (ret)
 		return ret;
 
 	dev_info(dev->dev, "found switch: %s, rev %i\n",
 		 dev->name, dev->core_rev);
 
-	return dsa_register_switch(dev->ds);
+	ret = dsa_register_switch(dev->ds);
+	/* Disable integrated PHY ports */
+	for(i = 0; i < dev->num_ports; i++)
+	{
+		if((dev->enabled_ports & BIT(i)) && (i != dev->cpu_port) && (i != dev->imp_port))
+		{
+			b53_read16(dev, B53_PORT_MII_PAGE(i), B53_GMII_CTL, &phyreg);
+			phyreg |= GMII_PWR_DOWN;
+			b53_write16(dev, B53_PORT_MII_PAGE(i), B53_GMII_CTL, phyreg);
+		}
+	}
+	return ret;
 }
 EXPORT_SYMBOL(b53_switch_register);
 

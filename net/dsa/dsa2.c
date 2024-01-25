@@ -1633,6 +1633,7 @@ int dsa_register_switch(struct dsa_switch *ds)
 	err = dsa_switch_probe(ds);
 	printk("dsi-dsa_switch_probe err=%d\n", err);
 	dsa_tree_put(ds->dst);
+	printk("dsi-dsa_tree_put\n");
 	mutex_unlock(&dsa2_mutex);
 
 	return err;
