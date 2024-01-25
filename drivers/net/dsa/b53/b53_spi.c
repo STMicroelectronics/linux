@@ -301,12 +301,8 @@ static int b53_spi_probe(struct spi_device *spi)
 	int ret;
 	struct net_device *ndev = dev_get_by_name(&init_net, "eth0");
 
-	printk("dsi-b53_spi_probe\n");
 	if(!ndev)
-	{
-		printk("dsi-b53_spi_probe dev is null\n");
 		return -EPROBE_DEFER;
-	}
 
 	dev = b53_switch_alloc(&spi->dev, &b53_spi_ops, spi);
 	if (!dev)

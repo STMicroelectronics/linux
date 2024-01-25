@@ -459,7 +459,6 @@ static inline bool dsa_is_unused_port(struct dsa_switch *ds, int p)
 
 static inline bool dsa_is_cpu_port(struct dsa_switch *ds, int p)
 {
-	printk("dsi-dsa_is_cpu_port: port=%d\n",p);
 	return dsa_to_port(ds, p)->type == DSA_PORT_TYPE_CPU;
 }
 

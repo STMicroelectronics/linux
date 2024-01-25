@@ -56,7 +56,6 @@ void dsa_tag_drivers_register(struct dsa_tag_driver *dsa_tag_driver_array[],
 			      unsigned int count, struct module *owner)
 {
 	unsigned int i;
-	printk("dsi-dsa_tag_drivers_register() #=%d\n", count);
 
 	for (i = 0; i < count; i++)
 		dsa_tag_driver_register(dsa_tag_driver_array[i], owner);

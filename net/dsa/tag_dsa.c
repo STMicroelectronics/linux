@@ -130,7 +130,6 @@ static struct sk_buff *dsa_xmit_ll(struct sk_buff *skb, struct net_device *dev,
 	u8 tag_dev, tag_port;
 	enum dsa_cmd cmd;
 	u8 *dsa_header;
-	printk("dsi-dsa_xmit_ll()\n");
 
 	if (skb->offload_fwd_mark) {
 		struct dsa_switch_tree *dst = dp->ds->dst;

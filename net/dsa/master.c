@@ -383,7 +383,6 @@ static ssize_t pvlan_show(struct device *d, struct device_attribute *attr,
 				return -EOPNOTSUPP;
 			dp->ds->ops->port_get_pvlan(dp->ds, dp->index, &value);
 			len += sprintf(buf + len, "%d:%03hx ", dp->index,  value);
-			printk("dsi-pvlan_show %d:%03hx\n", dp->index,  dp->index);
 		}
 	}
 

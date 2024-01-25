@@ -110,7 +110,6 @@ static void bcm_sf2_imp_setup(struct dsa_switch *ds, int port)
 	struct bcm_sf2_priv *priv = bcm_sf2_to_priv(ds);
 	unsigned int i;
 	u32 reg, offset;
-	printk("dsi-bcm_sf2_imp_setup(): port=%d\n", port);
 
 	/* Enable the port memories */
 	reg = core_readl(priv, CORE_MEM_PSM_VDD_CTRL);
@@ -1337,8 +1336,6 @@ static int bcm_sf2_sw_probe(struct platform_device *pdev)
 	unsigned int i;
 	u32 reg, rev;
 	int ret;
-	
-	printk("bcm_sf2_sw_probe\n");
 	
 	priv = devm_kzalloc(&pdev->dev, sizeof(*priv), GFP_KERNEL);
 	if (!priv)
