@@ -89,7 +89,7 @@ static const struct drm_display_mode default_mode = {
 	.vsync_start = 1280 + 12,
 	.vsync_end = 1280 + 12 + 5,
 	.vtotal = 1280 + 12 + 5 + 12,
-	.flags = 0,
+	.flags = DRM_MODE_FLAG_NHSYNC | DRM_MODE_FLAG_NVSYNC,
 	.width_mm = 68,
 	.height_mm = 122,
 };
@@ -311,6 +311,8 @@ static int rm68200_get_modes(struct drm_panel *panel,
 
 	connector->display_info.width_mm = mode->width_mm;
 	connector->display_info.height_mm = mode->height_mm;
+	connector->display_info.bus_flags = DRM_BUS_FLAG_DE_HIGH |
+					    DRM_BUS_FLAG_PIXDATA_DRIVE_POSEDGE;
 
 	return 1;
 }
