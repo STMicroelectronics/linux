@@ -334,19 +334,14 @@ static int rm68200_probe(struct mipi_dsi_device *dsi)
 		return PTR_ERR(ctx);
 
 	ctx->reset_gpio = devm_gpiod_get_optional(dev, "reset", GPIOD_OUT_LOW);
-	if (IS_ERR(ctx->reset_gpio)) {
-		ret = PTR_ERR(ctx->reset_gpio);
-		dev_err(dev, "cannot get reset GPIO: %d\n", ret);
-		return ret;
-	}
+	if (IS_ERR(ctx->reset_gpio))
+		return dev_err_probe(dev, PTR_ERR(ctx->reset_gpio),
+				     "cannot get reset GPIO\n");
 
 	ctx->supply = devm_regulator_get(dev, "power");
-	if (IS_ERR(ctx->supply)) {
-		ret = PTR_ERR(ctx->supply);
-		if (ret != -EPROBE_DEFER)
-			dev_err(dev, "cannot get regulator: %d\n", ret);
-		return ret;
-	}
+	if (IS_ERR(ctx->supply))
+		return dev_err_probe(dev, PTR_ERR(ctx->supply),
+				     "cannot get regulator\n");
 
 	mipi_dsi_set_drvdata(dsi, ctx);
 
