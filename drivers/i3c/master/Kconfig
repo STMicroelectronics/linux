@@ -85,3 +85,9 @@ config RENESAS_I3C
 
 	  This driver can also be built as a module. If so, the module will be
 	  called renesas-i3c.
+
+config STM32_I3C
+	tristate "STM32 I3C Controller driver"
+	depends on ARCH_STM32 || COMPILE_TEST
+	help
+	  Support for STMicroelectronics STM32 I3C Controller.
