@@ -48,6 +48,15 @@ properties:
   resets:
     maxItems: 1
 
+  memory-region:
+    maxItems: 1
+    description:
+      Phandle to a /reserved-memory child node assigned to STM32 DMA3 for linked-list items
+      allocation. When not defined, linked-list items are allocated in DDR.
+      During transfer, STM32 DMA3 updates its registers reading the linked-list items in memory.
+      These reads are 32-bit single reads. Allocating the linked-list items in internal RAM improves
+      STM32 DMA3 performance.
+
   power-domains:
     maxItems: 1
 
@@ -116,6 +125,17 @@ examples:
   - |
     #include <dt-bindings/interrupt-controller/arm-gic.h>
     #include <dt-bindings/clock/st,stm32mp25-rcc.h>
+
+    reserved-memory {
+      #address-cells = <2>;
+      #size-cells = <2>;
+
+      dma_lli: dma-lli@a020000 {
+        reg = <0x0 0xa020000 0x0 0x10000>;
+        no-map;
+      };
+    };
+
     dma-controller@40400000 {
       compatible = "st,stm32mp25-dma3";
       reg = <0x40400000 0x1000>;
@@ -137,5 +157,6 @@ examples:
                    <GIC_SPI 48 IRQ_TYPE_LEVEL_HIGH>;
       clocks = <&rcc CK_BUS_HPDMA1>;
       #dma-cells = <3>;
+      memory-region = <&dma_lli>;
     };
 ...
