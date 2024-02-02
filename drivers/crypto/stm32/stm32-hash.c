@@ -1288,17 +1288,6 @@ static int stm32_hash_prepare_request(struct ahash_request *req)
 
 	rctx->total = nbytes;
 
-	if (update && req->nbytes && (!IS_ALIGNED(state->bufcnt, bs))) {
-		int len = bs - state->bufcnt % bs;
-
-		if (len > req->nbytes)
-			len = req->nbytes;
-		scatterwalk_map_and_copy(state->buffer + state->bufcnt, req->src,
-					 0, len, 0);
-		state->bufcnt += len;
-		rctx->offset = len;
-	}
-
 	/* copy buffer in a temporary one that is used for sg alignment */
 	if (state->bufcnt)
 		memcpy(hdev->xmit_buf, state->buffer, state->bufcnt);
