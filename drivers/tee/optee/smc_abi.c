@@ -508,7 +508,7 @@ static int optee_shm_register(struct tee_context *ctx, struct tee_shm *shm,
 	msg_arg->params->u.tmem.buf_ptr = virt_to_phys(pages_list) |
 	  (tee_shm_get_page_offset(shm) & (OPTEE_MSG_NONCONTIG_PAGE_SIZE - 1));
 
-	if (optee->ops->do_call_with_arg(ctx, shm_arg, 0, false) ||
+	if (optee->ops->do_call_with_arg(ctx, shm_arg, 0, false, NULL) ||
 	    msg_arg->ret != TEEC_SUCCESS)
 		rc = -EINVAL;
 
@@ -551,7 +551,7 @@ static int optee_shm_unregister(struct tee_context *ctx, struct tee_shm *shm)
 	msg_arg->params[0].attr = OPTEE_MSG_ATTR_TYPE_RMEM_INPUT;
 	msg_arg->params[0].u.rmem.shm_ref = (unsigned long)shm;
 
-	if (optee->ops->do_call_with_arg(ctx, shm_arg, 0, false) ||
+	if (optee->ops->do_call_with_arg(ctx, shm_arg, 0, false, NULL) ||
 	    msg_arg->ret != TEEC_SUCCESS)
 		rc = -EINVAL;
 out:
@@ -877,6 +877,7 @@ static void optee_handle_rpc(struct tee_context *ctx,
  * @shm:	shared memory holding the message to pass to secure world
  * @offs:	offset of the message in @shm
  * @system_thread: true if caller requests TEE system thread support
+ * @extra:     Extra arguments used in OCall based invocation, NULL otherwise
  *
  * Does and SMC to OP-TEE in secure world and handles eventual resulting
  * Remote Procedure Calls (RPC) from OP-TEE.
@@ -885,14 +886,30 @@ static void optee_handle_rpc(struct tee_context *ctx,
  */
 static int optee_smc_do_call_with_arg(struct tee_context *ctx,
 				      struct tee_shm *shm, u_int offs,
-				      bool system_thread)
+				      bool system_thread,
+				      struct optee_call_extra *extra)
 {
 	struct optee *optee = tee_get_drvdata(ctx->teedev);
-	struct optee_call_waiter w;
+	struct optee_call_waiter waiter;
+	struct optee_call_waiter *w = &waiter;
 	struct optee_rpc_param param = { };
 	struct optee_call_ctx call_ctx = { };
 	struct optee_msg_arg *rpc_arg = NULL;
 	int rc;
+
+	if (extra) {
+		if (tee_ocall_is_used(extra->ocall_arg))
+			w = extra->ocall_call_waiter;
+
+		if (tee_ocall_in_progress(extra->ocall_arg)) {
+			/* We are returning to TEE from an Ocall in REE */
+			param.a0 = OPTEE_SMC_CALL_RETURN_FROM_RPC;
+			param.a1 = extra->ocall_arg->out_param1;
+			param.a2 = extra->ocall_arg->out_param2;
+			param.a3 = extra->tee_thread_id;
+			goto call_optee;
+		}
+	}
 
 	if (optee->rpc_param_count) {
 		struct optee_msg_arg *arg;
@@ -926,7 +943,9 @@ static int optee_smc_do_call_with_arg(struct tee_context *ctx,
 		reg_pair_from_64(&param.a1, &param.a2, parg);
 	}
 	/* Initialize waiter */
-	optee_cq_wait_init(&optee->call_queue, &w, system_thread);
+	optee_cq_wait_init(&optee->call_queue, w, system_thread);
+
+call_optee:
 	while (true) {
 		struct arm_smccc_res res;
 
@@ -941,7 +960,24 @@ static int optee_smc_do_call_with_arg(struct tee_context *ctx,
 			 * Out of threads in secure world, wait for a thread
 			 * become available.
 			 */
-			optee_cq_wait_for_completion(&optee->call_queue, &w);
+			optee_cq_wait_for_completion(&optee->call_queue, w);
+		} else if (res.a0 == OPTEE_SMC_RETURN_RPC_OCALL2) {
+			cond_resched();
+			if (extra && tee_ocall_is_used(extra->ocall_arg)) {
+				extra->ocall_arg->state = TEE_OCALL2_IN_PROGRESS;
+				extra->ocall_arg->in_param1 = res.a1;
+				extra->ocall_arg->in_param2 = res.a2;
+				extra->ocall_arg->out_param1 = TEE_OCALL2_OUT_PARAM1_ERROR;
+				extra->ocall_arg->out_param2 = 0;
+				extra->tee_thread_id = res.a3;
+
+				return -EAGAIN;
+			}
+
+			WARN_ONCE(1, "optee unexpected Ocall2\n");
+			param.a0 = OPTEE_SMC_CALL_RETURN_FROM_RPC;
+			param.a1 = TEE_OCALL2_OUT_PARAM1_ERROR;
+			param.a2 = 0;
 		} else if (OPTEE_SMC_RETURN_IS_RPC(res.a0)) {
 			cond_resched();
 			param.a0 = res.a0;
@@ -955,12 +991,18 @@ static int optee_smc_do_call_with_arg(struct tee_context *ctx,
 		}
 	}
 
+	if (extra && tee_ocall_is_used(extra->ocall_arg)) {
+		w = extra->ocall_call_waiter;
+		extra->ocall_arg->state = TEE_OCALL2_IDLE;
+		extra->tee_thread_id = 0;
+	}
+
 	optee_rpc_finalize_call(&call_ctx);
 	/*
 	 * We're done with our thread in secure world, if there's any
 	 * thread waiters wake up one.
 	 */
-	optee_cq_wait_final(&optee->call_queue, &w);
+	optee_cq_wait_final(&optee->call_queue, w);
 
 	return rc;
 }
@@ -987,7 +1029,7 @@ static int optee_smc_lend_protmem(struct optee *optee, struct tee_shm *protmem,
 	msg_arg->params[1].u.tmem.size = protmem->size;
 	msg_arg->params[1].u.tmem.shm_ref = (u_long)protmem;
 
-	rc = optee->ops->do_call_with_arg(optee->ctx, shm, offs, false);
+	rc = optee->ops->do_call_with_arg(optee->ctx, shm, offs, false, NULL);
 	if (rc)
 		goto out;
 	if (msg_arg->ret != TEEC_SUCCESS) {
@@ -1018,7 +1060,7 @@ static int optee_smc_reclaim_protmem(struct optee *optee,
 	msg_arg->params[0].attr = OPTEE_MSG_ATTR_TYPE_RMEM_INPUT;
 	msg_arg->params[0].u.rmem.shm_ref = (u_long)protmem;
 
-	rc = optee->ops->do_call_with_arg(optee->ctx, shm, offs, false);
+	rc = optee->ops->do_call_with_arg(optee->ctx, shm, offs, false, NULL);
 	if (rc)
 		goto out;
 	if (msg_arg->ret != TEEC_SUCCESS)
@@ -1240,6 +1282,14 @@ static int optee_smc_open(struct tee_context *ctx)
 	return optee_open(ctx, sec_caps & OPTEE_SMC_SEC_CAP_MEMREF_NULL);
 }
 
+static int optee_invoke_func_ocall2(struct tee_context *ctx,
+				    struct tee_ioctl_invoke_arg *arg,
+				    struct tee_param *param,
+				    struct tee_ocall2_arg *ocall_arg)
+{
+	return optee_invoke_func_helper(ctx, arg, param, ocall_arg);
+}
+
 static const struct tee_driver_ops optee_clnt_ops = {
 	.get_version = optee_get_version,
 	.open = optee_smc_open,
@@ -1248,6 +1298,7 @@ static const struct tee_driver_ops optee_clnt_ops = {
 	.close_session = optee_close_session,
 	.system_session = optee_system_session,
 	.invoke_func = optee_invoke_func,
+	.invoke_func_ocall2 = optee_invoke_func_ocall2,
 	.cancel_req = optee_cancel_req,
 	.shm_register = optee_shm_register,
 	.shm_unregister = optee_shm_unregister,

@@ -616,6 +616,29 @@ struct optee_smc_get_protmem_config_result {
 #define OPTEE_SMC_RETURN_RPC_CMD \
 	OPTEE_SMC_RPC_VAL(OPTEE_SMC_RPC_FUNC_CMD)
 
+/*
+ * Do an OCall RPC request to caller client. The Ocall request ABI is very
+ * minimal: 2 input arguments and 2 output arguments. 1st output argument
+ * value 0 is reserved to error management requesting OCall termination.
+ * When 1st output argument is 0, 2nd output argument is either 0 or can
+ * carry a TEEC_Result like error code.
+ *
+ * "Call" register usage:
+ * a0	OPTEE_SMC_RETURN_RPC_OCALL2
+ * a1	OCall input argument 1 (32 bit)
+ * a2	OCall input argument 2 (32 bit)
+ * a3-7	Resume information, must be preserved
+ *
+ * "Return" register usage:
+ * a0	SMC Function ID, OPTEE_SMC_CALL_RETURN_FROM_RPC.
+ * a1	OCall output argument 1 (32 bit), value 0 upon error
+ * a2	OCall output argument 2 (32 bit), TEEC_Result error if @a1 is 0
+ * a3-7	Preserved
+ */
+#define OPTEE_SMC_RPC_FUNC_OCALL2		2048
+#define OPTEE_SMC_RETURN_RPC_OCALL2 \
+	OPTEE_SMC_RPC_VAL(OPTEE_SMC_RPC_FUNC_OCALL2)
+
 /* Returned in a0 */
 #define OPTEE_SMC_RETURN_UNKNOWN_FUNCTION 0xFFFFFFFF
 

@@ -616,7 +616,8 @@ done:
 
 static int optee_ffa_do_call_with_arg(struct tee_context *ctx,
 				      struct tee_shm *shm, u_int offs,
-				      bool system_thread)
+				      bool system_thread,
+				      struct optee_call_extra *call_extra __always_unused)
 {
 	struct ffa_send_direct_data data = {
 		.data0 = OPTEE_FFA_YIELDING_CALL_WITH_ARG,
@@ -666,7 +667,7 @@ static int do_call_lend_protmem(struct optee *optee, u64 cookie, u32 use_case)
 	msg_arg->params[0].u.value.a = cookie;
 	msg_arg->params[0].u.value.b = use_case;
 
-	rc = optee->ops->do_call_with_arg(optee->ctx, shm, offs, false);
+	rc = optee->ops->do_call_with_arg(optee->ctx, shm, offs, false, NULL);
 	if (rc)
 		goto out;
 	if (msg_arg->ret != TEEC_SUCCESS) {

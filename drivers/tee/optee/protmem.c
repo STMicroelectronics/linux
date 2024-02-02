@@ -246,7 +246,7 @@ static int get_protmem_config(struct optee *optee, u32 use_case,
 	if (rc)
 		goto out_free_msg;
 
-	rc = optee->ops->do_call_with_arg(optee->ctx, shm, offs, false);
+	rc = optee->ops->do_call_with_arg(optee->ctx, shm, offs, false, NULL);
 	if (rc)
 		goto out_free_msg;
 	if (msg_arg->ret && msg_arg->ret != TEEC_ERROR_SHORT_BUFFER) {

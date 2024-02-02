@@ -1363,6 +1363,18 @@ int tee_client_invoke_func(struct tee_context *ctx,
 }
 EXPORT_SYMBOL_GPL(tee_client_invoke_func);
 
+int tee_client_invoke_func_ocall2(struct tee_context *ctx,
+				  struct tee_ioctl_invoke_arg *arg,
+				  struct tee_param *param,
+				  struct tee_ocall2_arg *ocall_arg)
+{
+	if (!ctx->teedev->desc->ops->invoke_func_ocall2)
+		return -EINVAL;
+	return ctx->teedev->desc->ops->invoke_func_ocall2(ctx, arg, param,
+							  ocall_arg);
+}
+EXPORT_SYMBOL_GPL(tee_client_invoke_func_ocall2);
+
 int tee_client_cancel_req(struct tee_context *ctx,
 			  struct tee_ioctl_cancel_arg *arg)
 {

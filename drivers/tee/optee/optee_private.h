@@ -172,6 +172,18 @@ struct optee_ffa {
 struct optee;
 
 /**
+ * struct optee_call_extra - Extra data used by calling TEE
+ * @ocall_arg: OCall arguments related to the call or NULL
+ * @tee_thread_id: TEE thread ID to use to return from an OCall, or 0
+ * @ocall_call_waiter: Reference to the waiter that tracks TEE entry
+ */
+struct optee_call_extra {
+	struct tee_ocall2_arg *ocall_arg;
+	u32 tee_thread_id;
+	struct optee_call_waiter *ocall_call_waiter;
+};
+
+/**
  * struct optee_ops - OP-TEE driver internal operations
  * @do_call_with_arg:	enters OP-TEE in secure world
  * @to_msg_param:	converts from struct tee_param to OPTEE_MSG parameters
@@ -189,7 +201,8 @@ struct optee;
 struct optee_ops {
 	int (*do_call_with_arg)(struct tee_context *ctx,
 				struct tee_shm *shm_arg, u_int offs,
-				bool system_thread);
+				bool system_thread,
+				struct optee_call_extra *extra);
 	int (*to_msg_param)(struct optee *optee,
 			    struct optee_msg_param *msg_params,
 			    size_t num_params, const struct tee_param *params);
@@ -251,10 +264,36 @@ struct optee {
 	struct work_struct rpmb_scan_bus_work;
 };
 
+/**
+ * struct tee_session_ocall - Ocall context of a session
+ * @thread_p1:    TEE thread ID plus 1 (0 means no suspended TEE thread)
+ * @call_waiter:  Waiter for the call entry completed at Ocall return entry
+ * @call_arg:     Invocation argument from initial call that issued the Ocall
+ * @msg_arg:      Reference to optee msg used at initial call
+ * @msg_entry:    Reference to optee msg allocation entry
+ * @msg_offs:     Reference to optee msg allocation offset
+ */
+struct tee_session_ocall {
+	u32 thread_p1;
+	struct optee_call_waiter call_waiter;
+	struct tee_ioctl_invoke_arg call_arg;
+	struct optee_msg_arg *msg_arg;
+	struct optee_shm_arg_entry *msg_entry;
+	u_int msg_offs;
+};
+
+/**
+ * struct tee_session - Session between a client and a TEE service (TA)
+ * @list_node: User list for the session
+ * @session_id:        Session identifier provided by the TEE
+ * @use_sys_thread:    True is session uses TEE system thread
+ * @ocall_ctx:         OCall context
+ */
 struct optee_session {
 	struct list_head list_node;
 	u32 session_id;
 	bool use_sys_thread;
+	struct tee_session_ocall ocall_ctx;
 };
 
 struct optee_context_data {
@@ -314,6 +353,11 @@ int optee_close_session(struct tee_context *ctx, u32 session);
 int optee_invoke_func(struct tee_context *ctx, struct tee_ioctl_invoke_arg *arg,
 		      struct tee_param *param);
 int optee_cancel_req(struct tee_context *ctx, u32 cancel_id, u32 session);
+
+int optee_invoke_func_helper(struct tee_context *ctx,
+			     struct tee_ioctl_invoke_arg *arg,
+			     struct tee_param *param,
+			     struct tee_ocall2_arg *ocall_arg);
 
 #define PTA_CMD_GET_DEVICES		0x0
 #define PTA_CMD_GET_DEVICES_SUPP	0x1
