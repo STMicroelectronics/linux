@@ -193,7 +193,6 @@ static struct sk_buff *dsa_rcv_ll(struct sk_buff *skb, struct net_device *dev,
 	enum dsa_code code;
 	enum dsa_cmd cmd;
 	u8 *dsa_header;
-	prinkt("dsa_rcv_ll()\n");
 
 	/* The ethertype field is part of the DSA header. */
 	dsa_header = dsa_etype_header_pos_rx(skb);

@@ -324,45 +324,32 @@ static ssize_t tagging_imp_show(struct device *d, struct device_attribute *attr,
 {
 	struct net_device *dev = to_net_dev(d);
 	struct dsa_port *cpu_dp = dev->dsa_ptr;
+	struct dsa_switch *ds = cpu_dp->ds;
+	const struct dsa_device_ops *tag_ops;
+	enum dsa_tag_protocol proto;
 
-	return sprintf(buf, "%s\n",
-		       dsa_tag_protocol_to_str(cpu_dp->tag_ops));
+	proto = ds->ops->get_tag_protocol(ds, 8, DSA_TAG_PROTO_NONE);
+	tag_ops = dsa_tag_driver_get(proto);
+	return sprintf(buf, "%s\n", dsa_tag_protocol_to_str(tag_ops));
 }
 
 static ssize_t tagging_imp_store(struct device *d, struct device_attribute *attr,
 			     const char *buf, size_t count)
 {
-	const struct dsa_device_ops *new_tag_ops, *old_tag_ops;
+	const struct dsa_device_ops *new_tag_ops;
 	struct net_device *dev = to_net_dev(d);
 	struct dsa_port *cpu_dp = dev->dsa_ptr;
-	int err;
+	struct dsa_switch *ds = cpu_dp->ds;
 
-	old_tag_ops = cpu_dp->tag_ops;
 	new_tag_ops = dsa_find_tagger_by_name(buf);
 	/* Bad tagger name, or module is not loaded? */
 	if (IS_ERR(new_tag_ops))
 		return PTR_ERR(new_tag_ops);
 
-	if (new_tag_ops == old_tag_ops)
-		/* Drop the temporarily held duplicate reference, since
-		 * the DSA switch tree uses this tagger.
-		 */
-		goto out;
+	if(!ds->ops->change_tag_protocol)
+		return -EOPNOTSUPP;
 
-	err = dsa_tree_change_tag_proto(cpu_dp->ds->dst, dev, new_tag_ops,
-					old_tag_ops);
-	if (err) {
-		/* On failure the old tagger is restored, so we don't need the
-		 * driver for the new one.
-		 */
-		dsa_tag_driver_put(new_tag_ops);
-		return err;
-	}
-
-	/* On success we no longer need the module for the old tagging protocol
-	 */
-out:
-	dsa_tag_driver_put(old_tag_ops);
+	ds->ops->change_tag_protocol(ds, 8, new_tag_ops->proto);
 	return count;
 }
 static DEVICE_ATTR_RW(tagging_imp);

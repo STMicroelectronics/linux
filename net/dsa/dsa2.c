@@ -1343,7 +1343,6 @@ static int dsa_port_parse_of(struct dsa_port *dp, struct device_node *dn)
 	struct device_node *ethernet = of_parse_phandle(dn, "ethernet", 0);
 	const char *name = of_get_property(dn, "label", NULL);
 	bool link = of_property_read_bool(dn, "link");
-	bool port_imp = of_property_read_bool(dn, "port-imp");
 
 	dp->dn = dn;
 	if (ethernet) {

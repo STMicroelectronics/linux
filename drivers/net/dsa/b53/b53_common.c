@@ -166,6 +166,7 @@ static const struct b53_mib_desc b53_mibs[] = {
 
 #define B53_MIBS_SIZE	ARRAY_SIZE(b53_mibs)
 
+// Datum:  This is the one BCM53134
 static const struct b53_mib_desc b53_mibs_58xx[] = {
 	{ 8, 0x00, "TxOctets" },
 	{ 4, 0x08, "TxDropPkts" },
@@ -622,44 +623,52 @@ EXPORT_SYMBOL(b53_disable_port);
 void b53_brcm_hdr_setup(struct dsa_switch *ds, int port)
 {
 	struct b53_device *dev = ds->priv;
-	bool tag_en = !(dev->tag_protocol == DSA_TAG_PROTO_NONE);
+	bool tag_en;
 	u8 hdr_ctl, val;
 	u16 reg;
-	dev->tag_protocol = DSA_TAG_PROTO_NONE;
-	tag_en = 0;
+
 	/* Resolve which bit controls the Broadcom tag */
 	switch (port) {
 	case 8:
 		val = BRCM_HDR_P8_EN;
+		tag_en = !(dev->tag_protocol_imp == DSA_TAG_PROTO_NONE);
 		break;
 	case 7:
 		val = BRCM_HDR_P7_EN;
+		tag_en = false;
 		break;
 	case 5:
 		val = BRCM_HDR_P5_EN;
+		tag_en =  !(dev->tag_protocol == DSA_TAG_PROTO_NONE);
 		break;
 	default:
 		val = 0;
 		break;
 	}
 
-	/* Enable management mode if tagging is requested */
+	// /* Enable management mode if tagging is requested */
+	// b53_read8(dev, B53_CTRL_PAGE, B53_SWITCH_MODE, &hdr_ctl);
+	// if (tag_en)
+	// 	hdr_ctl |= SM_SW_FWD_MODE;
+	// else
+	// 	hdr_ctl &= ~SM_SW_FWD_MODE;
+	// b53_write8(dev, B53_CTRL_PAGE, B53_SWITCH_MODE, hdr_ctl);
+
+	// Datum:  Always disable management mode
 	b53_read8(dev, B53_CTRL_PAGE, B53_SWITCH_MODE, &hdr_ctl);
-	if (tag_en)
-		hdr_ctl |= SM_SW_FWD_MODE;
-	else
-		hdr_ctl &= ~SM_SW_FWD_MODE;
+	hdr_ctl &= ~SM_SW_FWD_MODE;
 	b53_write8(dev, B53_CTRL_PAGE, B53_SWITCH_MODE, hdr_ctl);
 
-	/* Configure the appropriate IMP port */
-	b53_read8(dev, B53_MGMT_PAGE, B53_GLOBAL_CONFIG, &hdr_ctl);
-	if (port == 8)
-		hdr_ctl |= GC_FRM_MGMT_PORT_MII;
-	else if (port == 5)
-		hdr_ctl |= GC_FRM_MGMT_PORT_M;
-	b53_write8(dev, B53_MGMT_PAGE, B53_GLOBAL_CONFIG, hdr_ctl);
+	// Datum:  No in-band management ports, switch is managed via SPI (defaults to no in-band management ports)
+	// /* Configure the appropriate IMP port */
+	// b53_read8(dev, B53_MGMT_PAGE, B53_GLOBAL_CONFIG, &hdr_ctl);
+	// if (port == 8)
+	// 	hdr_ctl |= GC_FRM_MGMT_PORT_MII;
+	// else if (port == 5)
+	// 	hdr_ctl |= GC_FRM_MGMT_PORT_M;
+	// b53_write8(dev, B53_MGMT_PAGE, B53_GLOBAL_CONFIG, hdr_ctl);
 
-	/* Enable Broadcom tags for IMP port */
+	/* Configure Broadcom tags for IMP/CPU port */
 	b53_read8(dev, B53_MGMT_PAGE, B53_BRCM_HDR, &hdr_ctl);
 	if (tag_en)
 		hdr_ctl |= val;
@@ -670,6 +679,8 @@ void b53_brcm_hdr_setup(struct dsa_switch *ds, int port)
 	/* Registers below are only accessible on newer devices */
 	if (!is58xx(dev))
 		return;
+	// Datum:  BCM53134 does not have the following registers:
+	//   B53_BRCM_HDR_RX_DIS, B53_BRCM_HDR_TX_DIS
 
 	/* Enable reception Broadcom tag for CPU TX (switch RX) to
 	 * allow us to tag outgoing frames
@@ -697,9 +708,21 @@ static void b53_enable_cpu_port(struct b53_device *dev, int port)
 {
 	u8 port_ctrl;
 
-	/* BCM5325 CPU port is at 8 */
-	if ((is5325(dev) || is5365(dev)) && port == B53_CPU_PORT_25)
-		port = B53_CPU_PORT;
+	port_ctrl = PORT_CTRL_RX_BCST_EN |
+		    PORT_CTRL_RX_MCST_EN |
+		    PORT_CTRL_RX_UCST_EN;
+	b53_write8(dev, B53_CTRL_PAGE, B53_PORT_CTRL(port), port_ctrl);
+
+	b53_brcm_hdr_setup(dev->ds, port);
+
+	b53_port_set_ucast_flood(dev, port, true);
+	b53_port_set_mcast_flood(dev, port, true);
+	b53_port_set_learning(dev, port, false);
+}
+
+static void b53_enable_imp_port(struct b53_device *dev, int port)
+{
+	u8 port_ctrl;
 
 	port_ctrl = PORT_CTRL_RX_BCST_EN |
 		    PORT_CTRL_RX_MCST_EN |
@@ -1117,6 +1140,11 @@ out:
 }
 EXPORT_SYMBOL(b53_setup_devlink_resources);
 
+static inline bool dsa_is_imp_port(struct dsa_switch *ds, int p)
+{
+	return p == B53_CPU_PORT;
+}
+
 static int b53_setup(struct dsa_switch *ds)
 {
 	struct b53_device *dev = ds->priv;
@@ -1146,8 +1174,11 @@ static int b53_setup(struct dsa_switch *ds)
 	 * ports will be configured with .port_enable
 	 */
 	for (port = 0; port < dev->num_ports; port++) {
+		dsa_is_cpu_port(ds, port);
 		if (dsa_is_cpu_port(ds, port))
 			b53_enable_cpu_port(dev, port);
+		else if(dsa_is_imp_port(ds, port))
+			b53_enable_imp_port(dev, port);
 		else
 			b53_disable_port(ds, port);
 	}
@@ -2059,6 +2090,7 @@ static bool b53_possible_cpu_port(struct dsa_switch *ds, int port)
 	/* Broadcom switches will accept enabling Broadcom tags on the
 	 * following ports: 5, 7 and 8, any other port is not supported
 	 */
+
 	switch (port) {
 	case B53_CPU_PORT_25:
 	case 7:
@@ -2100,6 +2132,10 @@ enum dsa_tag_protocol b53_get_tag_protocol(struct dsa_switch *ds, int port,
 					   enum dsa_tag_protocol mprot)
 {
 	struct b53_device *dev = ds->priv;
+
+	if(port == 8)
+		return dev->tag_protocol_imp;
+	
 	if (!b53_can_enable_brcm_tags(ds, port, mprot)) {
 		dev->tag_protocol = DSA_TAG_PROTO_NONE;
 		goto out;
@@ -2119,13 +2155,33 @@ enum dsa_tag_protocol b53_get_tag_protocol(struct dsa_switch *ds, int port,
 		goto out;
 	}
 
-	dev->tag_protocol = DSA_TAG_PROTO_BRCM;
 
 out:
+	// Datum:  Always set tag_protocol to NONE (cpu)
 	dev->tag_protocol = DSA_TAG_PROTO_NONE;
-	return dev->tag_protocol;
+	if(port == B53_CPU_PORT)
+		return dev->tag_protocol_imp;
+	else
+		return dev->tag_protocol;
 }
 EXPORT_SYMBOL(b53_get_tag_protocol);
+
+int b53_change_imp_tag_protocol(struct dsa_switch *ds, int port,
+				enum dsa_tag_protocol mprot)
+{
+	struct b53_device *dev = ds->priv;
+
+	if (!b53_can_enable_brcm_tags(ds, port, mprot))
+		return -EOPNOTSUPP;
+	if(dev->tag_protocol_imp == mprot)
+		return 0;
+	dev->tag_protocol_imp = mprot;
+	b53_brcm_hdr_setup(ds, port);
+
+	return 0;
+}
+EXPORT_SYMBOL(b53_change_imp_tag_protocol);
+
 
 int b53_mirror_add(struct dsa_switch *ds, int port,
 		   struct dsa_mall_mirror_tc_entry *mirror, bool ingress)
@@ -2351,6 +2407,7 @@ static int b53_switch_set_reg(struct dsa_switch *ds, u8 page, u8 reg, u8 size, u
 
 static const struct dsa_switch_ops b53_switch_ops = {
 	.get_tag_protocol	= b53_get_tag_protocol,
+	.change_tag_protocol	= b53_change_imp_tag_protocol,
 	.setup			= b53_setup,
 	.teardown		= b53_teardown,
 	.get_strings		= b53_get_strings,
@@ -2782,6 +2839,9 @@ static int b53_switch_init(struct b53_device *dev)
 			    !b53_possible_cpu_port(dev->ds, i))
 				dev->ds->phys_mii_mask |= BIT(i);
 		}
+		/* Default cpu to no tagging, imp Port to brcm tagging */
+		dev->tag_protocol = DSA_TAG_PROTO_NONE;
+		dev->tag_protocol_imp = DSA_TAG_PROTO_BRCM;
 	}
 	dev->ports = devm_kcalloc(dev->dev,
 				  dev->num_ports, sizeof(struct b53_port),
@@ -2809,6 +2869,9 @@ static int b53_switch_init(struct b53_device *dev)
 				  GFP_KERNEL);
 	if (!dev->vlans)
 		return -ENOMEM;
+
+	/* Join all VLANs for all ports (promiscuous mode) */
+	b53_write16(dev, B53_VLAN_PAGE, B53_JOIN_ALL_VLAN_EN, VJA_ALL_PORTS_MASK);
 
 	dev->reset_gpio = b53_switch_get_reset_gpio(dev);
 	if (dev->reset_gpio >= 0) {

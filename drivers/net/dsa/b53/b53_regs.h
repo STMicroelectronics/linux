@@ -402,6 +402,8 @@
 
 /* Join all VLANs register (16 bit) */
 #define B53_JOIN_ALL_VLAN_EN		0x50
+#define   VJA_ALL_PORTS_MASK		0x12f
+
 
 /*************************************************************************
  * 802.1Q Page Registers
