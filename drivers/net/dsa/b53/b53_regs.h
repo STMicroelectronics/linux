@@ -24,16 +24,12 @@
 #define B53_CTRL_PAGE			0x00 /* Control */
 #define B53_STAT_PAGE			0x01 /* Status */
 #define B53_MGMT_PAGE			0x02 /* Management Mode */
-#define B53_MIB_AC_PAGE			0x03 /* MIB Autocast */
+#define B53_ICR PAGE			0x03 /* Interrrupt Control Register */
 #define B53_ARLCTRL_PAGE		0x04 /* ARL Control */
 #define B53_ARLIO_PAGE			0x05 /* ARL Access */
-#define B53_FRAMEBUF_PAGE		0x06 /* Management frame access */
-#define B53_MEM_ACCESS_PAGE		0x08 /* Memory access */
 
 /* PHY Registers */
 #define B53_PORT_MII_PAGE(i)		(0x10 + (i)) /* Port i MII Registers */
-#define B53_IM_PORT_PAGE		0x18 /* Inverse MII Port (to EMAC) */
-#define B53_ALL_PORT_PAGE		0x19 /* All ports MII (broadcast) */
 
 /* MIB registers */
 #define B53_MIB_PAGE(i)			(0x20 + (i))
