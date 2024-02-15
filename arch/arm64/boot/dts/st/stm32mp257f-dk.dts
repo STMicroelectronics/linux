@@ -90,6 +90,10 @@
 	bootph-all;
 };
 
+&cryp1 {
+	status = "okay";
+};
+
 &cs_cti0 {
 	status = "okay";
 };
