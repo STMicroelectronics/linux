@@ -94,9 +94,11 @@ static void dcmipp_isp_adjust_fmt(struct v4l2_mbus_framefmt *fmt, u32 pad)
 static int dcmipp_isp_init_state(struct v4l2_subdev *sd,
 				 struct v4l2_subdev_state *state)
 {
-	for (unsigned int i = 0; i < sd->entity.num_pads; i++) {
-		struct v4l2_mbus_framefmt *mf;
+	struct v4l2_mbus_framefmt *mf;
+	unsigned int i;
 
+	/* Initialize the sink & source pads of data */
+	for (i = 0; i < 3; i++) {
 		mf = v4l2_subdev_state_get_format(state, i);
 		*mf = fmt_default;
 		mf->code = IS_SRC(i) ? ISP_MEDIA_BUS_SRC_FMT_DEFAULT :
@@ -114,6 +116,15 @@ static int dcmipp_isp_init_state(struct v4l2_subdev *sd,
 			*v4l2_subdev_state_get_compose(state, i) = r;
 		}
 	}
+
+	/* Initialize isp params & isp stats pads */
+	mf = v4l2_subdev_state_get_format(state, 3);
+	memset(mf, 0, sizeof(struct v4l2_mbus_framefmt));
+	mf->code = MEDIA_BUS_FMT_METADATA_FIXED;
+
+	mf = v4l2_subdev_state_get_format(state, 4);
+	memset(mf, 0, sizeof(struct v4l2_mbus_framefmt));
+	mf->code = MEDIA_BUS_FMT_METADATA_FIXED;
 
 	return 0;
 }
@@ -451,13 +462,29 @@ void dcmipp_isp_ent_release(struct dcmipp_ent_device *ved)
 	dcmipp_ent_sd_unregister(ved, &isp->sd);
 }
 
+static int dcmipp_isp_link_validate(struct media_link *link)
+{
+	/*
+	 * We only need to check link coming to the sink pad #0 since
+	 * sink pad #2 is connected to the output video device
+	 */
+	if (link->sink->index != 0)
+		return 0;
+
+	return v4l2_subdev_link_validate(link);
+}
+
+static const struct media_entity_operations dcmipp_isp_mops = {
+	.link_validate		= dcmipp_isp_link_validate,
+};
+
 struct dcmipp_ent_device *dcmipp_isp_ent_init(const char *entity_name,
 					      struct dcmipp_device *dcmipp)
 {
 	struct dcmipp_isp_device *isp;
 	const unsigned long pads_flag[] = {
+		MEDIA_PAD_FL_SINK, MEDIA_PAD_FL_SOURCE, MEDIA_PAD_FL_SOURCE,
 		MEDIA_PAD_FL_SINK, MEDIA_PAD_FL_SOURCE,
-		MEDIA_PAD_FL_SOURCE,
 	};
 	int ret;
 
@@ -480,6 +507,7 @@ struct dcmipp_ent_device *dcmipp_isp_ent_init(const char *entity_name,
 		return ERR_PTR(ret);
 	}
 
+	isp->sd.entity.ops = &dcmipp_isp_mops;
 	isp->ved.dcmipp = dcmipp;
 	isp->dev = dcmipp->dev;
 
