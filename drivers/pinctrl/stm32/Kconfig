@@ -52,6 +52,12 @@ config PINCTRL_STM32MP157
 	default MACH_STM32MP157
 	select PINCTRL_STM32
 
+config PINCTRL_STM32MP215
+	tristate "STMicroelectronics STM32MP215 pin control"
+	depends on OF && HAS_IOMEM
+	default MACH_STM32MP21 || ARM64
+	select PINCTRL_STM32
+
 config PINCTRL_STM32MP257
 	tristate "STMicroelectronics STM32MP257 pin control"
 	depends on OF && HAS_IOMEM
