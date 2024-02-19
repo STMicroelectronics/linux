@@ -79,6 +79,61 @@ static const struct hantro_fmt stm32mp25_venc_fmts[] = {
 		.enc_fmt = ROCKCHIP_VPU_ENC_FMT_UYVY422,
 	},
 	{
+		.fourcc = V4L2_PIX_FMT_RGB565,
+		.codec_mode = HANTRO_MODE_NONE,
+		.enc_fmt = ROCKCHIP_VPU_ENC_FMT_RGB565,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_XBGR32,
+		.codec_mode = HANTRO_MODE_NONE,
+		.enc_fmt = ROCKCHIP_VPU_ENC_FMT_RGB888,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_ABGR32,
+		.codec_mode = HANTRO_MODE_NONE,
+		.enc_fmt = ROCKCHIP_VPU_ENC_FMT_RGB888,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_BGR32,
+		.codec_mode = HANTRO_MODE_NONE,
+		.enc_fmt = ROCKCHIP_VPU_ENC_FMT_RGB888,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_RGBX32,
+		.codec_mode = HANTRO_MODE_NONE,
+		.enc_fmt = ROCKCHIP_VPU_ENC_FMT_RGB888,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_RGBA32,
+		.codec_mode = HANTRO_MODE_NONE,
+		.enc_fmt = ROCKCHIP_VPU_ENC_FMT_RGB888,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_BGRX32,
+		.codec_mode = HANTRO_MODE_NONE,
+		.enc_fmt = ROCKCHIP_VPU_ENC_FMT_RGB888,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_BGRA32,
+		.codec_mode = HANTRO_MODE_NONE,
+		.enc_fmt = ROCKCHIP_VPU_ENC_FMT_RGB888,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_XRGB32,
+		.codec_mode = HANTRO_MODE_NONE,
+		.enc_fmt = ROCKCHIP_VPU_ENC_FMT_RGB888,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_ARGB32,
+		.codec_mode = HANTRO_MODE_NONE,
+		.enc_fmt = ROCKCHIP_VPU_ENC_FMT_RGB888,
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_RGB32,
+		.codec_mode = HANTRO_MODE_NONE,
+		.enc_fmt = ROCKCHIP_VPU_ENC_FMT_RGB888,
+	},
+	{
 		.fourcc = V4L2_PIX_FMT_JPEG,
 		.codec_mode = HANTRO_MODE_JPEG_ENC,
 		.max_depth = 2,
