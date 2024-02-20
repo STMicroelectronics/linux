@@ -241,6 +241,7 @@ struct dsa_port {
 		DSA_PORT_TYPE_CPU,
 		DSA_PORT_TYPE_DSA,
 		DSA_PORT_TYPE_USER,
+		DSA_PORT_TYPE_IMP
 	} type;
 
 	struct dsa_switch	*ds;

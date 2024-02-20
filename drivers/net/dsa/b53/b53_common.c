@@ -829,10 +829,6 @@ static void b53_adjust_link(struct dsa_switch *ds, int port,
 	if (!phy_is_pseudo_fixed_link(phydev))
 		return;
 
-	// /* Enable flow control on BCM5301x's CPU port */
-	// if (is5301x(dev) && port == dev->cpu_port)
-	// 	tx_pause = rx_pause = true;
-
 	if (phydev->pause) {
 		if (phydev->asym_pause)
 			tx_pause = true;
@@ -852,9 +848,7 @@ static void b53_adjust_link(struct dsa_switch *ds, int port,
 		/* Configure the port RGMII clock delay by DLL disabled and
 		 * tx_clk aligned timing (restoring to reset defaults)
 		 */
-		b53_read8(dev, B53_CTRL_PAGE, off, &rgmii_ctrl);
-		rgmii_ctrl &= ~(RGMII_CTRL_DLL_RXC | RGMII_CTRL_DLL_TXC |
-				RGMII_CTRL_TIMING_SEL);
+		rgmii_ctrl = 0x00;
 
 		/* PHY_INTERFACE_MODE_RGMII_TXID means TX internal delay, make
 		 * sure that we enable the port TX clock internal delay to
@@ -874,12 +868,9 @@ static void b53_adjust_link(struct dsa_switch *ds, int port,
 			rgmii_ctrl |= RGMII_CTRL_DLL_TXC;
 		if (phydev->interface == PHY_INTERFACE_MODE_RGMII_RXID)
 			rgmii_ctrl |= RGMII_CTRL_DLL_RXC;
-		if (phydev->interface == PHY_INTERFACE_MODE_RGMII)
+		if (phydev->interface == PHY_INTERFACE_MODE_RGMII_ID)
 			rgmii_ctrl |= (RGMII_CTRL_DLL_TXC | RGMII_CTRL_DLL_RXC);
-		//rgmii_ctrl |= RGMII_CTRL_TIMING_SEL;
-		rgmii_ctrl = (RGMII_CTRL_DLL_TXC | RGMII_CTRL_DLL_RXC);
-		//rgmii_ctrl = RGMII_CTRL_DLL_TXC;
-		//rgmii_ctrl = RGMII_CTRL_DLL_RXC;
+
 		b53_write8(dev, B53_CTRL_PAGE, off, rgmii_ctrl);
 
 		dev_info(ds->dev, "Configured port %d for %s (reg=0x%02x)\n", port,

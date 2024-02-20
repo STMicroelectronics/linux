@@ -461,6 +461,18 @@ static int dsa_port_setup(struct dsa_port *dp)
 		dsa_port_enabled = true;
 
 		break;
+	case DSA_PORT_TYPE_IMP:
+		err = dsa_port_link_register_of(dp);
+		if (err)
+			break;
+		dsa_port_link_registered = true;
+
+		err = dsa_port_enable(dp, NULL);
+		if (err)
+			break;
+		dsa_port_enabled = true;
+
+		break; 
 	case DSA_PORT_TYPE_DSA:
 		err = dsa_port_link_register_of(dp);
 		if (err)
@@ -526,6 +538,9 @@ static int dsa_port_devlink_setup(struct dsa_port *dp)
 	case DSA_PORT_TYPE_DSA:
 		attrs.flavour = DEVLINK_PORT_FLAVOUR_DSA;
 		break;
+	case DSA_PORT_TYPE_IMP:
+		attrs.flavour = DEVLINK_PORT_FLAVOUR_PHYSICAL;
+		break;
 	case DSA_PORT_TYPE_USER:
 		attrs.flavour = DEVLINK_PORT_FLAVOUR_PHYSICAL;
 		break;
@@ -558,6 +573,10 @@ static void dsa_port_teardown(struct dsa_port *dp)
 	case DSA_PORT_TYPE_UNUSED:
 		break;
 	case DSA_PORT_TYPE_CPU:
+		dsa_port_disable(dp);
+		dsa_port_link_unregister_of(dp);
+		break;
+	case DSA_PORT_TYPE_IMP:
 		dsa_port_disable(dp);
 		dsa_port_link_unregister_of(dp);
 		break;
@@ -1224,6 +1243,17 @@ static int dsa_port_parse_dsa(struct dsa_port *dp)
 	return 0;
 }
 
+static int dsa_port_parse_imp(struct dsa_port *dp, const char *name)
+{
+	if (!name)
+		name = "imp%d";
+
+	dp->type = DSA_PORT_TYPE_IMP;
+	dp->name = name;
+
+	return 0;
+}
+
 static enum dsa_tag_protocol dsa_get_tag_protocol(struct dsa_port *dp,
 						  struct net_device *master)
 {
@@ -1356,6 +1386,10 @@ static int dsa_port_parse_of(struct dsa_port *dp, struct device_node *dn)
 
 		user_protocol = of_get_property(dn, "dsa-tag-protocol", NULL);
 		return dsa_port_parse_cpu(dp, master, user_protocol);
+	}
+
+	if(of_property_read_bool(dn, "port-imp")) {
+		return dsa_port_parse_imp(dp, name);
 	}
 
 	if (link)
