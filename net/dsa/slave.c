@@ -1546,7 +1546,7 @@ static void dsa_bridge_mtu_normalization(struct dsa_port *dp)
 			struct dsa_hw_port *hw_port;
 			struct net_device *slave;
 
-			if (other_dp->type != DSA_PORT_TYPE_USER)
+			if ((other_dp->type != DSA_PORT_TYPE_USER) && (other_dp->type != DSA_PORT_TYPE_IMP))
 				continue;
 
 			if (other_dp->bridge_dev != dp->bridge_dev)

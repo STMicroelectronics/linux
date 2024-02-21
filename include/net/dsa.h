@@ -445,7 +445,7 @@ static inline bool dsa_port_is_cpu(struct dsa_port *port)
 
 static inline bool dsa_port_is_user(struct dsa_port *dp)
 {
-	return dp->type == DSA_PORT_TYPE_USER;
+	return (dp->type == DSA_PORT_TYPE_USER) || (dp->type == DSA_PORT_TYPE_IMP);
 }
 
 static inline bool dsa_port_is_unused(struct dsa_port *dp)
@@ -470,7 +470,7 @@ static inline bool dsa_is_dsa_port(struct dsa_switch *ds, int p)
 
 static inline bool dsa_is_user_port(struct dsa_switch *ds, int p)
 {
-	return dsa_to_port(ds, p)->type == DSA_PORT_TYPE_USER;
+	return dsa_to_port(ds, p)->type == DSA_PORT_TYPE_USER || dsa_to_port(ds, p)->type == DSA_PORT_TYPE_IMP;
 }
 
 static inline u32 dsa_user_ports(struct dsa_switch *ds)

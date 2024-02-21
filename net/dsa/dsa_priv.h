@@ -191,7 +191,7 @@ static inline struct net_device *dsa_master_find_slave(struct net_device *dev,
 
 	list_for_each_entry(dp, &dst->ports, list)
 		if (dp->ds->index == device && dp->index == port &&
-		    dp->type == DSA_PORT_TYPE_USER)
+		    (dp->type == DSA_PORT_TYPE_USER || dp->type == DSA_PORT_TYPE_IMP))
 			return dp->slave;
 
 	return NULL;

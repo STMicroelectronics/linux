@@ -472,7 +472,13 @@ static int dsa_port_setup(struct dsa_port *dp)
 			break;
 		dsa_port_enabled = true;
 
-		break; 
+		of_get_mac_address(dp->dn, dp->mac);
+		err = dsa_slave_create(dp);
+		if (err)
+			break;
+
+		devlink_port_type_eth_set(dlp, dp->slave);
+		break;
 	case DSA_PORT_TYPE_DSA:
 		err = dsa_port_link_register_of(dp);
 		if (err)
@@ -577,9 +583,18 @@ static void dsa_port_teardown(struct dsa_port *dp)
 		dsa_port_link_unregister_of(dp);
 		break;
 	case DSA_PORT_TYPE_IMP:
-		dsa_port_disable(dp);
-		dsa_port_link_unregister_of(dp);
+		if (dp->slave) {
+			dsa_slave_destroy(dp->slave);
+			dp->slave = NULL;
+		}
 		break;
+		// dsa_port_disable(dp);
+		// dsa_port_link_unregister_of(dp);
+		// if (dp->slave) {
+		// 	dsa_slave_destroy(dp->slave);
+		// 	dp->slave = NULL;
+		// }
+		// break;
 	case DSA_PORT_TYPE_DSA:
 		dsa_port_disable(dp);
 		dsa_port_link_unregister_of(dp);
