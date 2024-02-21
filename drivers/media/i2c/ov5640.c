@@ -1578,13 +1578,38 @@ static unsigned long ov5640_calc_pclk(struct ov5640_dev *sensor,
 
 static int ov5640_set_dvp_pclk(struct ov5640_dev *sensor)
 {
+	const struct ov5640_mode_info *mode = sensor->current_mode;
+	struct i2c_client *client = sensor->i2c_client;
 	u8 prediv, mult, sysdiv, pll_rdiv, bit_div, pclk_div;
+	u32 pclk_freq, max_pclk_freq;
+	u8 dvp_pclk_divider;
 	u32 rate;
 	int ret;
 
 	rate = ov5640_calc_pixel_rate(sensor);
 	rate *= ov5640_code_to_bpp(sensor, sensor->fmt.code);
 	rate /= sensor->ep.bus.parallel.bus_width;
+
+	/*
+	 * 1280x720 and 1024x768 are reported to use 'SUBSAMPLING' only,
+	 * but they seems to go through the scaler before subsampling.
+	 */
+	if (mode->dn_mode == SCALING ||
+	   (mode->id == OV5640_MODE_720P_1280_720) ||
+	   (mode->id == OV5640_MODE_XGA_1024_768))
+		dvp_pclk_divider = 1;
+	else
+		dvp_pclk_divider = 2;
+
+	pclk_freq = rate / dvp_pclk_divider;
+	max_pclk_freq = sensor->ep.bus.parallel.pclk_max_frequency;
+
+	/* clip rate according to optional maximum pixel clock limit */
+	if (max_pclk_freq && (pclk_freq > max_pclk_freq)) {
+		rate = max_pclk_freq * dvp_pclk_divider;
+		dev_dbg(&client->dev, "DVP pixel clock too high (%d > %d Hz), reducing rate...\n",
+			pclk_freq, max_pclk_freq);
+	}
 
 	ov5640_calc_pclk(sensor, rate, &prediv, &mult, &sysdiv, &pll_rdiv,
 			 &bit_div, &pclk_div);
