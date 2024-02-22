@@ -13,12 +13,11 @@ maintainers:
 description:
   The STMicroelectronics STM32 DSI controller uses the Synopsys DesignWare MIPI-DSI host controller.
 
-allOf:
-  - $ref: dsi-controller.yaml#
-
 properties:
   compatible:
-    const: st,stm32-dsi
+    enum:
+      - st,stm32-dsi
+      - st,stm32mp255-dsi
 
   reg:
     maxItems: 1
@@ -37,6 +36,11 @@ properties:
       - const: px_clk
     minItems: 2
 
+  "#clock-cells":
+    const: 0
+    description:
+      Provides the output data lane clock to the framework.
+
   resets:
     maxItems: 1
 
@@ -44,9 +48,11 @@ properties:
     items:
       - const: apb
 
-  phy-dsi-supply:
-    description:
-      Phandle of the regulator that provides the supply voltage.
+  power-domains:
+    maxItems: 1
+
+  access-controllers:
+    maxItems: 1
 
   ports:
     $ref: /schemas/graph.yaml#/properties/ports
@@ -81,6 +87,37 @@ required:
   - ports
 
 unevaluatedProperties: false
+
+allOf:
+  - $ref: dsi-controller.yaml#
+
+  - if:
+      properties:
+        compatible:
+          contains:
+            enum:
+              - st,stm32-dsi
+    then:
+      properties:
+        phy-dsi-supply:
+          description:
+            Phandle of the regulator that provides the supply voltage.
+
+  - if:
+      properties:
+        compatible:
+          contains:
+            enum:
+              - st,stm32mp255-dsi
+    then:
+      properties:
+        vdd-supply:
+          description:
+            Phandle of the regulator that provides the supply voltage vdd.
+
+        vdda18-supply:
+          description:
+            Phandle of the regulator that provides the supply voltage vdda18.
 
 examples:
   - |
