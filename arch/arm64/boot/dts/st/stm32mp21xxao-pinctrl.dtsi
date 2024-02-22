@@ -1,0 +1,63 @@
+// SPDX-License-Identifier: (GPL-2.0-only OR BSD-3-Clause)
+/*
+ * Copyright (C) STMicroelectronics 2024-2025 - All Rights Reserved
+ * Author: Amelie Delaunay <amelie.delaunay@foss.st.com> for STMicroelectronics.
+ */
+
+&pinctrl {
+	st,package = <STM32MP_PKG_AO>;
+
+	gpioa: gpio@44240000 {
+		ngpios = <15>;
+		gpio-ranges = <&pinctrl 0 0 12>, <&pinctrl 13 13 3>;
+		status = "okay";
+	};
+
+	gpiob: gpio@44250000 {
+		ngpios = <5>;
+		gpio-ranges = <&pinctrl 11 27 5>;
+		status = "okay";
+	};
+
+	gpioc: gpio@44260000 {
+		ngpios = <14>;
+		gpio-ranges = <&pinctrl 0 32 14>;
+		status = "okay";
+	};
+
+	gpiod: gpio@44270000 {
+		ngpios = <16>;
+		gpio-ranges = <&pinctrl 0 48 16>;
+		status = "okay";
+	};
+
+	gpioe: gpio@44280000 {
+		ngpios = <14>;
+		gpio-ranges = <&pinctrl 0 64 10>, <&pinctrl 11 75 3>, <&pinctrl 15 79 1>;
+		status = "okay";
+	};
+
+	gpiof: gpio@44290000 {
+		ngpios = <15>;
+		gpio-ranges = <&pinctrl 0 80 14>, <&pinctrl 15 95 1>;
+		status = "okay";
+	};
+
+	gpiog: gpio@442a0000 {
+		ngpios = <9>;
+		gpio-ranges = <&pinctrl 0 96 6>, <&pinctrl 7 103 1>, <&pinctrl 11 107 2>;
+		status = "okay";
+	};
+
+	gpioh: gpio@442b0000 {
+		ngpios = <7>;
+		gpio-ranges = <&pinctrl 4 116 2>, <&pinctrl 9 121 5>;
+		status = "okay";
+	};
+
+	gpioi: gpio@442c0000 {
+		ngpios = <3>;
+		gpio-ranges = <&pinctrl 0 128 2>, <&pinctrl 4 132 1>;
+		status = "okay";
+	};
+};
