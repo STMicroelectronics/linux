@@ -509,6 +509,7 @@
 #define B53_JUMBO_PORT_MASK		0x01
 #define B53_JUMBO_PORT_MASK_63XX	0x04
 #define   JPM_10_100_JUMBO_EN		BIT(24) /* GigE always enabled */
+#define   JPM_RESERVED_BITS		0xfefffe00
 
 /* Good Frame Max Size without 802.1Q TAG (16 bit) */
 #define B53_JUMBO_MAX_SIZE		0x05

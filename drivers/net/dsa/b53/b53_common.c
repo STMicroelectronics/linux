@@ -126,20 +126,18 @@ static void b53_set_forwarding(struct b53_device *dev, int enable)
 	b53_write8(dev, B53_CTRL_PAGE, B53_IP_MULTICAST_CTRL, mgmt);
 }
 
-static int b53_set_jumbo(struct b53_device *dev, bool enable, bool allow_10_100)
+static int b53_set_jumbo(struct b53_device *dev, int port, bool enable, bool allow_10_100)
 {
-	u32 port_mask = 0;
-	u16 max_size = JMS_MIN_SIZE;
-
-	if (enable) {
-		port_mask = dev->enabled_ports;
-		max_size = JMS_MAX_SIZE;
-		if (allow_10_100)
-			port_mask |= JPM_10_100_JUMBO_EN;
-	}
-
-	b53_write32(dev, B53_JUMBO_PAGE, dev->jumbo_pm_reg, port_mask);
-	return b53_write16(dev, B53_JUMBO_PAGE, dev->jumbo_size_reg, max_size);
+	u32 port_mask;
+	b53_read32(dev, B53_JUMBO_PAGE, dev->jumbo_pm_reg, &port_mask);
+	port_mask &= ~JPM_RESERVED_BITS;
+	if (enable)
+		port_mask |= BIT(port);
+	else
+		port_mask &= ~BIT(port);
+	if (allow_10_100)
+		port_mask |= JPM_10_100_JUMBO_EN;
+	return b53_write32(dev, B53_JUMBO_PAGE, dev->jumbo_pm_reg, port_mask);
 }
 
 static int b53_flush_arl(struct b53_device *dev, u8 mask)
@@ -734,10 +732,11 @@ static int b53_setup(struct dsa_switch *ds)
 			b53_disable_port(ds, port);
 	}
 	/* Disable all port based VLANs on powerup.  Userspace configuration
-	 * will enable them as needed.
+	 * will enable them as needed.  Note, PVLAN bit mask for each port
+	 * must be set to include itself per data sheet.
 	 */
 	for (port = 0; port < dev->num_ports; port++)
-		b53_write16(dev, B53_PVLAN_PAGE, B53_PVLAN_PORT_MASK(port), 0x00);
+		b53_write16(dev, B53_PVLAN_PAGE, B53_PVLAN_PORT_MASK(port), BIT(port));
 
 	return b53_setup_devlink_resources(ds);
 }
@@ -1549,11 +1548,10 @@ static int b53_change_mtu(struct dsa_switch *ds, int port, int mtu)
 	struct b53_device *dev = ds->priv;
 	bool enable_jumbo;
 	bool allow_10_100;
-
 	enable_jumbo = (mtu >= JMS_MIN_SIZE);
-	allow_10_100 = (dev->chip_id == BCM583XX_DEVICE_ID);
+	allow_10_100 = true;
 
-	return b53_set_jumbo(dev, enable_jumbo, allow_10_100);
+	return b53_set_jumbo(dev, port, enable_jumbo, allow_10_100);
 }
 
 static int b53_get_max_mtu(struct dsa_switch *ds, int port)

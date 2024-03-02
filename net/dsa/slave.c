@@ -1589,98 +1589,30 @@ out:
 	dsa_hw_port_list_free(&hw_port_list);
 }
 
+/* Datum - rewrite to unlink slave (switch ports) from master (eth0) */
 int dsa_slave_change_mtu(struct net_device *dev, int new_mtu)
 {
-	struct net_device *master = dsa_slave_to_master(dev);
 	struct dsa_port *dp = dsa_slave_to_port(dev);
 	struct dsa_slave_priv *p = netdev_priv(dev);
 	struct dsa_switch *ds = p->dp->ds;
-	struct dsa_port *dp_iter;
-	struct dsa_port *cpu_dp;
-	int port = p->dp->index;
-	int largest_mtu = 0;
-	int new_master_mtu;
-	int old_master_mtu;
 	int mtu_limit;
-	int cpu_mtu;
 	int err;
 
 	if (!ds->ops->port_change_mtu)
 		return -EOPNOTSUPP;
 
-	list_for_each_entry(dp_iter, &ds->dst->ports, list) {
-		int slave_mtu;
+	mtu_limit = dev->max_mtu;
 
-		if (!dsa_port_is_user(dp_iter))
-			continue;
-
-		/* During probe, this function will be called for each slave
-		 * device, while not all of them have been allocated. That's
-		 * ok, it doesn't change what the maximum is, so ignore it.
-		 */
-		if (!dp_iter->slave)
-			continue;
-
-		/* Pretend that we already applied the setting, which we
-		 * actually haven't (still haven't done all integrity checks)
-		 */
-		if (dp_iter == dp)
-			slave_mtu = new_mtu;
-		else
-			slave_mtu = dp_iter->slave->mtu;
-
-		if (largest_mtu < slave_mtu)
-			largest_mtu = slave_mtu;
-	}
-
-	cpu_dp = dsa_to_port(ds, port)->cpu_dp;
-
-	mtu_limit = min_t(int, master->max_mtu, dev->max_mtu);
-	old_master_mtu = master->mtu;
-	new_master_mtu = largest_mtu + dsa_tag_protocol_overhead(cpu_dp->tag_ops);
-	if (new_master_mtu > mtu_limit)
+	if(new_mtu > mtu_limit)
 		return -ERANGE;
-
-	/* If the master MTU isn't over limit, there's no need to check the CPU
-	 * MTU, since that surely isn't either.
-	 */
-	cpu_mtu = largest_mtu;
-
-	/* Start applying stuff */
-	if (new_master_mtu != old_master_mtu) {
-		err = dev_set_mtu(master, new_master_mtu);
-		if (err < 0)
-			goto out_master_failed;
-
-		/* We only need to propagate the MTU of the CPU port to
-		 * upstream switches, so create a non-targeted notifier which
-		 * updates all switches.
-		 */
-		err = dsa_port_mtu_change(cpu_dp, cpu_mtu, false);
-		if (err)
-			goto out_cpu_failed;
-	}
 
 	err = dsa_port_mtu_change(dp, new_mtu, true);
 	if (err)
-		goto out_port_failed;
+		return err;
 
 	dev->mtu = new_mtu;
 
-	dsa_bridge_mtu_normalization(dp);
-
 	return 0;
-
-out_port_failed:
-	if (new_master_mtu != old_master_mtu)
-		dsa_port_mtu_change(cpu_dp, old_master_mtu -
-				    dsa_tag_protocol_overhead(cpu_dp->tag_ops),
-				    false);
-out_cpu_failed:
-	if (new_master_mtu != old_master_mtu)
-		dev_set_mtu(master, old_master_mtu);
-out_master_failed:
-	return err;
 }
 
 static const struct ethtool_ops dsa_slave_ethtool_ops = {
