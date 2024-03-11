@@ -290,6 +290,37 @@ static int hantro_try_ctrl(struct v4l2_ctrl *ctrl)
 	return 0;
 }
 
+static int hantro_enc_try_ctrl(struct v4l2_ctrl *ctrl)
+{
+	if (ctrl->id == V4L2_CID_ROTATE) {
+		/* Only 90 and 270 degrees rotation are supported */
+		if (ctrl->val != 0 && ctrl->val != 90 && ctrl->val != 270)
+			return -EINVAL;
+	}
+
+	return 0;
+}
+
+static int hantro_enc_s_ctrl(struct v4l2_ctrl *ctrl)
+{
+	struct hantro_ctx *ctx;
+
+	ctx = container_of(ctrl->handler,
+			   struct hantro_ctx, ctrl_handler);
+
+	vpu_debug(1, "s_ctrl: id = %d, val = %d\n", ctrl->id, ctrl->val);
+
+	switch (ctrl->id) {
+	case V4L2_CID_ROTATE:
+		ctx->rotation = ctrl->val;
+		break;
+	default:
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
 static int hantro_jpeg_s_ctrl(struct v4l2_ctrl *ctrl)
 {
 	struct hantro_ctx *ctx;
@@ -389,6 +420,11 @@ static int hantro_av1_s_ctrl(struct v4l2_ctrl *ctrl)
 
 static const struct v4l2_ctrl_ops hantro_ctrl_ops = {
 	.try_ctrl = hantro_try_ctrl,
+};
+
+static const struct v4l2_ctrl_ops hantro_enc_ctrl_ops = {
+	.try_ctrl = hantro_enc_try_ctrl,
+	.s_ctrl = hantro_enc_s_ctrl,
 };
 
 static const struct v4l2_ctrl_ops hantro_jpeg_ctrl_ops = {
@@ -626,7 +662,11 @@ static int hantro_ctrls_setup(struct hantro_dev *vpu,
 {
 	int i, num_ctrls = ARRAY_SIZE(controls);
 
-	v4l2_ctrl_handler_init(&ctx->ctrl_handler, num_ctrls);
+	v4l2_ctrl_handler_init(&ctx->ctrl_handler, 1 + num_ctrls);
+
+	if (ctx->is_encoder)
+		v4l2_ctrl_new_std(&ctx->ctrl_handler, &hantro_enc_ctrl_ops,
+				  V4L2_CID_ROTATE, 0, 270, 90, 0);
 
 	for (i = 0; i < num_ctrls; i++) {
 		if (!(allowed_codecs & controls[i].codec))

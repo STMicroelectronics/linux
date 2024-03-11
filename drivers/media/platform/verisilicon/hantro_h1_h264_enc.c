@@ -223,28 +223,6 @@ static void hantro_h1_h264_enc_set_params(struct hantro_dev *vpu, struct hantro_
 	}
 }
 
-static void hantro_h1_h264_enc_set_src_img_ctrl(struct hantro_dev *vpu,
-						struct hantro_ctx *ctx)
-{
-	u32 overfill_r, overfill_b;
-	u32 reg;
-
-	/*
-	 * The format width and height are already macroblock aligned
-	 * by .vidioc_s_fmt_vid_cap_mplane() callback. Destination
-	 * format width and height can be further modified by
-	 * .vidioc_s_selection(), and the width is 4-aligned.
-	 */
-	overfill_r = ctx->src_fmt.width - ctx->dst_fmt.width;
-	overfill_b = ctx->src_fmt.height - ctx->dst_fmt.height;
-
-	reg = H1_REG_IN_IMG_CTRL_ROW_LEN(ctx->src_fmt.width)
-		| H1_REG_IN_IMG_CTRL_OVRFLR_D4(overfill_r / 4)
-		| H1_REG_IN_IMG_CTRL_OVRFLB(overfill_b)
-		| H1_REG_IN_IMG_CTRL_FMT(ctx->vpu_src_fmt->enc_fmt);
-	vepu_write_relaxed(vpu, reg, H1_REG_IN_IMG_CTRL);
-}
-
 static void hantro_h1_h264_enc_set_buffers(struct hantro_dev *vpu, struct hantro_ctx *ctx,
 					   struct v4l2_ctrl_h264_encode_params *params)
 {
@@ -397,7 +375,7 @@ int hantro_h1_h264_enc_run(struct hantro_ctx *ctx)
 	vepu_write_relaxed(vpu, H1_REG_ENC_CTRL_ENC_MODE_H264, H1_REG_ENC_CTRL);
 
 	hantro_h1_h264_enc_set_params(vpu, ctx, params, rc->qp);
-	hantro_h1_h264_enc_set_src_img_ctrl(vpu, ctx);
+	hantro_h1_set_src_img_ctrl(vpu, ctx);
 	hantro_h1_h264_enc_set_buffers(vpu, ctx, params);
 
 	reg = H1_REG_DEVICE_CTRL_SCALE_OUTPUT_SWAP8

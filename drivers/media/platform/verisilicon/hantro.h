@@ -238,6 +238,7 @@ struct hantro_dev {
  * @ctrl_handler:	Control handler used to register controls.
  * @jpeg_quality:	User-specified JPEG compression quality.
  * @bit_depth:		Bit depth of current frame
+ * @rotation:		Image clockwise rotation in degrees
  * @need_postproc:	Set to true if the bitstream features require to
  *			use the post-processor.
  *
@@ -267,6 +268,7 @@ struct hantro_ctx {
 	struct v4l2_ctrl_handler ctrl_handler;
 	int jpeg_quality;
 	int bit_depth;
+	int rotation;
 
 	const struct hantro_codec_ops *codec_ops;
 	struct hantro_postproc_ctx postproc;
@@ -521,5 +523,7 @@ int hanto_postproc_enum_framesizes(struct hantro_ctx *ctx,
 
 void hantro_h1_set_axi_ctrl(struct hantro_dev *vpu, struct hantro_ctx *ctx);
 void hantro_h1_set_color_conv(struct hantro_dev *vpu, struct hantro_ctx *ctx);
+void hantro_h1_set_src_img_ctrl(struct hantro_dev *vpu, struct hantro_ctx *ctx);
+
 
 #endif /* HANTRO_H_ */

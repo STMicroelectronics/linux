@@ -346,3 +346,40 @@ void hantro_h1_set_axi_ctrl(struct hantro_dev *vpu, struct hantro_ctx *ctx)
 
 	vepu_write(vpu, reg, H1_REG_AXI_CTRL);
 }
+
+static inline unsigned int hantro_rotation(int rotation)
+{
+	if (rotation == 90)
+		return 1;
+	else if (rotation == 270)
+		return 2;
+
+	return 0;
+}
+
+void hantro_h1_set_src_img_ctrl(struct hantro_dev *vpu, struct hantro_ctx *ctx)
+{
+	u32 overfill_r, overfill_b;
+	u32 reg;
+
+	/*
+	 * The format width and height are already macroblock aligned
+	 * by .vidioc_s_fmt_vid_cap_mplane() callback. Destination
+	 * format width and height can be further modified by
+	 * .vidioc_s_selection(), and the width is 4-aligned.
+	 */
+	if (!ctx->rotation) {
+		overfill_r = ctx->src_fmt.width - ctx->dst_fmt.width;
+		overfill_b = ctx->src_fmt.height - ctx->dst_fmt.height;
+	} else {
+		overfill_r = ctx->src_fmt.width - ctx->dst_fmt.height;
+		overfill_b = ctx->src_fmt.height - ctx->dst_fmt.width;
+	}
+
+	reg = H1_REG_IN_IMG_CTRL_ROW_LEN(ctx->src_fmt.width)
+		| H1_REG_IN_IMG_CTRL_OVRFLR_D4(overfill_r / 4)
+		| H1_REG_IN_IMG_CTRL_OVRFLB(overfill_b)
+		| H1_REG_IN_IMG_CTRL_FMT(ctx->vpu_src_fmt->enc_fmt)
+		| H1_REG_IN_IMG_CTRL_ROTATION(hantro_rotation(ctx->rotation));
+	vepu_write_relaxed(vpu, reg, H1_REG_IN_IMG_CTRL);
+}

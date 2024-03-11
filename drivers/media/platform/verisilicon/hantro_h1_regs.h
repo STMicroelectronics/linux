@@ -61,6 +61,7 @@
 #define     H1_REG_IN_IMG_CTRL_OVRFLR_D4(x)		((x) << 10)
 #define     H1_REG_IN_IMG_CTRL_OVRFLB(x)		((x) << 6)
 #define     H1_REG_IN_IMG_CTRL_FMT(x)			((x) << 2)
+#define     H1_REG_IN_IMG_CTRL_ROTATION(x)		((x))
 #define H1_REG_ENC_CTRL0				0x040
 #define    H1_REG_ENC_CTRL0_INIT_QP(x)			((x) << 26)
 #define    H1_REG_ENC_CTRL0_SLICE_ALPHA(x)		((x) << 22)
