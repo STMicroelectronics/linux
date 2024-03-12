@@ -493,6 +493,11 @@ static int panel_dpi_probe(struct device *dev,
 	of_property_read_u32(np, "height-mm", &desc->size.height);
 
 	of_property_read_string(np, "data-mapping", &mapping);
+	if(!mapping){
+		dev_err(dev, "%pOF: no data-mapping node found for \"panel-dpi\" binding\n",
+			np);
+		return -EINVAL;
+	}
 	if (!strcmp(mapping, "rgb24")) {
 		desc->bus_format = MEDIA_BUS_FMT_RGB888_1X24;
 		desc->bpc = 8;
