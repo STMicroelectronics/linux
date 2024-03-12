@@ -23,4 +23,14 @@ config STM32_PM_DOMAINS
 	  platforms, providing runtime power management for various hardware
 	  blocks. If unsure, say Y.
 
+config STM32_RISAF
+	tristate "STM32 RISAF"
+	depends on ARM64 && DEBUG_FS
+	default y
+	help
+	  Say y to enable RISAF dump debug helper driver. This creates an entry
+	  in the debugfs to dump RISAF memory regions configurations and
+	  topology. It implicitly requires that the RISAF is clocked by a
+	  capable software component.
+
 endif # ARCH_STM32 || COMPILE_TEST
