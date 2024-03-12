@@ -245,6 +245,7 @@
 	phy-handle = <&phy1_eth1>;
 	phy-mode = "rgmii-id";
 	st,ext-phyclk;
+	snps,ext-systime;
 	status = "okay";
 
 	mdio {
