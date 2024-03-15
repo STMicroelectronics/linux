@@ -176,6 +176,12 @@
 #define BCCR_BCRED	GENMASK(23, 16)	/* Background Color RED */
 #define BCCR_BCWHITE	GENMASK(23, 0)	/* Background Color WHITE */
 
+#define DCCR_DCBLACK	0x00		/* Default Color BLACK */
+#define DCCR_DCBLUE	GENMASK(7, 0)	/* Default Color BLUE */
+#define DCCR_DCGREEN	GENMASK(15, 8)	/* Default Color GREEN */
+#define DCCR_DCRED	GENMASK(23, 16)	/* Default Color RED */
+#define DCCR_DCWHITE	GENMASK(23, 0)	/* Default Color WHITE */
+
 #define IER_LIE		BIT(0)		/* Line Interrupt Enable */
 #define IER_FUWIE	BIT(1)		/* Fifo Underrun Warning Interrupt Enable */
 #define IER_TERRIE	BIT(2)		/* Transfer ERRor Interrupt Enable */
@@ -1533,6 +1539,9 @@ static void ltdc_plane_update(struct drm_plane *plane, struct drm_atomic_state *
 	/* Specifies the constant alpha value */
 	val = newstate->alpha >> 8;
 	regmap_write_bits(ldev->regmap, LTDC_L1CACR + lofs, LXCACR_CONSTA, val);
+
+	/* Sets the default color to black */
+	regmap_write(ldev->regmap, LTDC_L1DCCR + lofs, DCCR_DCBLACK);
 
 	/* Specifies the blending factors */
 	val = BF1_PAXCA | BF2_1PAXCA;
