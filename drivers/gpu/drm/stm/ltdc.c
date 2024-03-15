@@ -1047,6 +1047,10 @@ static void ltdc_crtc_atomic_disable(struct drm_crtc *crtc,
 	/* immediately commit disable of layers before switching off LTDC */
 	if (!ldev->caps.plane_reg_shadow)
 		regmap_set_bits(ldev->regmap, LTDC_SRCR, SRCR_IMR);
+	else
+		for (layer_index = 0; layer_index < ldev->caps.nb_layers; layer_index++)
+			regmap_write_bits(ldev->regmap, LTDC_L1RCR + layer_index * LAY_OFS,
+					  LXRCR_IMR | LXRCR_VBR | LXRCR_GRMSK, LXRCR_IMR);
 
 	/* Disable display streaming */
 	regmap_clear_bits(ldev->regmap, LTDC_GCR, GCR_LTDCEN);
