@@ -372,8 +372,9 @@ void hantro_h1_set_src_img_ctrl(struct hantro_dev *vpu, struct hantro_ctx *ctx)
 		overfill_r = ctx->src_fmt.width - ctx->dst_fmt.width;
 		overfill_b = ctx->src_fmt.height - ctx->dst_fmt.height;
 	} else {
-		overfill_r = ctx->src_fmt.width - ctx->dst_fmt.height;
-		overfill_b = ctx->src_fmt.height - ctx->dst_fmt.width;
+		/* FIXME Overfilled lines are seen when rotating image */
+		overfill_r = 0;
+		overfill_b = 0;
 	}
 
 	reg = H1_REG_IN_IMG_CTRL_ROW_LEN(ctx->src_fmt.width)
