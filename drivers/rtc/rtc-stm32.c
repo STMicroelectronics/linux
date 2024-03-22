@@ -1162,6 +1162,9 @@ static int stm32_rtc_probe(struct platform_device *pdev)
 		goto err;
 	}
 
+	rtc->rtc_dev->range_min = RTC_TIMESTAMP_BEGIN_2000;
+	rtc->rtc_dev->range_max = RTC_TIMESTAMP_END_2099;
+
 	/* Handle RTC alarm interrupts */
 	ret = devm_request_threaded_irq(&pdev->dev, rtc->irq_alarm, NULL,
 					stm32_rtc_alarm_irq, IRQF_ONESHOT,
