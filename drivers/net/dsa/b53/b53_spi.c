@@ -23,6 +23,7 @@
 #include <linux/delay.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
+#include <linux/mutex.h>
 #include <linux/spi/spi.h>
 #include <linux/platform_data/b53.h>
 
@@ -41,15 +42,23 @@
 
 #define B53_SPI_PAGE_SELECT	0xff
 
+DEFINE_MUTEX(datum_b53_spi_mutex);
+EXPORT_SYMBOL(datum_b53_spi_mutex);
+
 static inline int b53_spi_read_reg(struct spi_device *spi, u8 reg, u8 *val,
 				   unsigned int len)
 {
 	u8 txbuf[2];
+	int retval;
 
 	txbuf[0] = B53_SPI_CMD_NORMAL | B53_SPI_CMD_READ;
 	txbuf[1] = reg;
 
-	return spi_write_then_read(spi, txbuf, 2, val, len);
+	mutex_lock(&datum_b53_spi_mutex);
+	retval =  spi_write_then_read(spi, txbuf, 2, val, len);
+	mutex_unlock(&datum_b53_spi_mutex);
+
+	return retval;
 }
 
 static inline int b53_spi_clear_status(struct spi_device *spi)
@@ -78,12 +87,17 @@ static inline int b53_spi_clear_status(struct spi_device *spi)
 static inline int b53_spi_set_page(struct spi_device *spi, u8 page)
 {
 	u8 txbuf[3];
+	int retval;
 
 	txbuf[0] = B53_SPI_CMD_NORMAL | B53_SPI_CMD_WRITE;
 	txbuf[1] = B53_SPI_PAGE_SELECT;
 	txbuf[2] = page;
 
-	return spi_write(spi, txbuf, sizeof(txbuf));
+	mutex_lock(&datum_b53_spi_mutex);
+	retval = spi_write(spi, txbuf, sizeof(txbuf));
+	mutex_unlock(&datum_b53_spi_mutex);
+
+	return retval;
 }
 
 static inline int b53_prepare_reg_access(struct spi_device *spi, u8 page)
@@ -202,6 +216,7 @@ static int b53_spi_write8(struct b53_device *dev, u8 page, u8 reg, u8 value)
 	struct spi_device *spi = dev->priv;
 	int ret;
 	u8 txbuf[3];
+	int retval;
 
 	ret = b53_prepare_reg_access(spi, page);
 	if (ret)
@@ -211,7 +226,11 @@ static int b53_spi_write8(struct b53_device *dev, u8 page, u8 reg, u8 value)
 	txbuf[1] = reg;
 	txbuf[2] = value;
 
-	return spi_write(spi, txbuf, sizeof(txbuf));
+	mutex_lock(&datum_b53_spi_mutex);
+	retval =  spi_write(spi, txbuf, sizeof(txbuf));
+	mutex_unlock(&datum_b53_spi_mutex);
+
+	return retval;
 }
 
 static int b53_spi_write16(struct b53_device *dev, u8 page, u8 reg, u16 value)
@@ -219,6 +238,7 @@ static int b53_spi_write16(struct b53_device *dev, u8 page, u8 reg, u16 value)
 	struct spi_device *spi = dev->priv;
 	int ret;
 	u8 txbuf[4];
+	int retval;
 
 	ret = b53_prepare_reg_access(spi, page);
 	if (ret)
@@ -228,7 +248,11 @@ static int b53_spi_write16(struct b53_device *dev, u8 page, u8 reg, u16 value)
 	txbuf[1] = reg;
 	put_unaligned_le16(value, &txbuf[2]);
 
-	return spi_write(spi, txbuf, sizeof(txbuf));
+	mutex_lock(&datum_b53_spi_mutex);
+	retval =  spi_write(spi, txbuf, sizeof(txbuf));
+	mutex_unlock(&datum_b53_spi_mutex);
+
+	return retval;
 }
 
 static int b53_spi_write32(struct b53_device *dev, u8 page, u8 reg, u32 value)
@@ -236,6 +260,7 @@ static int b53_spi_write32(struct b53_device *dev, u8 page, u8 reg, u32 value)
 	struct spi_device *spi = dev->priv;
 	int ret;
 	u8 txbuf[6];
+	int retval;
 
 	ret = b53_prepare_reg_access(spi, page);
 	if (ret)
@@ -245,7 +270,11 @@ static int b53_spi_write32(struct b53_device *dev, u8 page, u8 reg, u32 value)
 	txbuf[1] = reg;
 	put_unaligned_le32(value, &txbuf[2]);
 
-	return spi_write(spi, txbuf, sizeof(txbuf));
+	mutex_lock(&datum_b53_spi_mutex);
+	retval = spi_write(spi, txbuf, sizeof(txbuf));
+	mutex_unlock(&datum_b53_spi_mutex);
+
+	return retval;
 }
 
 static int b53_spi_write48(struct b53_device *dev, u8 page, u8 reg, u64 value)
@@ -253,6 +282,7 @@ static int b53_spi_write48(struct b53_device *dev, u8 page, u8 reg, u64 value)
 	struct spi_device *spi = dev->priv;
 	int ret;
 	u8 txbuf[10];
+	int retval;
 
 	ret = b53_prepare_reg_access(spi, page);
 	if (ret)
@@ -262,7 +292,11 @@ static int b53_spi_write48(struct b53_device *dev, u8 page, u8 reg, u64 value)
 	txbuf[1] = reg;
 	put_unaligned_le64(value, &txbuf[2]);
 
-	return spi_write(spi, txbuf, sizeof(txbuf) - 2);
+	mutex_lock(&datum_b53_spi_mutex);
+	retval =  spi_write(spi, txbuf, sizeof(txbuf) - 2);
+	mutex_unlock(&datum_b53_spi_mutex);
+
+	return retval;
 }
 
 static int b53_spi_write64(struct b53_device *dev, u8 page, u8 reg, u64 value)
@@ -270,6 +304,7 @@ static int b53_spi_write64(struct b53_device *dev, u8 page, u8 reg, u64 value)
 	struct spi_device *spi = dev->priv;
 	int ret;
 	u8 txbuf[10];
+	int retval;
 
 	ret = b53_prepare_reg_access(spi, page);
 	if (ret)
@@ -279,7 +314,11 @@ static int b53_spi_write64(struct b53_device *dev, u8 page, u8 reg, u64 value)
 	txbuf[1] = reg;
 	put_unaligned_le64(value, &txbuf[2]);
 
-	return spi_write(spi, txbuf, sizeof(txbuf));
+	mutex_lock(&datum_b53_spi_mutex);
+	retval = spi_write(spi, txbuf, sizeof(txbuf));
+	mutex_unlock(&datum_b53_spi_mutex);
+
+	return retval;
 }
 
 static const struct b53_io_ops b53_spi_ops = {

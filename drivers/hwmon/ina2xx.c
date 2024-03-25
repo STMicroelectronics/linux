@@ -94,6 +94,8 @@
  */
 #define INA226_TOTAL_CONV_TIME_DEFAULT	2200
 
+extern struct mutex datum_b53_spi_mutex;
+
 static struct regmap_config ina2xx_regmap_config = {
 	.reg_bits = 8,
 	.val_bits = 16,
@@ -187,8 +189,14 @@ static u16 ina226_interval_to_reg(int interval)
  */
 static int ina2xx_calibrate(struct ina2xx_data *data)
 {
-	return regmap_write(data->regmap, INA2XX_CALIBRATION,
+	int retval;
+
+	mutex_lock(&datum_b53_spi_mutex);
+	retval =  regmap_write(data->regmap, INA2XX_CALIBRATION,
 			    data->config->calibration_value);
+	mutex_unlock(&datum_b53_spi_mutex);
+
+	return retval;
 }
 
 /*
@@ -196,8 +204,13 @@ static int ina2xx_calibrate(struct ina2xx_data *data)
  */
 static int ina2xx_init(struct ina2xx_data *data)
 {
-	int ret = regmap_write(data->regmap, INA2XX_CONFIG,
+	int ret;
+
+	mutex_lock(&datum_b53_spi_mutex);
+	ret = regmap_write(data->regmap, INA2XX_CONFIG,
 			       data->config->config_default);
+	mutex_unlock(&datum_b53_spi_mutex);
+
 	if (ret < 0)
 		return ret;
 
@@ -213,7 +226,10 @@ static int ina2xx_read_reg(struct device *dev, int reg, unsigned int *regval)
 
 	for (retry = 5; retry; retry--) {
 
+		mutex_lock(&datum_b53_spi_mutex);
 		ret = regmap_read(data->regmap, reg, regval);
+		mutex_unlock(&datum_b53_spi_mutex);
+
 		if (ret < 0)
 			return ret;
 
@@ -230,8 +246,11 @@ static int ina2xx_read_reg(struct device *dev, int reg, unsigned int *regval)
 		if (*regval == 0) {
 			unsigned int cal;
 
+			mutex_lock(&datum_b53_spi_mutex);
 			ret = regmap_read(data->regmap, INA2XX_CALIBRATION,
 					  &cal);
+			mutex_unlock(&datum_b53_spi_mutex);
+
 			if (ret < 0)
 				return ret;
 
@@ -375,6 +394,7 @@ static ssize_t ina226_alert_show(struct device *dev,
 	int ret;
 
 	mutex_lock(&data->config_lock);
+	mutex_lock(&datum_b53_spi_mutex);
 	ret = regmap_read(data->regmap, INA226_MASK_ENABLE, &regval);
 	if (ret)
 		goto abort;
@@ -388,6 +408,7 @@ static ssize_t ina226_alert_show(struct device *dev,
 
 	ret = sysfs_emit(buf, "%d\n", val);
 abort:
+	mutex_unlock(&datum_b53_spi_mutex);
 	mutex_unlock(&data->config_lock);
 	return ret;
 }
@@ -411,13 +432,16 @@ static ssize_t ina226_alert_store(struct device *dev,
 	 * if the value is non-zero.
 	 */
 	mutex_lock(&data->config_lock);
+	mutex_lock(&datum_b53_spi_mutex);
 	ret = regmap_update_bits(data->regmap, INA226_MASK_ENABLE,
 				 INA226_ALERT_CONFIG_MASK, 0);
 	if (ret < 0)
 		goto abort;
 
+
 	ret = regmap_write(data->regmap, INA226_ALERT_LIMIT,
 			   ina226_alert_to_reg(data, attr->index, val));
+
 	if (ret < 0)
 		goto abort;
 
@@ -431,6 +455,7 @@ static ssize_t ina226_alert_store(struct device *dev,
 
 	ret = count;
 abort:
+	mutex_unlock(&datum_b53_spi_mutex);
 	mutex_unlock(&data->config_lock);
 	return ret;
 }
@@ -444,7 +469,9 @@ static ssize_t ina226_alarm_show(struct device *dev,
 	int alarm = 0;
 	int ret;
 
+	mutex_lock(&datum_b53_spi_mutex);
 	ret = regmap_read(data->regmap, INA226_MASK_ENABLE, &regval);
+	mutex_unlock(&datum_b53_spi_mutex);
 	if (ret)
 		return ret;
 
@@ -517,9 +544,11 @@ static ssize_t ina226_interval_store(struct device *dev,
 	if (val > INT_MAX || val == 0)
 		return -EINVAL;
 
+	mutex_lock(&datum_b53_spi_mutex);
 	status = regmap_update_bits(data->regmap, INA2XX_CONFIG,
 				    INA226_AVG_RD_MASK,
 				    ina226_interval_to_reg(val));
+	mutex_unlock(&datum_b53_spi_mutex);
 	if (status < 0)
 		return status;
 
@@ -533,7 +562,9 @@ static ssize_t ina226_interval_show(struct device *dev,
 	int status;
 	unsigned int regval;
 
+	mutex_lock(&datum_b53_spi_mutex);
 	status = regmap_read(data->regmap, INA2XX_CONFIG, &regval);
+	mutex_unlock(&datum_b53_spi_mutex);
 	if (status)
 		return status;
 

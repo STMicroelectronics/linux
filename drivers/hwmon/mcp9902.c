@@ -55,6 +55,8 @@ static const unsigned short normal_i2c[] = {
 #define MCP9902_REG_R_TCRIT_HYST			0x21
 #define MCP9902_REG_W_TCRIT_HYST			0x21
 
+extern struct mutex datum_b53_spi_mutex;
+
 /*
  * Conversions
  */
@@ -131,8 +133,10 @@ static struct mcp9902_data *mcp9902_update_device(struct device *dev)
 	int i;
 
 	mutex_lock(&data->update_lock);
+	mutex_lock(&datum_b53_spi_mutex);
 
 	if (time_after(jiffies, data->last_updated + HZ * 2) || !data->valid) {
+	// if (time_after(jiffies, data->last_updated + 5) || !data->valid) {
 		dev_dbg(&client->dev, "Updating mcp9902 data.\n");
 		for (i = 0; i < t_num_regs; i++)
 			data->temp[i] = i2c_smbus_read_byte_data(client,
@@ -144,6 +148,7 @@ static struct mcp9902_data *mcp9902_update_device(struct device *dev)
 		data->valid = 1;
 	}
 
+	mutex_unlock(&datum_b53_spi_mutex);
 	mutex_unlock(&data->update_lock);
 
 	return data;
@@ -159,7 +164,7 @@ static ssize_t temp_show(struct device *dev, struct device_attribute *devattr,
 	struct sensor_device_attribute *attr = to_sensor_dev_attr(devattr);
 	struct mcp9902_data *data = mcp9902_update_device(dev);
 	u8 fraction_reg;
-	
+
 	switch(attr->index)
 	{
 		case t_input1:
