@@ -1273,6 +1273,13 @@ enum v4l2_isp_stat_bin_comp {
 	V4L2_STAT_BIN_COMP_L		= 3,
 };
 
+#define V4L2_CID_ISP_STAT_PROFILE		(V4L2_CID_IMAGE_PROC_CLASS_BASE + 14)
+enum v4l2_isp_stat_profile {
+	V4L2_STAT_PROFILE_FULL		= 0,
+	V4L2_STAT_PROFILE_AVERAGE_PRE	= 1,
+	V4L2_STAT_PROFILE_AVERAGE_POST	= 2,
+};
+
 /*  DV-class control IDs defined by V4L2 */
 #define V4L2_CID_DV_CLASS_BASE			(V4L2_CTRL_CLASS_DV | 0x900)
 #define V4L2_CID_DV_CLASS			(V4L2_CTRL_CLASS_DV | 1)

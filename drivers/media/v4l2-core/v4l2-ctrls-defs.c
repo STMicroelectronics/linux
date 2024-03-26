@@ -1167,6 +1167,7 @@ const char *v4l2_ctrl_get_name(u32 id)
 	case V4L2_CID_ISP_STAT_REGION:		return "ISP Stat Region";
 	case V4L2_CID_ISP_STAT_AVG_FILTER:	return "ISP Stat Average Filter";
 	case V4L2_CID_ISP_STAT_BIN_COMP:	return "ISP Stat Bin Component";
+	case V4L2_CID_ISP_STAT_PROFILE:		return "ISP Stat Profile";
 
 	/* DV controls */
 	/* Keep the order of the 'case's the same as in v4l2-controls.h! */
