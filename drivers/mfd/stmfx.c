@@ -191,12 +191,28 @@ static void stmfx_irq_unmask(struct irq_data *data)
 	stmfx->irq_src |= BIT(data->hwirq % 8);
 }
 
+static int stmfx_irq_set_affinity(struct irq_data *d, const struct cpumask *dest, bool force)
+{
+	struct stmfx *stmfx = irq_data_get_irq_chip_data(d);
+	struct i2c_client *client = to_i2c_client(stmfx->dev);
+	static DEFINE_RATELIMIT_STATE(rs, DEFAULT_RATELIMIT_INTERVAL * 10, 1);
+
+	if (__ratelimit(&rs))
+		dev_notice(stmfx->dev, "Can't set the affinity, set it for irq %d instead\n",
+			   client->irq);
+	if (force)
+		return -EINVAL;
+
+	return 0;
+}
+
 static struct irq_chip stmfx_irq_chip = {
 	.name			= "stmfx-core",
 	.irq_bus_lock		= stmfx_irq_bus_lock,
 	.irq_bus_sync_unlock	= stmfx_irq_bus_sync_unlock,
 	.irq_mask		= stmfx_irq_mask,
 	.irq_unmask		= stmfx_irq_unmask,
+	.irq_set_affinity	= IS_ENABLED(CONFIG_SMP) ? stmfx_irq_set_affinity : NULL,
 };
 
 static irqreturn_t stmfx_irq_handler(int irq, void *data)
