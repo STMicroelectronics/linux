@@ -6,6 +6,7 @@
  * Author(s): Amelie Delaunay <amelie.delaunay@st.com>.
  */
 #include <linux/gpio/driver.h>
+#include <linux/i2c.h>
 #include <linux/interrupt.h>
 #include <linux/mfd/stmfx.h>
 #include <linux/module.h>
@@ -605,6 +606,23 @@ static void stmfx_pinctrl_irq_print_chip(struct irq_data *d, struct seq_file *p)
 	seq_puts(p, dev_name(pctl->dev));
 }
 
+static int stmfx_pinctrl_irq_set_affinity(struct irq_data *d, const struct cpumask *dest,
+					  bool force)
+{
+	struct gpio_chip *gpio_chip = irq_data_get_irq_chip_data(d);
+	struct stmfx_pinctrl *pctl = gpiochip_get_data(gpio_chip);
+	struct i2c_client *client = to_i2c_client(pctl->stmfx->dev);
+	static DEFINE_RATELIMIT_STATE(rs, DEFAULT_RATELIMIT_INTERVAL * 10, 1);
+
+	if (__ratelimit(&rs))
+		dev_notice(pctl->dev, "Can't set the affinity, set it for irq %d instead\n",
+			   client->irq);
+	if (force)
+		return -EINVAL;
+
+	return 0;
+}
+
 static const struct irq_chip stmfx_pinctrl_irq_chip = {
 	.irq_mask = stmfx_pinctrl_irq_mask,
 	.irq_unmask = stmfx_pinctrl_irq_unmask,
@@ -615,6 +633,7 @@ static const struct irq_chip stmfx_pinctrl_irq_chip = {
 	.irq_release_resources = stmfx_gpio_irq_release_resources,
 	.irq_print_chip = stmfx_pinctrl_irq_print_chip,
 	.flags = IRQCHIP_IMMUTABLE,
+	.irq_set_affinity = IS_ENABLED(CONFIG_SMP) ? stmfx_pinctrl_irq_set_affinity : NULL,
 };
 
 static int stmfx_pinctrl_gpio_function_enable(struct stmfx_pinctrl *pctl)
