@@ -238,6 +238,8 @@ int hantro_g1_jpeg_dec_run(struct hantro_ctx *ctx)
 	int ret;
 	u32 i;
 
+	hantro_g1_check_idle(vpu);
+
 	hantro_start_prepare_run(ctx);
 
 	src_buf = hantro_get_src_buf(ctx);

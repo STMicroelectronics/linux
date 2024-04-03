@@ -156,6 +156,8 @@ int hantro_g1_mpeg2_dec_run(struct hantro_ctx *ctx)
 	src_buf = hantro_get_src_buf(ctx);
 	dst_buf = hantro_get_dst_buf(ctx);
 
+	hantro_g1_check_idle(vpu);
+
 	/* Apply request controls if any */
 	hantro_start_prepare_run(ctx);
 
@@ -165,7 +167,6 @@ int hantro_g1_mpeg2_dec_run(struct hantro_ctx *ctx)
 			      V4L2_CID_STATELESS_MPEG2_PICTURE);
 
 	reg = G1_REG_DEC_AXI_RD_ID(0) |
-	      G1_REG_DEC_TIMEOUT_E(1) |
 	      G1_REG_DEC_STRSWAP32_E(1) |
 	      G1_REG_DEC_STRENDIAN_E(1) |
 	      G1_REG_DEC_INSWAP32_E(1) |

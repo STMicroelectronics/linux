@@ -11,6 +11,23 @@
 #include "hantro.h"
 #include "hantro_g1_regs.h"
 
+void hantro_g1_check_idle(struct hantro_dev *vpu)
+{
+	int i;
+
+	for (i = 0; i < 3; i++) {
+		u32 status;
+
+		/* Make sure the VPU is idle */
+		status = vdpu_read(vpu, G1_REG_INTERRUPT);
+		if (status & G1_REG_INTERRUPT_DEC_E) {
+			dev_warn(vpu->dev, "device still running, aborting");
+			status |= G1_REG_INTERRUPT_DEC_ABORT_E | G1_REG_INTERRUPT_DEC_IRQ_DIS;
+			vdpu_write(vpu, status, G1_REG_INTERRUPT);
+		}
+	}
+}
+
 irqreturn_t hantro_g1_irq(int irq, void *dev_id)
 {
 	struct hantro_dev *vpu = dev_id;
