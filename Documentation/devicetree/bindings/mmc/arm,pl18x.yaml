@@ -167,6 +167,16 @@ properties:
     description:
       The GPIO matching the CKIN pin.
 
+  st,syscfg-arcr:
+    description: ST Micro-specific property, use to enable address remapping
+      to allow to access the 4 GB of the DDR.
+    $ref: /schemas/types.yaml#/definitions/phandle-array
+    items:
+      - items:
+          - description: phandle to syscfg
+          - description: register offset within syscfg
+          - description: register bitmask for address remapping bit
+
 dependencies:
   st,cmd-gpios: [ "st,use-ckin" ]
   st,ck-gpios: [ "st,use-ckin" ]
