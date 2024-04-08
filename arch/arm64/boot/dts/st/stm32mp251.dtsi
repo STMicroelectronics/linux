@@ -2067,7 +2067,6 @@
 			ranges = <0 0x44240000 0xa0400>;
 			interrupt-parent = <&exti1>;
 			st,syscfg = <&exti1 0x60 0xff>;
-			pins-are-numbered;
 
 			gpioa: gpio@44240000 {
 				gpio-controller;
@@ -2208,7 +2207,6 @@
 			ranges = <0 0x46200000 0x400>;
 			interrupt-parent = <&exti1>;
 			st,syscfg = <&exti1 0x60 0xff>;
-			pins-are-numbered;
 
 			gpioz: gpio@46200000 {
 				gpio-controller;
