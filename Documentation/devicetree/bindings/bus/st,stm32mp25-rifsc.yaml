@@ -58,6 +58,8 @@ properties:
 
   ranges: true
 
+  dma-ranges: true
+
   "#access-controller-cells":
     const: 1
     description:
