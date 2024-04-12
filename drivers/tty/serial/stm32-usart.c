@@ -200,7 +200,7 @@ static void stm32_usart_config_reg_rs485(u32 *cr1, u32 *cr3, u32 delay_ADE,
 	else
 		rs485_deat_dedt = delay_ADE * baud * 16;
 
-	rs485_deat_dedt = DIV_ROUND_CLOSEST(rs485_deat_dedt, 1000);
+	rs485_deat_dedt = DIV_ROUND_UP(rs485_deat_dedt, 1000);
 	rs485_deat_dedt = rs485_deat_dedt > rs485_deat_dedt_max ?
 			  rs485_deat_dedt_max : rs485_deat_dedt;
 	rs485_deat_dedt = (rs485_deat_dedt << USART_CR1_DEAT_SHIFT) &
@@ -212,7 +212,7 @@ static void stm32_usart_config_reg_rs485(u32 *cr1, u32 *cr3, u32 delay_ADE,
 	else
 		rs485_deat_dedt = delay_DDE * baud * 16;
 
-	rs485_deat_dedt = DIV_ROUND_CLOSEST(rs485_deat_dedt, 1000);
+	rs485_deat_dedt = DIV_ROUND_UP(rs485_deat_dedt, 1000);
 	rs485_deat_dedt = rs485_deat_dedt > rs485_deat_dedt_max ?
 			  rs485_deat_dedt_max : rs485_deat_dedt;
 	rs485_deat_dedt = (rs485_deat_dedt << USART_CR1_DEDT_SHIFT) &
