@@ -187,7 +187,6 @@ static void stm32_usart_config_reg_rs485(u32 *cr1, u32 *cr3, u32 delay_ADE,
 					 u32 delay_DDE, u32 baud)
 {
 	u32 rs485_deat_dedt;
-	u32 rs485_deat_dedt_max = (USART_CR1_DEAT_MASK >> USART_CR1_DEAT_SHIFT);
 	bool over8;
 
 	*cr3 |= USART_CR3_DEM;
@@ -201,11 +200,8 @@ static void stm32_usart_config_reg_rs485(u32 *cr1, u32 *cr3, u32 delay_ADE,
 		rs485_deat_dedt = delay_ADE * baud * 16;
 
 	rs485_deat_dedt = DIV_ROUND_UP(rs485_deat_dedt, 1000);
-	rs485_deat_dedt = rs485_deat_dedt > rs485_deat_dedt_max ?
-			  rs485_deat_dedt_max : rs485_deat_dedt;
-	rs485_deat_dedt = (rs485_deat_dedt << USART_CR1_DEAT_SHIFT) &
-			   USART_CR1_DEAT_MASK;
-	*cr1 |= rs485_deat_dedt;
+	rs485_deat_dedt = min_t(u32, rs485_deat_dedt, FIELD_MAX(USART_CR1_DEAT_MASK));
+	*cr1 |= FIELD_PREP(USART_CR1_DEAT_MASK, rs485_deat_dedt);
 
 	if (over8)
 		rs485_deat_dedt = delay_DDE * baud * 8;
@@ -213,11 +209,8 @@ static void stm32_usart_config_reg_rs485(u32 *cr1, u32 *cr3, u32 delay_ADE,
 		rs485_deat_dedt = delay_DDE * baud * 16;
 
 	rs485_deat_dedt = DIV_ROUND_UP(rs485_deat_dedt, 1000);
-	rs485_deat_dedt = rs485_deat_dedt > rs485_deat_dedt_max ?
-			  rs485_deat_dedt_max : rs485_deat_dedt;
-	rs485_deat_dedt = (rs485_deat_dedt << USART_CR1_DEDT_SHIFT) &
-			   USART_CR1_DEDT_MASK;
-	*cr1 |= rs485_deat_dedt;
+	rs485_deat_dedt = min_t(u32, rs485_deat_dedt, FIELD_MAX(USART_CR1_DEDT_MASK));
+	*cr1 |= FIELD_PREP(USART_CR1_DEDT_MASK, rs485_deat_dedt);
 }
 
 static int stm32_usart_config_rs485(struct uart_port *port, struct ktermios *termios,
