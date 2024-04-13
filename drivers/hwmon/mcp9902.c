@@ -131,17 +131,24 @@ static struct mcp9902_data *mcp9902_update_device(struct device *dev)
 	struct mcp9902_data *data = dev_get_drvdata(dev);
 	struct i2c_client *client = data->client;
 	int i;
+	int j;
 
 	mutex_lock(&data->update_lock);
 	mutex_lock(&datum_b53_spi_mutex);
 
-	if (time_after(jiffies, data->last_updated + HZ * 2) || !data->valid) {
+	// if (time_after(jiffies, data->last_updated + HZ * 2) || !data->valid) {
+	if (time_after(jiffies, data->last_updated + 1) || !data->valid) {
 		dev_dbg(&client->dev, "Updating mcp9902 data.\n");
-		for (i = 0; i < t_num_regs; i++)
-			data->temp[i] = i2c_smbus_read_byte_data(client,
-					regs_read[i]);
-		data->alarms = i2c_smbus_read_byte_data(client,
-					MCP9902_REG_R_STATUS);
+		// printk("Updating mcp9902 data.\n");
+
+		for (j = 0; j < 100; j++)
+		{
+			for (i = 0; i < t_num_regs; i++)
+				data->temp[i] = i2c_smbus_read_byte_data(client,
+						regs_read[i]);
+			data->alarms = i2c_smbus_read_byte_data(client,
+						MCP9902_REG_R_STATUS);
+		}
 
 		data->last_updated = jiffies;
 		data->valid = 1;

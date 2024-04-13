@@ -36,7 +36,8 @@
 #include <net/genetlink.h>
 #include <net/sock.h>
 
-#define PHY_STATE_TIME	HZ
+// #define PHY_STATE_TIME	HZ
+#define PHY_STATE_TIME	2
 
 #define PHY_STATE_STR(_state)			\
 	case PHY_##_state:			\
@@ -953,7 +954,6 @@ void phy_stop_machine(struct phy_device *phydev)
 void phy_error(struct phy_device *phydev)
 {
 	WARN_ON(1);
-
 	mutex_lock(&phydev->lock);
 	phydev->state = PHY_HALTED;
 	mutex_unlock(&phydev->lock);
@@ -1209,7 +1209,10 @@ void phy_state_machine(struct work_struct *work)
 		return;
 
 	if (err < 0)
+	{
+		printk("dsi-phy_state_machine(): PHY_ERROR error=%d\n", err);
 		phy_error(phydev);
+	}
 
 	phy_process_state_change(phydev, old_state);
 
@@ -1223,7 +1226,10 @@ void phy_state_machine(struct work_struct *work)
 	 */
 	mutex_lock(&phydev->lock);
 	if (phy_polling_mode(phydev) && phy_is_started(phydev))
+	{
+		// printk("phydev poll - port=%d\n", phydev->port);
 		phy_queue_state_machine(phydev, PHY_STATE_TIME);
+	}
 	mutex_unlock(&phydev->lock);
 }
 
