@@ -79,7 +79,10 @@ static inline int b53_spi_clear_status(struct spi_device *spi)
 	}
 
 	if (i == 10)
+	{
+		printk("dsi-datum: b53_spi_clear_status failed, rxbuf=0x%x02\n", rxbuf);
 		return -EIO;
+	}
 
 	return 0;
 }
@@ -132,7 +135,10 @@ static int b53_spi_prepare_reg_read(struct spi_device *spi, u8 reg)
 	}
 
 	if (retry_count == 10)
+	{
+		printk("dsi-datum: b53_spi_prepare_reg_read failed, rxbuf=0x%02x\n", rxbuf);
 		return -EIO;
+	}
 
 	return 0;
 }

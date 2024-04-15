@@ -134,27 +134,29 @@ static struct mcp9902_data *mcp9902_update_device(struct device *dev)
 	int j;
 
 	mutex_lock(&data->update_lock);
-	mutex_lock(&datum_b53_spi_mutex);
+//	mutex_lock(&datum_b53_spi_mutex);
 
 	// if (time_after(jiffies, data->last_updated + HZ * 2) || !data->valid) {
 	if (time_after(jiffies, data->last_updated + 1) || !data->valid) {
 		dev_dbg(&client->dev, "Updating mcp9902 data.\n");
 		// printk("Updating mcp9902 data.\n");
 
-		for (j = 0; j < 100; j++)
+		for (j = 0; j < 25; j++)
 		{
+		mutex_lock(&datum_b53_spi_mutex);
 			for (i = 0; i < t_num_regs; i++)
 				data->temp[i] = i2c_smbus_read_byte_data(client,
 						regs_read[i]);
 			data->alarms = i2c_smbus_read_byte_data(client,
 						MCP9902_REG_R_STATUS);
+			mutex_unlock(&datum_b53_spi_mutex);
 		}
 
 		data->last_updated = jiffies;
 		data->valid = 1;
 	}
 
-	mutex_unlock(&datum_b53_spi_mutex);
+//	mutex_unlock(&datum_b53_spi_mutex);
 	mutex_unlock(&data->update_lock);
 
 	return data;
