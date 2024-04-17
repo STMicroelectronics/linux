@@ -34,6 +34,7 @@
 #include <linux/of_device.h>
 #include <linux/of.h>
 #include <linux/delay.h>
+#include <linux/pm_runtime.h>
 #include <linux/util_macros.h>
 #include <linux/regmap.h>
 
@@ -189,11 +190,15 @@ static u16 ina226_interval_to_reg(int interval)
  */
 static int ina2xx_calibrate(struct ina2xx_data *data)
 {
+	struct device *dev = regmap_get_device(data->regmap);
 	int retval;
 
 	mutex_lock(&datum_b53_spi_mutex);
 	retval =  regmap_write(data->regmap, INA2XX_CALIBRATION,
 			    data->config->calibration_value);
+	
+	if(pm_runtime_active(dev))
+		usleep_range(100, 200);
 	mutex_unlock(&datum_b53_spi_mutex);
 
 	return retval;
@@ -204,11 +209,14 @@ static int ina2xx_calibrate(struct ina2xx_data *data)
  */
 static int ina2xx_init(struct ina2xx_data *data)
 {
+	struct device *dev = regmap_get_device(data->regmap);
 	int ret;
 
 	mutex_lock(&datum_b53_spi_mutex);
 	ret = regmap_write(data->regmap, INA2XX_CONFIG,
 			       data->config->config_default);
+	if(pm_runtime_active(dev))
+		usleep_range(100, 200);
 	mutex_unlock(&datum_b53_spi_mutex);
 
 	if (ret < 0)
@@ -228,6 +236,8 @@ static int ina2xx_read_reg(struct device *dev, int reg, unsigned int *regval)
 
 		mutex_lock(&datum_b53_spi_mutex);
 		ret = regmap_read(data->regmap, reg, regval);
+		if(pm_runtime_active(dev))
+			usleep_range(100, 200);
 		mutex_unlock(&datum_b53_spi_mutex);
 
 		if (ret < 0)
@@ -249,6 +259,8 @@ static int ina2xx_read_reg(struct device *dev, int reg, unsigned int *regval)
 			mutex_lock(&datum_b53_spi_mutex);
 			ret = regmap_read(data->regmap, INA2XX_CALIBRATION,
 					  &cal);
+			if(pm_runtime_active(dev))
+				usleep_range(100, 200);
 			mutex_unlock(&datum_b53_spi_mutex);
 
 			if (ret < 0)
@@ -408,6 +420,8 @@ static ssize_t ina226_alert_show(struct device *dev,
 
 	ret = sysfs_emit(buf, "%d\n", val);
 abort:
+	if(pm_runtime_active(dev))
+		usleep_range(100, 200);
 	mutex_unlock(&datum_b53_spi_mutex);
 	mutex_unlock(&data->config_lock);
 	return ret;
@@ -455,6 +469,8 @@ static ssize_t ina226_alert_store(struct device *dev,
 
 	ret = count;
 abort:
+	if(pm_runtime_active(dev))
+		usleep_range(100, 200);
 	mutex_unlock(&datum_b53_spi_mutex);
 	mutex_unlock(&data->config_lock);
 	return ret;
@@ -471,6 +487,8 @@ static ssize_t ina226_alarm_show(struct device *dev,
 
 	mutex_lock(&datum_b53_spi_mutex);
 	ret = regmap_read(data->regmap, INA226_MASK_ENABLE, &regval);
+	if(pm_runtime_active(dev))
+		usleep_range(100, 200);
 	mutex_unlock(&datum_b53_spi_mutex);
 	if (ret)
 		return ret;
@@ -548,6 +566,8 @@ static ssize_t ina226_interval_store(struct device *dev,
 	status = regmap_update_bits(data->regmap, INA2XX_CONFIG,
 				    INA226_AVG_RD_MASK,
 				    ina226_interval_to_reg(val));
+	if(pm_runtime_active(dev))
+		usleep_range(100, 200);
 	mutex_unlock(&datum_b53_spi_mutex);
 	if (status < 0)
 		return status;
@@ -564,6 +584,8 @@ static ssize_t ina226_interval_show(struct device *dev,
 
 	mutex_lock(&datum_b53_spi_mutex);
 	status = regmap_read(data->regmap, INA2XX_CONFIG, &regval);
+	if(pm_runtime_active(dev))
+		usleep_range(100, 200);
 	mutex_unlock(&datum_b53_spi_mutex);
 	if (status)
 		return status;

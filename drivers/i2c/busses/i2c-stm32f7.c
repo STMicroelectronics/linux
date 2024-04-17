@@ -179,7 +179,7 @@ enum {
 #define STM32F7_SCLH_MAX			BIT(8)
 #define STM32F7_SCLL_MAX			BIT(8)
 
-#define STM32F7_AUTOSUSPEND_DELAY		(HZ / 100)
+#define STM32F7_AUTOSUSPEND_DELAY		0
 
 /**
  * struct stm32f7_i2c_regs - i2c f7 registers backup

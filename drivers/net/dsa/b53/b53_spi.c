@@ -24,6 +24,7 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/mutex.h>
+#include <linux/pm_runtime.h>
 #include <linux/spi/spi.h>
 #include <linux/platform_data/b53.h>
 
@@ -48,6 +49,7 @@ EXPORT_SYMBOL(datum_b53_spi_mutex);
 static inline int b53_spi_read_reg(struct spi_device *spi, u8 reg, u8 *val,
 				   unsigned int len)
 {
+	struct device *dev = &spi->dev;
 	u8 txbuf[2];
 	int retval;
 
@@ -56,6 +58,8 @@ static inline int b53_spi_read_reg(struct spi_device *spi, u8 reg, u8 *val,
 
 	mutex_lock(&datum_b53_spi_mutex);
 	retval =  spi_write_then_read(spi, txbuf, 2, val, len);
+	if(pm_runtime_active(dev))
+		usleep_range(100, 200);
 	mutex_unlock(&datum_b53_spi_mutex);
 
 	return retval;
@@ -89,6 +93,7 @@ static inline int b53_spi_clear_status(struct spi_device *spi)
 
 static inline int b53_spi_set_page(struct spi_device *spi, u8 page)
 {
+	struct device *dev = &spi->dev;
 	u8 txbuf[3];
 	int retval;
 
@@ -98,6 +103,8 @@ static inline int b53_spi_set_page(struct spi_device *spi, u8 page)
 
 	mutex_lock(&datum_b53_spi_mutex);
 	retval = spi_write(spi, txbuf, sizeof(txbuf));
+	if(pm_runtime_active(dev))
+		usleep_range(100, 200);
 	mutex_unlock(&datum_b53_spi_mutex);
 
 	return retval;
@@ -220,6 +227,7 @@ static int b53_spi_read64(struct b53_device *dev, u8 page, u8 reg, u64 *val)
 static int b53_spi_write8(struct b53_device *dev, u8 page, u8 reg, u8 value)
 {
 	struct spi_device *spi = dev->priv;
+	struct device *device = &spi->dev;
 	int ret;
 	u8 txbuf[3];
 	int retval;
@@ -234,6 +242,8 @@ static int b53_spi_write8(struct b53_device *dev, u8 page, u8 reg, u8 value)
 
 	mutex_lock(&datum_b53_spi_mutex);
 	retval =  spi_write(spi, txbuf, sizeof(txbuf));
+	if(pm_runtime_active(device))
+		usleep_range(100, 200);
 	mutex_unlock(&datum_b53_spi_mutex);
 
 	return retval;
@@ -242,6 +252,7 @@ static int b53_spi_write8(struct b53_device *dev, u8 page, u8 reg, u8 value)
 static int b53_spi_write16(struct b53_device *dev, u8 page, u8 reg, u16 value)
 {
 	struct spi_device *spi = dev->priv;
+	struct device *device = &spi->dev;
 	int ret;
 	u8 txbuf[4];
 	int retval;
@@ -256,6 +267,8 @@ static int b53_spi_write16(struct b53_device *dev, u8 page, u8 reg, u16 value)
 
 	mutex_lock(&datum_b53_spi_mutex);
 	retval =  spi_write(spi, txbuf, sizeof(txbuf));
+	if(pm_runtime_active(device))
+		usleep_range(100, 200);
 	mutex_unlock(&datum_b53_spi_mutex);
 
 	return retval;
@@ -264,6 +277,7 @@ static int b53_spi_write16(struct b53_device *dev, u8 page, u8 reg, u16 value)
 static int b53_spi_write32(struct b53_device *dev, u8 page, u8 reg, u32 value)
 {
 	struct spi_device *spi = dev->priv;
+	struct device *device = &spi->dev;
 	int ret;
 	u8 txbuf[6];
 	int retval;
@@ -278,6 +292,8 @@ static int b53_spi_write32(struct b53_device *dev, u8 page, u8 reg, u32 value)
 
 	mutex_lock(&datum_b53_spi_mutex);
 	retval = spi_write(spi, txbuf, sizeof(txbuf));
+	if(pm_runtime_active(device))
+		usleep_range(100, 200);
 	mutex_unlock(&datum_b53_spi_mutex);
 
 	return retval;
@@ -286,6 +302,7 @@ static int b53_spi_write32(struct b53_device *dev, u8 page, u8 reg, u32 value)
 static int b53_spi_write48(struct b53_device *dev, u8 page, u8 reg, u64 value)
 {
 	struct spi_device *spi = dev->priv;
+	struct device *device = &spi->dev;
 	int ret;
 	u8 txbuf[10];
 	int retval;
@@ -300,6 +317,8 @@ static int b53_spi_write48(struct b53_device *dev, u8 page, u8 reg, u64 value)
 
 	mutex_lock(&datum_b53_spi_mutex);
 	retval =  spi_write(spi, txbuf, sizeof(txbuf) - 2);
+	if(pm_runtime_active(device))
+		usleep_range(100, 200);
 	mutex_unlock(&datum_b53_spi_mutex);
 
 	return retval;
@@ -308,6 +327,7 @@ static int b53_spi_write48(struct b53_device *dev, u8 page, u8 reg, u64 value)
 static int b53_spi_write64(struct b53_device *dev, u8 page, u8 reg, u64 value)
 {
 	struct spi_device *spi = dev->priv;
+	struct device *device = &spi->dev;
 	int ret;
 	u8 txbuf[10];
 	int retval;
@@ -322,6 +342,8 @@ static int b53_spi_write64(struct b53_device *dev, u8 page, u8 reg, u64 value)
 
 	mutex_lock(&datum_b53_spi_mutex);
 	retval = spi_write(spi, txbuf, sizeof(txbuf));
+	if(pm_runtime_active(device))
+		usleep_range(100, 200);
 	mutex_unlock(&datum_b53_spi_mutex);
 
 	return retval;

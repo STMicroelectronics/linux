@@ -175,7 +175,7 @@
 #define SPI_3WIRE_TX		3
 #define SPI_3WIRE_RX		4
 
-#define STM32_SPI_AUTOSUSPEND_DELAY		1	/* 1 ms */
+#define STM32_SPI_AUTOSUSPEND_DELAY		0	/* 0 ms */
 
 /*
  * use PIO for small transfers, avoiding DMA setup/teardown overhead for drivers
