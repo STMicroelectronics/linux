@@ -2228,6 +2228,7 @@ static int stm32f7_i2c_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, i2c_dev);
 
+	dev_err(i2c_dev->dev, "dsi-stm32f7_i2c_probe() dev\n");
 	pm_runtime_set_autosuspend_delay(i2c_dev->dev,
 					 STM32F7_AUTOSUSPEND_DELAY);
 	pm_runtime_use_autosuspend(i2c_dev->dev);

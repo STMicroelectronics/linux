@@ -58,7 +58,7 @@ static inline int b53_spi_read_reg(struct spi_device *spi, u8 reg, u8 *val,
 
 	mutex_lock(&datum_b53_spi_mutex);
 	retval =  spi_write_then_read(spi, txbuf, 2, val, len);
-	if(pm_runtime_active(dev))
+	if(!pm_runtime_suspended(dev))
 		usleep_range(100, 200);
 	mutex_unlock(&datum_b53_spi_mutex);
 
@@ -103,7 +103,7 @@ static inline int b53_spi_set_page(struct spi_device *spi, u8 page)
 
 	mutex_lock(&datum_b53_spi_mutex);
 	retval = spi_write(spi, txbuf, sizeof(txbuf));
-	if(pm_runtime_active(dev))
+	if(!pm_runtime_suspended(dev))
 		usleep_range(100, 200);
 	mutex_unlock(&datum_b53_spi_mutex);
 
@@ -242,7 +242,7 @@ static int b53_spi_write8(struct b53_device *dev, u8 page, u8 reg, u8 value)
 
 	mutex_lock(&datum_b53_spi_mutex);
 	retval =  spi_write(spi, txbuf, sizeof(txbuf));
-	if(pm_runtime_active(device))
+	if(!pm_runtime_suspended(device))
 		usleep_range(100, 200);
 	mutex_unlock(&datum_b53_spi_mutex);
 
@@ -267,7 +267,7 @@ static int b53_spi_write16(struct b53_device *dev, u8 page, u8 reg, u16 value)
 
 	mutex_lock(&datum_b53_spi_mutex);
 	retval =  spi_write(spi, txbuf, sizeof(txbuf));
-	if(pm_runtime_active(device))
+	if(!pm_runtime_suspended(device))
 		usleep_range(100, 200);
 	mutex_unlock(&datum_b53_spi_mutex);
 
@@ -292,7 +292,7 @@ static int b53_spi_write32(struct b53_device *dev, u8 page, u8 reg, u32 value)
 
 	mutex_lock(&datum_b53_spi_mutex);
 	retval = spi_write(spi, txbuf, sizeof(txbuf));
-	if(pm_runtime_active(device))
+	if(!pm_runtime_suspended(device))
 		usleep_range(100, 200);
 	mutex_unlock(&datum_b53_spi_mutex);
 
@@ -317,7 +317,7 @@ static int b53_spi_write48(struct b53_device *dev, u8 page, u8 reg, u64 value)
 
 	mutex_lock(&datum_b53_spi_mutex);
 	retval =  spi_write(spi, txbuf, sizeof(txbuf) - 2);
-	if(pm_runtime_active(device))
+	if(!pm_runtime_suspended(device))
 		usleep_range(100, 200);
 	mutex_unlock(&datum_b53_spi_mutex);
 
@@ -342,7 +342,7 @@ static int b53_spi_write64(struct b53_device *dev, u8 page, u8 reg, u64 value)
 
 	mutex_lock(&datum_b53_spi_mutex);
 	retval = spi_write(spi, txbuf, sizeof(txbuf));
-	if(pm_runtime_active(device))
+	if(!pm_runtime_suspended(device))
 		usleep_range(100, 200);
 	mutex_unlock(&datum_b53_spi_mutex);
 

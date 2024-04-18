@@ -132,6 +132,7 @@ static struct mcp9902_data *mcp9902_update_device(struct device *dev)
 {
 	struct mcp9902_data *data = dev_get_drvdata(dev);
 	struct i2c_client *client = data->client;
+	struct i2c_adapter *adapter = client->adapter;
 	int i;
 	int j;
 
@@ -151,7 +152,7 @@ static struct mcp9902_data *mcp9902_update_device(struct device *dev)
 						regs_read[i]);
 			data->alarms = i2c_smbus_read_byte_data(client,
 						MCP9902_REG_R_STATUS);
-			if(pm_runtime_active(dev))
+			if(!pm_runtime_suspended(adapter->dev.parent))
 				usleep_range(100, 200);
 			mutex_unlock(&datum_b53_spi_mutex);
 		}
@@ -199,6 +200,7 @@ static ssize_t temp_store(struct device *dev,
 	struct sensor_device_attribute *attr = to_sensor_dev_attr(devattr);
 	struct mcp9902_data *data = dev_get_drvdata(dev);
 	struct i2c_client *client = data->client;
+	struct i2c_adapter *adapter = client->adapter;
 	long val;
 	int err = kstrtol(buf, 10, &val);
 	if (err)
@@ -209,7 +211,7 @@ static ssize_t temp_store(struct device *dev,
 	mutex_lock(&datum_b53_spi_mutex);
 	i2c_smbus_write_byte_data(client, regs_write[attr->index],
 				  data->temp[attr->index]);
-	if(pm_runtime_active(dev))
+	if(!pm_runtime_suspended(adapter->dev.parent))
 		usleep_range(100, 200);
 	mutex_unlock(&datum_b53_spi_mutex);
 	mutex_unlock(&data->update_lock);
@@ -287,7 +289,7 @@ static int mcp9902_detect(struct i2c_client *client,
 	mutex_lock(&datum_b53_spi_mutex);
 	man_id = i2c_smbus_read_byte_data(client, MCP9902_REG_R_MAN_ID);
 	chip_id = i2c_smbus_read_byte_data(client, MCP9902_REG_R_CHIP_ID);
-	if(pm_runtime_active(&adapter->dev))
+	if(!pm_runtime_suspended(adapter->dev.parent))
 		usleep_range(100, 200);
 	mutex_unlock(&datum_b53_spi_mutex);
 	if (man_id != 0x5D || chip_id != 0x04) {
@@ -304,14 +306,14 @@ static int mcp9902_detect(struct i2c_client *client,
 
 static void mcp9902_init_client(struct i2c_client *client)
 {
-
+	struct i2c_adapter *adapter = client->adapter;
 	/*
 	 * Start the conversions.
 	 */
 	mutex_lock(&datum_b53_spi_mutex);
 	i2c_smbus_write_byte_data(client, MCP9902_REG_W_CONVRATE, 5);	/* 2 Hz */
 	i2c_smbus_write_byte_data(client, MCP9902_REG_W_CONFIG, 0x9F);	/* run - extended temp */
-	if(pm_runtime_active(&client->adapter->dev))
+	if(!pm_runtime_suspended(adapter->dev.parent))
 		usleep_range(100, 200);
 	mutex_unlock(&datum_b53_spi_mutex);
 }
