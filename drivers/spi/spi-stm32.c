@@ -2041,6 +2041,7 @@ static int stm32_spi_probe(struct platform_device *pdev)
 	if (spi->dma_tx || spi->dma_rx)
 		ctrl->can_dma = stm32_spi_can_dma;
 
+	dev_err(&pdev->dev, "dsi-stm32_spi_probe() [&pdev->dev]\n");
 	pm_runtime_set_autosuspend_delay(&pdev->dev,
 					 STM32_SPI_AUTOSUSPEND_DELAY);
 	pm_runtime_use_autosuspend(&pdev->dev);

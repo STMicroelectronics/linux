@@ -46,21 +46,29 @@
 DEFINE_MUTEX(datum_b53_spi_mutex);
 EXPORT_SYMBOL(datum_b53_spi_mutex);
 
+static inline void spi_lock(void) { mutex_lock(&datum_b53_spi_mutex); }
+
+static inline void spi_unlock(struct device *dev)
+{
+	if(!pm_runtime_suspended(dev))
+		usleep_range(100, 200);
+	msleep(1);
+	mutex_unlock(&datum_b53_spi_mutex);
+}
+
 static inline int b53_spi_read_reg(struct spi_device *spi, u8 reg, u8 *val,
 				   unsigned int len)
 {
-	struct device *dev = &spi->dev;
+	struct device *dev = spi->dev.parent->parent;
 	u8 txbuf[2];
 	int retval;
 
 	txbuf[0] = B53_SPI_CMD_NORMAL | B53_SPI_CMD_READ;
 	txbuf[1] = reg;
 
-	mutex_lock(&datum_b53_spi_mutex);
+	spi_lock();
 	retval =  spi_write_then_read(spi, txbuf, 2, val, len);
-	if(!pm_runtime_suspended(dev))
-		usleep_range(100, 200);
-	mutex_unlock(&datum_b53_spi_mutex);
+	spi_unlock(dev);
 
 	return retval;
 }
@@ -84,7 +92,7 @@ static inline int b53_spi_clear_status(struct spi_device *spi)
 
 	if (i == 10)
 	{
-		printk("dsi-datum: b53_spi_clear_status failed, rxbuf=0x%x02\n", rxbuf);
+		printk("dsi-datum: b53_spi_clear_status failed, rxbuf=0x%02x\n", rxbuf);
 		return -EIO;
 	}
 
@@ -93,7 +101,7 @@ static inline int b53_spi_clear_status(struct spi_device *spi)
 
 static inline int b53_spi_set_page(struct spi_device *spi, u8 page)
 {
-	struct device *dev = &spi->dev;
+	struct device *dev = spi->dev.parent->parent;
 	u8 txbuf[3];
 	int retval;
 
@@ -101,11 +109,9 @@ static inline int b53_spi_set_page(struct spi_device *spi, u8 page)
 	txbuf[1] = B53_SPI_PAGE_SELECT;
 	txbuf[2] = page;
 
-	mutex_lock(&datum_b53_spi_mutex);
+	spi_lock();
 	retval = spi_write(spi, txbuf, sizeof(txbuf));
-	if(!pm_runtime_suspended(dev))
-		usleep_range(100, 200);
-	mutex_unlock(&datum_b53_spi_mutex);
+	spi_unlock(dev);
 
 	return retval;
 }
@@ -227,7 +233,7 @@ static int b53_spi_read64(struct b53_device *dev, u8 page, u8 reg, u64 *val)
 static int b53_spi_write8(struct b53_device *dev, u8 page, u8 reg, u8 value)
 {
 	struct spi_device *spi = dev->priv;
-	struct device *device = &spi->dev;
+	struct device *device = spi->dev.parent->parent;
 	int ret;
 	u8 txbuf[3];
 	int retval;
@@ -240,11 +246,10 @@ static int b53_spi_write8(struct b53_device *dev, u8 page, u8 reg, u8 value)
 	txbuf[1] = reg;
 	txbuf[2] = value;
 
-	mutex_lock(&datum_b53_spi_mutex);
+	spi_lock();
+	dev_err(device, "dsi-b53_spi_write8(): %02x %02x %02x\n", txbuf[0], txbuf[1], txbuf[2]);
 	retval =  spi_write(spi, txbuf, sizeof(txbuf));
-	if(!pm_runtime_suspended(device))
-		usleep_range(100, 200);
-	mutex_unlock(&datum_b53_spi_mutex);
+	spi_unlock(device);
 
 	return retval;
 }
@@ -252,7 +257,7 @@ static int b53_spi_write8(struct b53_device *dev, u8 page, u8 reg, u8 value)
 static int b53_spi_write16(struct b53_device *dev, u8 page, u8 reg, u16 value)
 {
 	struct spi_device *spi = dev->priv;
-	struct device *device = &spi->dev;
+	struct device *device = spi->dev.parent->parent;
 	int ret;
 	u8 txbuf[4];
 	int retval;
@@ -265,11 +270,9 @@ static int b53_spi_write16(struct b53_device *dev, u8 page, u8 reg, u16 value)
 	txbuf[1] = reg;
 	put_unaligned_le16(value, &txbuf[2]);
 
-	mutex_lock(&datum_b53_spi_mutex);
+	spi_lock();
 	retval =  spi_write(spi, txbuf, sizeof(txbuf));
-	if(!pm_runtime_suspended(device))
-		usleep_range(100, 200);
-	mutex_unlock(&datum_b53_spi_mutex);
+	spi_unlock(device);
 
 	return retval;
 }
@@ -277,7 +280,7 @@ static int b53_spi_write16(struct b53_device *dev, u8 page, u8 reg, u16 value)
 static int b53_spi_write32(struct b53_device *dev, u8 page, u8 reg, u32 value)
 {
 	struct spi_device *spi = dev->priv;
-	struct device *device = &spi->dev;
+	struct device *device = spi->dev.parent->parent;
 	int ret;
 	u8 txbuf[6];
 	int retval;
@@ -290,11 +293,9 @@ static int b53_spi_write32(struct b53_device *dev, u8 page, u8 reg, u32 value)
 	txbuf[1] = reg;
 	put_unaligned_le32(value, &txbuf[2]);
 
-	mutex_lock(&datum_b53_spi_mutex);
+	spi_lock();
 	retval = spi_write(spi, txbuf, sizeof(txbuf));
-	if(!pm_runtime_suspended(device))
-		usleep_range(100, 200);
-	mutex_unlock(&datum_b53_spi_mutex);
+	spi_unlock(device);
 
 	return retval;
 }
@@ -302,7 +303,7 @@ static int b53_spi_write32(struct b53_device *dev, u8 page, u8 reg, u32 value)
 static int b53_spi_write48(struct b53_device *dev, u8 page, u8 reg, u64 value)
 {
 	struct spi_device *spi = dev->priv;
-	struct device *device = &spi->dev;
+	struct device *device = spi->dev.parent->parent;
 	int ret;
 	u8 txbuf[10];
 	int retval;
@@ -315,11 +316,9 @@ static int b53_spi_write48(struct b53_device *dev, u8 page, u8 reg, u64 value)
 	txbuf[1] = reg;
 	put_unaligned_le64(value, &txbuf[2]);
 
-	mutex_lock(&datum_b53_spi_mutex);
+	spi_lock();
 	retval =  spi_write(spi, txbuf, sizeof(txbuf) - 2);
-	if(!pm_runtime_suspended(device))
-		usleep_range(100, 200);
-	mutex_unlock(&datum_b53_spi_mutex);
+	spi_unlock(device);
 
 	return retval;
 }
@@ -327,7 +326,7 @@ static int b53_spi_write48(struct b53_device *dev, u8 page, u8 reg, u64 value)
 static int b53_spi_write64(struct b53_device *dev, u8 page, u8 reg, u64 value)
 {
 	struct spi_device *spi = dev->priv;
-	struct device *device = &spi->dev;
+	struct device *device = spi->dev.parent->parent;
 	int ret;
 	u8 txbuf[10];
 	int retval;
@@ -340,11 +339,9 @@ static int b53_spi_write64(struct b53_device *dev, u8 page, u8 reg, u64 value)
 	txbuf[1] = reg;
 	put_unaligned_le64(value, &txbuf[2]);
 
-	mutex_lock(&datum_b53_spi_mutex);
+	spi_lock();
 	retval = spi_write(spi, txbuf, sizeof(txbuf));
-	if(!pm_runtime_suspended(device))
-		usleep_range(100, 200);
-	mutex_unlock(&datum_b53_spi_mutex);
+	spi_unlock(device);
 
 	return retval;
 }
