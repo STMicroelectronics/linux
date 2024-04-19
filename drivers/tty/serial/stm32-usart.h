@@ -8,6 +8,11 @@
 
 #define DRIVER_NAME "stm32-usart"
 
+enum stm32_baudgen_type {
+	UART_BAUDGEN = 0,
+	LPUART_BAUDGEN = 1
+};
+
 struct stm32_usart_offsets {
 	u16 cr1;
 	u16 cr2;
@@ -82,6 +87,10 @@ struct stm32_usart_info {
 #define USART_BRR_DIV_M_SHIFT	4
 #define USART_BRR_04_R_SHIFT	1
 #define USART_BRR_MASK		(USART_BRR_DIV_M_MASK | USART_BRR_DIV_F_MASK)
+
+/* LPUART_BRR */
+#define LPUART_BRR_MASK		GENMASK(19, 0)
+#define LPUART_BRR_MIN_VALUE	0x300
 
 /* USART_CR1 */
 #define USART_CR1_SBK		BIT(0)
@@ -194,6 +203,8 @@ struct stm32_usart_info {
 #define USART_PRESC_MAX		0b1011
 
 /* USART_HWCFCR1 */
+#define USART_HWCFGR1_CFG4	GENMASK(15, 12)	/* MP1 */
+#define USART_HWCFGR1_CFG7	GENMASK(27, 24)	/* MP1 */
 #define USART_HWCFGR1_CFG8	GENMASK(31, 28)	/* MP1 */
 
 #define STM32_SERIAL_NAME "ttySTM"
@@ -205,6 +216,8 @@ struct stm32_usart_info {
 #define TX_BUF_L RX_BUF_L	 /* dma tx buffer length     */
 
 #define STM32_USART_TIMEOUT_USEC USEC_PER_SEC /* 1s timeout in µs */
+
+#define LPUART_RECEIVE_TIMEOUT_MS 1000
 
 struct stm32_port {
 	struct uart_port port;
@@ -225,6 +238,9 @@ struct stm32_port {
 	bool hw_flow_control;
 	bool swap;		 /* swap RX & TX pins */
 	bool fifoen;
+	bool txdone;
+	bool has_rtor;
+	bool has_smartcard;
 	int rxftcfg;		/* RX FIFO threshold CFG      */
 	int txftcfg;		/* TX FIFO threshold CFG      */
 	bool wakeup_src;
@@ -232,6 +248,8 @@ struct stm32_port {
 	struct mctrl_gpios *gpios; /* modem control gpios */
 	struct dma_tx_state rx_dma_state;
 	struct stm32_backup_regs bkp_regs;
+	enum stm32_baudgen_type baudgen;
+	struct timer_list rx_dma_timer; /* Only used for LPUART */
 };
 
 static struct stm32_port stm32_ports[STM32_MAX_PORTS];
