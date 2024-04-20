@@ -52,7 +52,7 @@ static inline void spi_unlock(struct device *dev)
 {
 	if(!pm_runtime_suspended(dev))
 		usleep_range(100, 200);
-	msleep(1);
+//	msleep(1);
 	mutex_unlock(&datum_b53_spi_mutex);
 }
 
@@ -66,9 +66,9 @@ static inline int b53_spi_read_reg(struct spi_device *spi, u8 reg, u8 *val,
 	txbuf[0] = B53_SPI_CMD_NORMAL | B53_SPI_CMD_READ;
 	txbuf[1] = reg;
 
-	spi_lock();
+//	spi_lock();
 	retval =  spi_write_then_read(spi, txbuf, 2, val, len);
-	spi_unlock(dev);
+//	spi_unlock(dev);
 
 	return retval;
 }
@@ -79,6 +79,7 @@ static inline int b53_spi_clear_status(struct spi_device *spi)
 	u8 rxbuf;
 	int ret;
 
+//	printk("dsi-b53_spi_clear_status()\n");
 	for (i = 0; i < 10; i++) {
 		ret = b53_spi_read_reg(spi, B53_SPI_STATUS, &rxbuf, 1);
 		if (ret)
@@ -109,9 +110,9 @@ static inline int b53_spi_set_page(struct spi_device *spi, u8 page)
 	txbuf[1] = B53_SPI_PAGE_SELECT;
 	txbuf[2] = page;
 
-	spi_lock();
+//	spi_lock();
 	retval = spi_write(spi, txbuf, sizeof(txbuf));
-	spi_unlock(dev);
+//	spi_unlock(dev);
 
 	return retval;
 }
@@ -120,6 +121,7 @@ static inline int b53_prepare_reg_access(struct spi_device *spi, u8 page)
 {
 	int ret = b53_spi_clear_status(spi);
 
+//	printk("dsi-b53_prepare_reg_access(): page=0x%02x\n", page);
 	if (ret)
 		return ret;
 
@@ -132,6 +134,7 @@ static int b53_spi_prepare_reg_read(struct spi_device *spi, u8 reg)
 	int retry_count;
 	int ret;
 
+//	printk("dsi-b53_spi_prepare_reg_read(): reg=0x%02x\n", reg);
 	ret = b53_spi_read_reg(spi, reg, &rxbuf, 1);
 	if (ret)
 		return ret;
@@ -162,6 +165,7 @@ static int b53_spi_read(struct b53_device *dev, u8 page, u8 reg, u8 *data,
 	struct spi_device *spi = dev->priv;
 	int ret;
 
+	spi_lock();
 	ret = b53_prepare_reg_access(spi, page);
 	if (ret)
 		return ret;
@@ -170,7 +174,10 @@ static int b53_spi_read(struct b53_device *dev, u8 page, u8 reg, u8 *data,
 	if (ret)
 		return ret;
 
-	return b53_spi_read_reg(spi, B53_SPI_DATA, data, len);
+	ret = b53_spi_read_reg(spi, B53_SPI_DATA, data, len);
+	spi_unlock(spi->dev.parent->parent);
+
+	return ret;
 }
 
 static int b53_spi_read8(struct b53_device *dev, u8 page, u8 reg, u8 *val)
@@ -238,6 +245,7 @@ static int b53_spi_write8(struct b53_device *dev, u8 page, u8 reg, u8 value)
 	u8 txbuf[3];
 	int retval;
 
+	spi_lock();
 	ret = b53_prepare_reg_access(spi, page);
 	if (ret)
 		return ret;
@@ -246,7 +254,6 @@ static int b53_spi_write8(struct b53_device *dev, u8 page, u8 reg, u8 value)
 	txbuf[1] = reg;
 	txbuf[2] = value;
 
-	spi_lock();
 	dev_err(device, "dsi-b53_spi_write8(): %02x %02x %02x\n", txbuf[0], txbuf[1], txbuf[2]);
 	retval =  spi_write(spi, txbuf, sizeof(txbuf));
 	spi_unlock(device);
@@ -262,6 +269,7 @@ static int b53_spi_write16(struct b53_device *dev, u8 page, u8 reg, u16 value)
 	u8 txbuf[4];
 	int retval;
 
+	spi_lock();
 	ret = b53_prepare_reg_access(spi, page);
 	if (ret)
 		return ret;
@@ -270,7 +278,6 @@ static int b53_spi_write16(struct b53_device *dev, u8 page, u8 reg, u16 value)
 	txbuf[1] = reg;
 	put_unaligned_le16(value, &txbuf[2]);
 
-	spi_lock();
 	retval =  spi_write(spi, txbuf, sizeof(txbuf));
 	spi_unlock(device);
 
@@ -285,6 +292,7 @@ static int b53_spi_write32(struct b53_device *dev, u8 page, u8 reg, u32 value)
 	u8 txbuf[6];
 	int retval;
 
+	spi_lock();
 	ret = b53_prepare_reg_access(spi, page);
 	if (ret)
 		return ret;
@@ -293,7 +301,6 @@ static int b53_spi_write32(struct b53_device *dev, u8 page, u8 reg, u32 value)
 	txbuf[1] = reg;
 	put_unaligned_le32(value, &txbuf[2]);
 
-	spi_lock();
 	retval = spi_write(spi, txbuf, sizeof(txbuf));
 	spi_unlock(device);
 
@@ -308,6 +315,7 @@ static int b53_spi_write48(struct b53_device *dev, u8 page, u8 reg, u64 value)
 	u8 txbuf[10];
 	int retval;
 
+	spi_lock();
 	ret = b53_prepare_reg_access(spi, page);
 	if (ret)
 		return ret;
@@ -316,7 +324,6 @@ static int b53_spi_write48(struct b53_device *dev, u8 page, u8 reg, u64 value)
 	txbuf[1] = reg;
 	put_unaligned_le64(value, &txbuf[2]);
 
-	spi_lock();
 	retval =  spi_write(spi, txbuf, sizeof(txbuf) - 2);
 	spi_unlock(device);
 
@@ -331,6 +338,7 @@ static int b53_spi_write64(struct b53_device *dev, u8 page, u8 reg, u64 value)
 	u8 txbuf[10];
 	int retval;
 
+	spi_lock();
 	ret = b53_prepare_reg_access(spi, page);
 	if (ret)
 		return ret;
@@ -339,7 +347,6 @@ static int b53_spi_write64(struct b53_device *dev, u8 page, u8 reg, u64 value)
 	txbuf[1] = reg;
 	put_unaligned_le64(value, &txbuf[2]);
 
-	spi_lock();
 	retval = spi_write(spi, txbuf, sizeof(txbuf));
 	spi_unlock(device);
 
