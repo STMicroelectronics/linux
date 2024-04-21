@@ -10,6 +10,7 @@
  *   http://ww1.microchip.com/downloads/en/DeviceDoc/20005382C.pdf
  */
 
+#include <linux/delay.h>
 #include <linux/module.h>
 #include <linux/init.h>
 #include <linux/slab.h>
@@ -19,6 +20,7 @@
 #include <linux/hwmon-sysfs.h>
 #include <linux/err.h>
 #include <linux/mutex.h>
+#include <linux/pm_runtime.h>
 #include <linux/sysfs.h>
 
 static const unsigned short normal_i2c[] = {
@@ -54,6 +56,21 @@ static const unsigned short normal_i2c[] = {
 #define MCP9902_REG_W_LOCAL_CRIT			0x20
 #define MCP9902_REG_R_TCRIT_HYST			0x21
 #define MCP9902_REG_W_TCRIT_HYST			0x21
+
+/*
+ * I2C3-SPI2 Clocks Shorted Mutex
+ */
+
+extern struct mutex datum_b53_spi_mutex;
+
+static inline void spi_lock(void) { mutex_lock(&datum_b53_spi_mutex); }
+
+static inline void spi_unlock(struct device *dev)
+{
+	if(!pm_runtime_suspended(dev))
+		usleep_range(100, 200);
+	mutex_unlock(&datum_b53_spi_mutex);
+}
 
 /*
  * Conversions
@@ -128,22 +145,34 @@ static struct mcp9902_data *mcp9902_update_device(struct device *dev)
 {
 	struct mcp9902_data *data = dev_get_drvdata(dev);
 	struct i2c_client *client = data->client;
+	struct i2c_adapter *adapter = client->adapter;
 	int i;
+	int j;
 
 	mutex_lock(&data->update_lock);
+//	spi_lock();
 
-	if (time_after(jiffies, data->last_updated + HZ * 2) || !data->valid) {
+	// if (time_after(jiffies, data->last_updated + HZ * 2) || !data->valid) {
+	if (time_after(jiffies, data->last_updated + 1) || !data->valid) {
 		dev_dbg(&client->dev, "Updating mcp9902 data.\n");
-		for (i = 0; i < t_num_regs; i++)
-			data->temp[i] = i2c_smbus_read_byte_data(client,
-					regs_read[i]);
-		data->alarms = i2c_smbus_read_byte_data(client,
-					MCP9902_REG_R_STATUS);
+		// printk("Updating mcp9902 data.\n");
+
+		for (j = 0; j < 20; j++)
+		{
+			spi_lock();
+			for (i = 0; i < t_num_regs; i++)
+				data->temp[i] = i2c_smbus_read_byte_data(client,
+						regs_read[i]);
+			data->alarms = i2c_smbus_read_byte_data(client,
+						MCP9902_REG_R_STATUS);
+			spi_unlock(adapter->dev.parent);
+		}
 
 		data->last_updated = jiffies;
 		data->valid = 1;
 	}
 
+//	spi_unlock(adapter->dev.parent);
 	mutex_unlock(&data->update_lock);
 
 	return data;
@@ -159,7 +188,7 @@ static ssize_t temp_show(struct device *dev, struct device_attribute *devattr,
 	struct sensor_device_attribute *attr = to_sensor_dev_attr(devattr);
 	struct mcp9902_data *data = mcp9902_update_device(dev);
 	u8 fraction_reg;
-	
+
 	switch(attr->index)
 	{
 		case t_input1:
@@ -182,6 +211,7 @@ static ssize_t temp_store(struct device *dev,
 	struct sensor_device_attribute *attr = to_sensor_dev_attr(devattr);
 	struct mcp9902_data *data = dev_get_drvdata(dev);
 	struct i2c_client *client = data->client;
+	struct i2c_adapter *adapter = client->adapter;
 	long val;
 	int err = kstrtol(buf, 10, &val);
 	if (err)
@@ -189,8 +219,10 @@ static ssize_t temp_store(struct device *dev,
 
 	mutex_lock(&data->update_lock);
 	data->temp[attr->index] = temp_to_reg(val);
+	spi_lock();
 	i2c_smbus_write_byte_data(client, regs_write[attr->index],
 				  data->temp[attr->index]);
+	spi_unlock(adapter->dev.parent);
 	mutex_unlock(&data->update_lock);
 	return count;
 }
@@ -263,8 +295,10 @@ static int mcp9902_detect(struct i2c_client *client,
 		return -ENODEV;
 
 	/* identification */
+	spi_lock();
 	man_id = i2c_smbus_read_byte_data(client, MCP9902_REG_R_MAN_ID);
 	chip_id = i2c_smbus_read_byte_data(client, MCP9902_REG_R_CHIP_ID);
+	spi_unlock(adapter->dev.parent);
 	if (man_id != 0x5D || chip_id != 0x04) {
 		dev_info(&adapter->dev,
 			 "Unsupported chip (man_id=0x%02X, chip_id=0x%02X).\n",
@@ -279,12 +313,17 @@ static int mcp9902_detect(struct i2c_client *client,
 
 static void mcp9902_init_client(struct i2c_client *client)
 {
+	struct i2c_adapter *adapter = client->adapter;
+
+	pm_runtime_set_autosuspend_delay(adapter->dev.parent, 0);
 
 	/*
 	 * Start the conversions.
 	 */
+	spi_lock();
 	i2c_smbus_write_byte_data(client, MCP9902_REG_W_CONVRATE, 5);	/* 2 Hz */
 	i2c_smbus_write_byte_data(client, MCP9902_REG_W_CONFIG, 0x9F);	/* run - extended temp */
+	spi_unlock(adapter->dev.parent);
 }
 
 static int mcp9902_probe(struct i2c_client *new_client,
@@ -312,14 +351,14 @@ static int mcp9902_probe(struct i2c_client *new_client,
 }
 
 static const struct i2c_device_id mcp9902_id[] = {
-	{ "mcp9902", 0 },
+	{ "mcp9902-datum", 0 },
 	{ }
 };
 MODULE_DEVICE_TABLE(i2c, mcp9902_id);
 
 #ifdef CONFIG_OF
 static const struct of_device_id mcp9902_of_match[] = {
-	{ .compatible = "microchip,mcp9902", },
+	{ .compatible = "microchip,mcp9902-datum", },
 	{},
 };
 
@@ -329,7 +368,7 @@ MODULE_DEVICE_TABLE(of, mcp9902_of_match);
 static struct i2c_driver mcp9902_driver = {
 	.class		= I2C_CLASS_HWMON,
 	.driver = {
-		.name	= "mcp9902",
+		.name	= "mcp9902-datum",
 		.of_match_table = of_match_ptr(mcp9902_of_match),
 	},
 	.probe		= mcp9902_probe,

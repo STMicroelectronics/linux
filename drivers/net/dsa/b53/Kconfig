@@ -16,6 +16,14 @@ config B53_SPI_DRIVER
 	help
 	  Select to enable support for registering switches configured through SPI.
 
+config B53_SPI_DATUM_DRIVER
+	tristate "B53 SPI connected switch driver with Datum SPI/I2C clocks shorted"
+	depends on B53 && SPI
+	help
+	  Select to enable support for registering switches configured through SPI.
+	  This driver is for use with the Datum Systems Inc. SPI/I2C shorted bus
+	  management system that fixes the I2C and SPI bus clocks shorted together.
+
 config B53_MDIO_DRIVER
 	tristate "B53 MDIO connected switch driver"
 	depends on B53
