@@ -152,8 +152,7 @@ static struct mcp9902_data *mcp9902_update_device(struct device *dev)
 	mutex_lock(&data->update_lock);
 	spi_lock();
 
-	// if (time_after(jiffies, data->last_updated + HZ * 2) || !data->valid) {
-	if (time_after(jiffies, data->last_updated + 1) || !data->valid) {
+	if (time_after(jiffies, data->last_updated + HZ * 2) || !data->valid) {
 		dev_dbg(&client->dev, "Updating mcp9902 data.\n");
 		// printk("Updating mcp9902 data.\n");
 

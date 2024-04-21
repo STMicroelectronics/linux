@@ -36,8 +36,7 @@
 #include <net/genetlink.h>
 #include <net/sock.h>
 
-// #define PHY_STATE_TIME	HZ
-#define PHY_STATE_TIME	2
+#define PHY_STATE_TIME	HZ
 
 #define PHY_STATE_STR(_state)			\
 	case PHY_##_state:			\
