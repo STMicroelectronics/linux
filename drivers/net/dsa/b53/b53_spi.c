@@ -58,7 +58,6 @@ static inline void spi_unlock(struct device *dev)
 static inline int b53_spi_read_reg(struct spi_device *spi, u8 reg, u8 *val,
 				   unsigned int len)
 {
-	struct device *dev = spi->dev.parent->parent;
 	u8 txbuf[2];
 	int retval;
 
@@ -88,17 +87,13 @@ static inline int b53_spi_clear_status(struct spi_device *spi)
 	}
 
 	if (i == 10)
-	{
-		printk("dsi-datum: b53_spi_clear_status failed, rxbuf=0x%02x\n", rxbuf);
 		return -EIO;
-	}
 
 	return 0;
 }
 
 static inline int b53_spi_set_page(struct spi_device *spi, u8 page)
 {
-	struct device *dev = spi->dev.parent->parent;
 	u8 txbuf[3];
 	int retval;
 
@@ -115,7 +110,6 @@ static inline int b53_prepare_reg_access(struct spi_device *spi, u8 page)
 {
 	int ret = b53_spi_clear_status(spi);
 
-//	printk("dsi-b53_prepare_reg_access(): page=0x%02x\n", page);
 	if (ret)
 		return ret;
 
@@ -128,7 +122,6 @@ static int b53_spi_prepare_reg_read(struct spi_device *spi, u8 reg)
 	int retry_count;
 	int ret;
 
-//	printk("dsi-b53_spi_prepare_reg_read(): reg=0x%02x\n", reg);
 	ret = b53_spi_read_reg(spi, reg, &rxbuf, 1);
 	if (ret)
 		return ret;
@@ -145,10 +138,7 @@ static int b53_spi_prepare_reg_read(struct spi_device *spi, u8 reg)
 	}
 
 	if (retry_count == 10)
-	{
-		printk("dsi-datum: b53_spi_prepare_reg_read failed, rxbuf=0x%02x\n", rxbuf);
 		return -EIO;
-	}
 
 	return 0;
 }
@@ -361,6 +351,7 @@ static const struct b53_io_ops b53_spi_ops = {
 
 static int b53_spi_probe(struct spi_device *spi)
 {
+	struct device *device = spi->dev.parent->parent;
 	struct b53_device *dev;
 	int ret;
 	struct net_device *ndev = dev_get_by_name(&init_net, "eth0");
@@ -374,6 +365,8 @@ static int b53_spi_probe(struct spi_device *spi)
 
 	if (spi->dev.platform_data)
 		dev->pdata = spi->dev.platform_data;
+
+	pm_runtime_set_autosuspend_delay(device, 0);
 
 	ret = b53_switch_register(dev);
 	if (ret)

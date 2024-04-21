@@ -207,7 +207,6 @@ static int ina2xx_calibrate(struct ina2xx_data *data)
 	retval =  regmap_write(data->regmap, INA2XX_CALIBRATION,
 			    data->config->calibration_value);
 	
-	//dev_err(device, "dsi-ina2xx_calibrate()\n");
 	spi_unlock(device);
 
 	return retval;
@@ -225,7 +224,6 @@ static int ina2xx_init(struct ina2xx_data *data)
 	spi_lock();
 	ret = regmap_write(data->regmap, INA2XX_CONFIG,
 			       data->config->config_default);
-	//dev_err(device, "dsi-ina2xx_init()\n");
 	spi_unlock(device);
 	if (ret < 0)
 		return ret;
@@ -245,7 +243,6 @@ static int ina2xx_read_reg(struct device *dev, int reg, unsigned int *regval)
 
 		spi_lock();
 		ret = regmap_read(data->regmap, reg, regval);
-		//dev_err(device, "dsi-ina2xx_read_reg()\n");
 		spi_unlock(device);
 
 		if (ret < 0)
@@ -267,7 +264,6 @@ static int ina2xx_read_reg(struct device *dev, int reg, unsigned int *regval)
 			spi_lock();
 			ret = regmap_read(data->regmap, INA2XX_CALIBRATION,
 					  &cal);
-			//dev_err(device, "dsi-ina2xx_read_reg()\n");
 			spi_unlock(device);
 
 			if (ret < 0)
@@ -428,7 +424,6 @@ static ssize_t ina226_alert_show(struct device *dev,
 
 	ret = sysfs_emit(buf, "%d\n", val);
 abort:
-	//dev_err(device, "dsi-ina226_alert_show()\n");
 	spi_unlock(device);
 	mutex_unlock(&data->config_lock);
 	return ret;
@@ -477,7 +472,6 @@ static ssize_t ina226_alert_store(struct device *dev,
 
 	ret = count;
 abort:
-	//dev_err(device, "dsi-ina226_alert_store()\n");
 	spi_unlock(device);
 	mutex_unlock(&data->config_lock);
 	return ret;
@@ -495,7 +489,6 @@ static ssize_t ina226_alarm_show(struct device *dev,
 
 	spi_lock();
 	ret = regmap_read(data->regmap, INA226_MASK_ENABLE, &regval);
-	//dev_err(device, "dsi-ina226_alarm_show()\n");
 	spi_unlock(device);
 	if (ret)
 		return ret;
@@ -575,7 +568,6 @@ static ssize_t ina226_interval_store(struct device *dev,
 				    INA226_AVG_RD_MASK,
 				    ina226_interval_to_reg(val));
 	
-	//dev_err(device, "dsi-ina226_interval_store()\n");
 	spi_unlock(device);
 	if (status < 0)
 		return status;
@@ -593,7 +585,6 @@ static ssize_t ina226_interval_show(struct device *dev,
 
 	spi_lock();
 	status = regmap_read(data->regmap, INA2XX_CONFIG, &regval);
-	//dev_err(device, "dsi-ina226_interval_show()\n");
 	spi_unlock(device);
 	if (status)
 		return status;
@@ -708,6 +699,7 @@ static int ina2xx_probe(struct i2c_client *client)
 			val = INA2XX_RSHUNT_DEFAULT;
 	}
 
+	pm_runtime_set_autosuspend_delay(dev->parent->parent, 0);
 	ina2xx_set_shunt(data, val);
 
 	ina2xx_regmap_config.max_register = data->config->registers;

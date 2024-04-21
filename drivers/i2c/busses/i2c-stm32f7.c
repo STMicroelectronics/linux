@@ -179,7 +179,7 @@ enum {
 #define STM32F7_SCLH_MAX			BIT(8)
 #define STM32F7_SCLL_MAX			BIT(8)
 
-#define STM32F7_AUTOSUSPEND_DELAY		0
+#define STM32F7_AUTOSUSPEND_DELAY		(HZ / 100)
 
 /**
  * struct stm32f7_i2c_regs - i2c f7 registers backup
@@ -2228,7 +2228,6 @@ static int stm32f7_i2c_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, i2c_dev);
 
-	dev_err(i2c_dev->dev, "dsi-stm32f7_i2c_probe() [i2c_dev->dev]\n");
 	pm_runtime_set_autosuspend_delay(i2c_dev->dev,
 					 STM32F7_AUTOSUSPEND_DELAY);
 	pm_runtime_use_autosuspend(i2c_dev->dev);

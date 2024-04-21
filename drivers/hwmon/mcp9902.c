@@ -298,7 +298,6 @@ static int mcp9902_detect(struct i2c_client *client,
 	spi_lock();
 	man_id = i2c_smbus_read_byte_data(client, MCP9902_REG_R_MAN_ID);
 	chip_id = i2c_smbus_read_byte_data(client, MCP9902_REG_R_CHIP_ID);
-	dev_err(adapter->dev.parent, "dsi-mcp9902_detect()\n");
 	spi_unlock(adapter->dev.parent);
 	if (man_id != 0x5D || chip_id != 0x04) {
 		dev_info(&adapter->dev,
@@ -315,13 +314,15 @@ static int mcp9902_detect(struct i2c_client *client,
 static void mcp9902_init_client(struct i2c_client *client)
 {
 	struct i2c_adapter *adapter = client->adapter;
+	
+	pm_runtime_set_autosuspend_delay(adapter->dev.parent, 0);
+
 	/*
 	 * Start the conversions.
 	 */
 	spi_lock();
 	i2c_smbus_write_byte_data(client, MCP9902_REG_W_CONVRATE, 5);	/* 2 Hz */
 	i2c_smbus_write_byte_data(client, MCP9902_REG_W_CONFIG, 0x9F);	/* run - extended temp */
-	dev_err(adapter->dev.parent, "dsi-mcp9902_init_client()\n");
 	spi_unlock(adapter->dev.parent);
 }
 

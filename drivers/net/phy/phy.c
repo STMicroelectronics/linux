@@ -1209,10 +1209,7 @@ void phy_state_machine(struct work_struct *work)
 		return;
 
 	if (err < 0)
-	{
-		printk("dsi-phy_state_machine(): PHY_ERROR error=%d\n", err);
 		phy_error(phydev);
-	}
 
 	phy_process_state_change(phydev, old_state);
 
