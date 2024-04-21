@@ -155,6 +155,15 @@ static const struct ina2xx_config ina2xx_config[] = {
  */
 static const int ina226_avg_tab[] = { 1, 4, 16, 64, 128, 256, 512, 1024 };
 
+static inline void spi_lock(void) { mutex_lock(&datum_b53_spi_mutex); }
+
+static inline void spi_unlock(struct device *dev)
+{
+	if(!pm_runtime_suspended(dev))
+		usleep_range(100, 200);
+	mutex_unlock(&datum_b53_spi_mutex);
+}
+
 static int ina226_reg_to_interval(u16 config)
 {
 	int avg = ina226_avg_tab[INA226_READ_AVG(config)];
@@ -191,16 +200,15 @@ static u16 ina226_interval_to_reg(int interval)
 static int ina2xx_calibrate(struct ina2xx_data *data)
 {
 	struct device *dev = regmap_get_device(data->regmap);
+	struct device *device = dev->parent->parent;
 	int retval;
 
-	mutex_lock(&datum_b53_spi_mutex);
+	spi_lock();
 	retval =  regmap_write(data->regmap, INA2XX_CALIBRATION,
 			    data->config->calibration_value);
 	
-	dev_err(dev, "ina2xx dev\n");
-	if(pm_runtime_active(dev))
-		usleep_range(100, 200);
-	mutex_unlock(&datum_b53_spi_mutex);
+	//dev_err(device, "dsi-ina2xx_calibrate()\n");
+	spi_unlock(device);
 
 	return retval;
 }
@@ -211,16 +219,14 @@ static int ina2xx_calibrate(struct ina2xx_data *data)
 static int ina2xx_init(struct ina2xx_data *data)
 {
 	struct device *dev = regmap_get_device(data->regmap);
+	struct device *device = dev->parent->parent;
 	int ret;
 
-	mutex_lock(&datum_b53_spi_mutex);
+	spi_lock();
 	ret = regmap_write(data->regmap, INA2XX_CONFIG,
 			       data->config->config_default);
-	dev_err(dev, "ina2xx dev\n");
-	if(pm_runtime_active(dev))
-		usleep_range(100, 200);
-	mutex_unlock(&datum_b53_spi_mutex);
-
+	//dev_err(device, "dsi-ina2xx_init()\n");
+	spi_unlock(device);
 	if (ret < 0)
 		return ret;
 
@@ -229,6 +235,7 @@ static int ina2xx_init(struct ina2xx_data *data)
 
 static int ina2xx_read_reg(struct device *dev, int reg, unsigned int *regval)
 {
+	struct device *device = dev->parent->parent->parent;
 	struct ina2xx_data *data = dev_get_drvdata(dev);
 	int ret, retry;
 
@@ -236,12 +243,10 @@ static int ina2xx_read_reg(struct device *dev, int reg, unsigned int *regval)
 
 	for (retry = 5; retry; retry--) {
 
-		mutex_lock(&datum_b53_spi_mutex);
+		spi_lock();
 		ret = regmap_read(data->regmap, reg, regval);
-		dev_err(dev, "ina2xx dev\n");
-		if(pm_runtime_active(dev))
-			usleep_range(100, 200);
-		mutex_unlock(&datum_b53_spi_mutex);
+		//dev_err(device, "dsi-ina2xx_read_reg()\n");
+		spi_unlock(device);
 
 		if (ret < 0)
 			return ret;
@@ -259,13 +264,11 @@ static int ina2xx_read_reg(struct device *dev, int reg, unsigned int *regval)
 		if (*regval == 0) {
 			unsigned int cal;
 
-			mutex_lock(&datum_b53_spi_mutex);
+			spi_lock();
 			ret = regmap_read(data->regmap, INA2XX_CALIBRATION,
 					  &cal);
-			dev_err(dev, "ina2xx dev\n");
-			if(pm_runtime_active(dev))
-				usleep_range(100, 200);
-			mutex_unlock(&datum_b53_spi_mutex);
+			//dev_err(device, "dsi-ina2xx_read_reg()\n");
+			spi_unlock(device);
 
 			if (ret < 0)
 				return ret;
@@ -403,6 +406,7 @@ static s16 ina226_alert_to_reg(struct ina2xx_data *data, u8 bit, int val)
 static ssize_t ina226_alert_show(struct device *dev,
 				 struct device_attribute *da, char *buf)
 {
+	struct device *device = dev->parent->parent->parent;
 	struct sensor_device_attribute *attr = to_sensor_dev_attr(da);
 	struct ina2xx_data *data = dev_get_drvdata(dev);
 	int regval;
@@ -410,7 +414,7 @@ static ssize_t ina226_alert_show(struct device *dev,
 	int ret;
 
 	mutex_lock(&data->config_lock);
-	mutex_lock(&datum_b53_spi_mutex);
+	spi_lock();
 	ret = regmap_read(data->regmap, INA226_MASK_ENABLE, &regval);
 	if (ret)
 		goto abort;
@@ -424,10 +428,8 @@ static ssize_t ina226_alert_show(struct device *dev,
 
 	ret = sysfs_emit(buf, "%d\n", val);
 abort:
-	dev_err(dev, "ina2xx dev\n");
-	if(pm_runtime_active(dev))
-		usleep_range(100, 200);
-	mutex_unlock(&datum_b53_spi_mutex);
+	//dev_err(device, "dsi-ina226_alert_show()\n");
+	spi_unlock(device);
 	mutex_unlock(&data->config_lock);
 	return ret;
 }
@@ -436,6 +438,7 @@ static ssize_t ina226_alert_store(struct device *dev,
 				  struct device_attribute *da,
 				  const char *buf, size_t count)
 {
+	struct device *device = dev->parent->parent->parent;
 	struct sensor_device_attribute *attr = to_sensor_dev_attr(da);
 	struct ina2xx_data *data = dev_get_drvdata(dev);
 	unsigned long val;
@@ -451,7 +454,7 @@ static ssize_t ina226_alert_store(struct device *dev,
 	 * if the value is non-zero.
 	 */
 	mutex_lock(&data->config_lock);
-	mutex_lock(&datum_b53_spi_mutex);
+	spi_lock();
 	ret = regmap_update_bits(data->regmap, INA226_MASK_ENABLE,
 				 INA226_ALERT_CONFIG_MASK, 0);
 	if (ret < 0)
@@ -474,10 +477,8 @@ static ssize_t ina226_alert_store(struct device *dev,
 
 	ret = count;
 abort:
-	dev_err(dev, "ina2xx dev\n");
-	if(pm_runtime_active(dev))
-		usleep_range(100, 200);
-	mutex_unlock(&datum_b53_spi_mutex);
+	//dev_err(device, "dsi-ina226_alert_store()\n");
+	spi_unlock(device);
 	mutex_unlock(&data->config_lock);
 	return ret;
 }
@@ -485,18 +486,17 @@ abort:
 static ssize_t ina226_alarm_show(struct device *dev,
 				 struct device_attribute *da, char *buf)
 {
+	struct device *device = dev->parent->parent->parent;
 	struct sensor_device_attribute *attr = to_sensor_dev_attr(da);
 	struct ina2xx_data *data = dev_get_drvdata(dev);
 	int regval;
 	int alarm = 0;
 	int ret;
 
-	mutex_lock(&datum_b53_spi_mutex);
+	spi_lock();
 	ret = regmap_read(data->regmap, INA226_MASK_ENABLE, &regval);
-	dev_err(dev, "ina2xx dev\n");
-	if(pm_runtime_active(dev))
-		usleep_range(100, 200);
-	mutex_unlock(&datum_b53_spi_mutex);
+	//dev_err(device, "dsi-ina226_alarm_show()\n");
+	spi_unlock(device);
 	if (ret)
 		return ret;
 
@@ -558,6 +558,7 @@ static ssize_t ina226_interval_store(struct device *dev,
 				     struct device_attribute *da,
 				     const char *buf, size_t count)
 {
+	struct device *device = dev->parent->parent->parent;
 	struct ina2xx_data *data = dev_get_drvdata(dev);
 	unsigned long val;
 	int status;
@@ -569,13 +570,13 @@ static ssize_t ina226_interval_store(struct device *dev,
 	if (val > INT_MAX || val == 0)
 		return -EINVAL;
 
-	mutex_lock(&datum_b53_spi_mutex);
+	spi_lock();
 	status = regmap_update_bits(data->regmap, INA2XX_CONFIG,
 				    INA226_AVG_RD_MASK,
 				    ina226_interval_to_reg(val));
-	if(pm_runtime_active(dev))
-		usleep_range(100, 200);
-	mutex_unlock(&datum_b53_spi_mutex);
+	
+	//dev_err(device, "dsi-ina226_interval_store()\n");
+	spi_unlock(device);
 	if (status < 0)
 		return status;
 
@@ -585,16 +586,15 @@ static ssize_t ina226_interval_store(struct device *dev,
 static ssize_t ina226_interval_show(struct device *dev,
 				    struct device_attribute *da, char *buf)
 {
+	struct device *device = dev->parent->parent->parent;
 	struct ina2xx_data *data = dev_get_drvdata(dev);
 	int status;
 	unsigned int regval;
 
-	mutex_lock(&datum_b53_spi_mutex);
+	spi_lock();
 	status = regmap_read(data->regmap, INA2XX_CONFIG, &regval);
-	dev_err(dev, "ina2xx dev\n");
-	if(pm_runtime_active(dev))
-		usleep_range(100, 200);
-	mutex_unlock(&datum_b53_spi_mutex);
+	//dev_err(device, "dsi-ina226_interval_show()\n");
+	spi_unlock(device);
 	if (status)
 		return status;
 

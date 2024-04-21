@@ -69,7 +69,6 @@ static inline void spi_unlock(struct device *dev)
 {
 	if(!pm_runtime_suspended(dev))
 		usleep_range(100, 200);
-//	msleep(1);	
 	mutex_unlock(&datum_b53_spi_mutex);
 }
 
