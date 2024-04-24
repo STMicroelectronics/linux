@@ -1,0 +1,86 @@
+# SPDX-License-Identifier: (GPL-2.0 OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/remoteproc/st,stm32-m0.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: STMicroelectronics STM32 remote processor controller for Cortex-M0+
+
+description:
+  This document defines the binding for the remoteproc component that loads and
+  boots firmwares on the M0 of the smartrun domain on the ST32MP2 series.
+
+maintainers:
+  - Arnaud Pouliquen <arnaud.pouliquen@foss.st.com>
+
+properties:
+  compatible:
+    enum:
+      - st,stm32mp2-m0
+    description:
+      Use "st,stm32mp2-m0" for the stm32mp2 Cortex-M0 coprocessor management by Linux
+  reg:
+    maxItems: 1
+
+  clocks: true
+
+  clock-names: true
+
+  resets:
+    minItems: 1
+
+  reset-names:
+    items:
+      - const: mcu_rst
+
+  interrupts:
+    description: Should contain the IWDG5 watchdog reset interrupt
+    maxItems: 1
+
+  wakeup-source: true
+
+  mboxes:
+    description:
+      A channel (c) used by the local proc to notify the remote proc that it
+      is about to be shut down.
+
+  mbox-names:
+    items:
+      - const: shutdown
+
+  memory-region:
+    description:
+      List of phandles to the reserved memory regions associated with the
+      remoteproc device. This is variable and describes the memories shared with
+      the remote processor (e.g. remoteproc firmware, shared memory for
+      interprocessor communication ...).
+      (see ../reserved-memory/reserved-memory.txt)
+
+  st,auto-boot:
+    $ref: /schemas/types.yaml#/definitions/flag
+    description:
+      If defined, when remoteproc is probed, it loads the default firmware and
+      starts the remote processor.
+
+required:
+  - compatible
+  - reg
+  - clocks
+  - resets
+  - reset-names
+
+additionalProperties: false
+
+examples:
+  - |
+    #include <dt-bindings/clock/st,stm32mp25-rcc.h>
+    #include <dt-bindings/reset/st,stm32mp25-rcc.h>
+
+    m0_rproc: m0@0 {
+      compatible = "st,stm32mp2-m0";
+      reg = <0 0>;
+      clocks = <&rcc CK_CPU3>;
+      resets = <&rcc C3_R>;
+      reset-names = "mcu_rst";
+    };
+...
