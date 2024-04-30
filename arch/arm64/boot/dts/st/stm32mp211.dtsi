@@ -819,6 +819,16 @@
 				<&intc GIC_SPI 204 IRQ_TYPE_LEVEL_HIGH>;
 		};
 
+		rtc: rtc@46000000 {
+			compatible = "st,stm32mp25-rtc";
+			reg = <0x46000000 0x0 0x400>;
+			clocks = <&scmi_clk CK_SCMI_RTC>,
+				 <&scmi_clk CK_SCMI_RTCCK>;
+			clock-names = "pclk", "rtc_ck";
+			interrupts-extended = <&exti2 17 IRQ_TYPE_LEVEL_HIGH>;
+			status = "disabled";
+		};
+
 		tamp: tamp@46010000 {
 			compatible = "st,stm32-tamp", "syscon", "simple-mfd";
 			#address-cells = <1>;
