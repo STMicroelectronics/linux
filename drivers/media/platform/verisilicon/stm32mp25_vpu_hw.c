@@ -22,10 +22,22 @@ static const struct hantro_fmt stm32mp25_vdec_fmts[] = {
 		.codec_mode = HANTRO_MODE_NONE,
 		.frmsize = {
 			.min_width = FMT_MIN_WIDTH,
-			.max_width = FMT_FHD_WIDTH,
+			.max_width = FMT_4K_WIDTH,
 			.step_width = MB_DIM,
 			.min_height = FMT_MIN_HEIGHT,
-			.max_height = FMT_FHD_HEIGHT,
+			.max_height = FMT_4K_HEIGHT,
+			.step_height = MB_DIM,
+		},
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_NV16,
+		.codec_mode = HANTRO_MODE_NONE,
+		.frmsize = {
+			.min_width = FMT_MIN_WIDTH,
+			.max_width = FMT_4K_WIDTH,
+			.step_width = MB_DIM,
+			.min_height = FMT_MIN_HEIGHT,
+			.max_height = FMT_4K_HEIGHT,
 			.step_height = MB_DIM,
 		},
 	},
@@ -53,6 +65,19 @@ static const struct hantro_fmt stm32mp25_vdec_fmts[] = {
 			.min_height = FMT_MIN_HEIGHT,
 			.max_height = FMT_FHD_HEIGHT,
 			.step_height = MB_DIM,
+		},
+	},
+	{
+		.fourcc = V4L2_PIX_FMT_JPEG,
+		.codec_mode = HANTRO_MODE_JPEG_DEC,
+		.max_depth = 2,
+		.frmsize = {
+			.min_width = 48,
+			.max_width = FMT_4K_WIDTH,
+			.step_width = MB_DIM,
+			.min_height = 48,
+			.max_height = FMT_4K_HEIGHT,
+			.step_height = 8,
 		},
 	},
 };
@@ -216,6 +241,12 @@ static const struct hantro_codec_ops stm32mp25_vdec_codec_ops[] = {
 		.init = hantro_h264_dec_init,
 		.exit = hantro_h264_dec_exit,
 	},
+	[HANTRO_MODE_JPEG_DEC] = {
+		.run = hantro_g1_jpeg_dec_run,
+		.reset = hantro_g1_reset,
+		.init = hantro_jpeg_dec_init,
+		.exit = hantro_jpeg_dec_exit,
+	},
 };
 
 static const struct hantro_codec_ops stm32mp25_venc_codec_ops[] = {
@@ -253,7 +284,7 @@ static const char * const stm32mp25_vdec_clk_names[] = { "vdec-clk" };
 const struct hantro_variant stm32mp25_vdec_variant = {
 	.dec_fmts = stm32mp25_vdec_fmts,
 	.num_dec_fmts = ARRAY_SIZE(stm32mp25_vdec_fmts),
-	.codec = HANTRO_VP8_DECODER | HANTRO_H264_DECODER,
+	.codec = HANTRO_VP8_DECODER | HANTRO_H264_DECODER | HANTRO_JPEG_DECODER,
 	.codec_ops = stm32mp25_vdec_codec_ops,
 	.irqs = stm32mp25_vdec_irqs,
 	.num_irqs = ARRAY_SIZE(stm32mp25_vdec_irqs),

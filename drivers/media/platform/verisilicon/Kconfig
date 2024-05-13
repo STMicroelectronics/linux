@@ -14,6 +14,7 @@ config VIDEO_HANTRO
 	select V4L2_H264
 	select V4L2_JPEG_HELPER
 	select V4L2_VP9
+	select V4L2_JPEG_HELPER
 	help
 	  Support for the Hantro IP based Video Processing Units present on
 	  Rockchip, NXP i.MX8M and STM32MP25 SoCs, which accelerate video

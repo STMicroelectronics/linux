@@ -232,9 +232,88 @@
 #define     G1_REG_DEC_CTRL7_DCT7_START_BIT(x)		(((x) & 0x3f) << 0)
 #define G1_REG_ADDR_STR					0x030
 #define G1_REG_ADDR_DST					0x034
+#define G1_REG_ADDR_DST_CHROMA				0x038
+#define G1_REG_JPEG_CTRL				0x03c
+#define     G1_REG_JPEG_CTRL_SLICE_H(x)			(((x) & 0xf) << 0)
 #define G1_REG_ADDR_REF(i)				(0x038 + ((i) * 0x4))
 #define     G1_REG_ADDR_REF_FIELD_E			BIT(1)
 #define     G1_REG_ADDR_REF_TOPC_E			BIT(0)
+#define G1_REG_DEC_JPEG_VLC_AC_CODE_LENGTHS_A		0x040
+#define     G1_REG_DEC_JPEG_VLC_AC1_CODE6_CNT(x)	(((x) & 0x7f) << 24)
+#define     G1_REG_DEC_JPEG_VLC_AC1_CODE5_CNT(x)	(((x) & 0x3f) << 16)
+#define     G1_REG_DEC_JPEG_VLC_AC1_CODE4_CNT(x)	(((x) & 0x1f) << 11)
+#define     G1_REG_DEC_JPEG_VLC_AC1_CODE3_CNT(x)	(((x) & 0xf) << 7)
+#define     G1_REG_DEC_JPEG_VLC_AC1_CODE2_CNT(x)	(((x) & 0x7) << 3)
+#define     G1_REG_DEC_JPEG_VLC_AC1_CODE1_CNT(x)	(((x) & 0x3) << 0)
+#define G1_REG_DEC_JPEG_VLC_AC_CODE_LENGTHS_B		0x044
+#define     G1_REG_DEC_JPEG_VLC_AC1_CODE10_CNT(x)	(((x) & 0xff) << 24)
+#define     G1_REG_DEC_JPEG_VLC_AC1_CODE9_CNT(x)	(((x) & 0xff) << 16)
+#define     G1_REG_DEC_JPEG_VLC_AC1_CODE8_CNT(x)	(((x) & 0xff) << 8)
+#define     G1_REG_DEC_JPEG_VLC_AC1_CODE7_CNT(x)	(((x) & 0xff) << 0)
+#define G1_REG_DEC_JPEG_VLC_AC_CODE_LENGTHS_C		0x048
+#define     G1_REG_DEC_JPEG_VLC_AC1_CODE14_CNT(x)	(((x) & 0xff) << 24)
+#define     G1_REG_DEC_JPEG_VLC_AC1_CODE13_CNT(x)	(((x) & 0xff) << 16)
+#define     G1_REG_DEC_JPEG_VLC_AC1_CODE12_CNT(x)	(((x) & 0xff) << 8)
+#define     G1_REG_DEC_JPEG_VLC_AC1_CODE11_CNT(x)	(((x) & 0xff) << 0)
+#define G1_REG_DEC_JPEG_VLC_AC_CODE_LENGTHS_D		0x04c
+#define     G1_REG_DEC_JPEG_VLC_AC2_CODE4_CNT(x)	(((x) & 0x1f) << 27)
+#define     G1_REG_DEC_JPEG_VLC_AC2_CODE3_CNT(x)	(((x) & 0xf) << 23)
+#define     G1_REG_DEC_JPEG_VLC_AC2_CODE2_CNT(x)	(((x) & 0x7) << 19)
+#define     G1_REG_DEC_JPEG_VLC_AC2_CODE1_CNT(x)	(((x) & 0x3) << 16)
+#define     G1_REG_DEC_JPEG_VLC_AC1_CODE16_CNT(x)	(((x) & 0xff) << 8)
+#define     G1_REG_DEC_JPEG_VLC_AC1_CODE15_CNT(x)	(((x) & 0xff) << 0)
+#define G1_REG_DEC_JPEG_VLC_AC_CODE_LENGTHS_E		0x050
+#define     G1_REG_DEC_JPEG_VLC_AC2_CODE8_CNT(x)	(((x) & 0xff) << 24)
+#define     G1_REG_DEC_JPEG_VLC_AC2_CODE7_CNT(x)	(((x) & 0xff) << 16)
+#define     G1_REG_DEC_JPEG_VLC_AC2_CODE6_CNT(x)	(((x) & 0x7f) << 8)
+#define     G1_REG_DEC_JPEG_VLC_AC2_CODE5_CNT(x)	(((x) & 0x3f) << 0)
+#define G1_REG_DEC_JPEG_VLC_AC_CODE_LENGTHS_F		0x054
+#define     G1_REG_DEC_JPEG_VLC_AC2_CODE12_CNT(x)	(((x) & 0xff) << 24)
+#define     G1_REG_DEC_JPEG_VLC_AC2_CODE11_CNT(x)	(((x) & 0xff) << 16)
+#define     G1_REG_DEC_JPEG_VLC_AC2_CODE10_CNT(x)	(((x) & 0xff) << 8)
+#define     G1_REG_DEC_JPEG_VLC_AC2_CODE9_CNT(x)	(((x) & 0xff) << 0)
+#define G1_REG_DEC_JPEG_VLC_AC_CODE_LENGTHS_G		0x058
+#define     G1_REG_DEC_JPEG_VLC_AC2_CODE16_CNT(x)	(((x) & 0xff) << 24)
+#define     G1_REG_DEC_JPEG_VLC_AC2_CODE15_CNT(x)	(((x) & 0xff) << 16)
+#define     G1_REG_DEC_JPEG_VLC_AC2_CODE14_CNT(x)	(((x) & 0xff) << 8)
+#define     G1_REG_DEC_JPEG_VLC_AC2_CODE13_CNT(x)	(((x) & 0xff) << 0)
+#define G1_REG_DEC_JPEG_VLC_DC_CODE_LENGTHS_A		0x05c
+#define     G1_REG_DEC_JPEG_VLC_DC1_CODE8_CNT(x)	(((x) & 0xf) << 28)
+#define     G1_REG_DEC_JPEG_VLC_DC1_CODE7_CNT(x)	(((x) & 0xf) << 24)
+#define     G1_REG_DEC_JPEG_VLC_DC1_CODE6_CNT(x)	(((x) & 0xf) << 20)
+#define     G1_REG_DEC_JPEG_VLC_DC1_CODE5_CNT(x)	(((x) & 0xf) << 16)
+#define     G1_REG_DEC_JPEG_VLC_DC1_CODE4_CNT(x)	(((x) & 0xf) << 12)
+#define     G1_REG_DEC_JPEG_VLC_DC1_CODE3_CNT(x)	(((x) & 0xf) << 8)
+#define     G1_REG_DEC_JPEG_VLC_DC1_CODE2_CNT(x)	(((x) & 0x7) << 4)
+#define     G1_REG_DEC_JPEG_VLC_DC1_CODE1_CNT(x)	(((x) & 0x3) << 0)
+#define G1_REG_DEC_JPEG_VLC_DC_CODE_LENGTHS_B		0x060
+#define     G1_REG_DEC_JPEG_VLC_DC1_CODE16_CNT(x)	(((x) & 0xf) << 28)
+#define     G1_REG_DEC_JPEG_VLC_DC1_CODE15_CNT(x)	(((x) & 0xf) << 24)
+#define     G1_REG_DEC_JPEG_VLC_DC1_CODE14_CNT(x)	(((x) & 0xf) << 20)
+#define     G1_REG_DEC_JPEG_VLC_DC1_CODE13_CNT(x)	(((x) & 0xf) << 16)
+#define     G1_REG_DEC_JPEG_VLC_DC1_CODE12_CNT(x)	(((x) & 0xf) << 12)
+#define     G1_REG_DEC_JPEG_VLC_DC1_CODE11_CNT(x)	(((x) & 0xf) << 8)
+#define     G1_REG_DEC_JPEG_VLC_DC1_CODE10_CNT(x)	(((x) & 0xf) << 4)
+#define     G1_REG_DEC_JPEG_VLC_DC1_CODE9_CNT(x)	(((x) & 0xf) << 0)
+#define G1_REG_DEC_JPEG_VLC_DC_CODE_LENGTHS_C		0x064
+#define     G1_REG_DEC_JPEG_VLC_DC2_CODE8_CNT(x)	(((x) & 0xf) << 28)
+#define     G1_REG_DEC_JPEG_VLC_DC2_CODE7_CNT(x)	(((x) & 0xf) << 24)
+#define     G1_REG_DEC_JPEG_VLC_DC2_CODE6_CNT(x)	(((x) & 0xf) << 20)
+#define     G1_REG_DEC_JPEG_VLC_DC2_CODE5_CNT(x)	(((x) & 0xf) << 16)
+#define     G1_REG_DEC_JPEG_VLC_DC2_CODE4_CNT(x)	(((x) & 0xf) << 12)
+#define     G1_REG_DEC_JPEG_VLC_DC2_CODE3_CNT(x)	(((x) & 0xf) << 8)
+#define     G1_REG_DEC_JPEG_VLC_DC2_CODE2_CNT(x)	(((x) & 0x7) << 4)
+#define     G1_REG_DEC_JPEG_VLC_DC2_CODE1_CNT(x)	(((x) & 0x3) << 0)
+#define G1_REG_DEC_JPEG_VLC_DC_CODE_LENGTHS_D		0x068
+#define     G1_REG_DEC_JPEG_VLC_DC2_CODE16_CNT(x)	(((x) & 0xf) << 28)
+#define     G1_REG_DEC_JPEG_VLC_DC2_CODE15_CNT(x)	(((x) & 0xf) << 24)
+#define     G1_REG_DEC_JPEG_VLC_DC2_CODE14_CNT(x)	(((x) & 0xf) << 20)
+#define     G1_REG_DEC_JPEG_VLC_DC2_CODE13_CNT(x)	(((x) & 0xf) << 16)
+#define     G1_REG_DEC_JPEG_VLC_DC2_CODE12_CNT(x)	(((x) & 0xf) << 12)
+#define     G1_REG_DEC_JPEG_VLC_DC2_CODE11_CNT(x)	(((x) & 0xf) << 8)
+#define     G1_REG_DEC_JPEG_VLC_DC2_CODE10_CNT(x)	(((x) & 0xf) << 4)
+#define     G1_REG_DEC_JPEG_VLC_DC2_CODE9_CNT(x)	(((x) & 0xf) << 0)
+
 #define G1_REG_REF_PIC(i)				(0x078 + ((i) * 0x4))
 #define     G1_REG_REF_PIC_FILT_TYPE_E			BIT(31)
 #define     G1_REG_REF_PIC_FILT_SHARPNESS(x)		(((x) & 0x7) << 28)

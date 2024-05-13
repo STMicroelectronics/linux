@@ -264,6 +264,10 @@ struct hantro_vp9_dec_hw_ctx {
 	s16 feature_data[8][4];
 };
 
+struct hantro_jpeg_dec_hw_ctx {
+	struct hantro_aux_buf priv;
+};
+
 /**
  * struct hantro_av1_dec_ctrls
  * @sequence:		AV1 Sequence
@@ -690,6 +694,10 @@ void hantro_vp9_dec_exit(struct hantro_ctx *ctx);
 void hantro_g2_check_idle(struct hantro_dev *vpu);
 void hantro_g2_reset(struct hantro_ctx *ctx);
 irqreturn_t hantro_g2_irq(int irq, void *dev_id);
+
+int hantro_g1_jpeg_dec_run(struct hantro_ctx *ctx);
+int hantro_jpeg_dec_init(struct hantro_ctx *ctx);
+void hantro_jpeg_dec_exit(struct hantro_ctx *ctx);
 
 int rockchip_vpu2_vp8_enc_run(struct hantro_ctx *ctx);
 int hantro_vp8_enc_init(struct hantro_ctx *ctx);
