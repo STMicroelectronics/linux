@@ -651,6 +651,22 @@
 				};
 			};
 
+			i2s2: audio-controller@400b0000 {
+				compatible = "st,stm32mp25-i2s";
+				reg = <0x400b0000 0x0 0x400>;
+				#sound-dai-cells = <0>;
+				interrupts = <GIC_SPI 100 IRQ_TYPE_LEVEL_HIGH>;
+				clocks = <&rcc CK_BUS_SPI2>, <&rcc CK_KER_SPI2>;
+				clock-names = "pclk", "i2sclk";
+				resets = <&rcc SPI2_R>;
+				dmas = <&hpdma 34 0x43 0x40012>,
+					<&hpdma 35 0x43 0x40021>;
+				dma-names = "rx", "tx";
+				access-controllers = <&rifsc 23>;
+				power-domains = <&d1_pd>;
+				status = "disabled";
+			};
+
 			spi2: spi@400b0000 {
 				#address-cells = <1>;
 				#size-cells = <0>;
@@ -663,6 +679,22 @@
 				       <&hpdma 35 0x40 0x3021>;
 				dma-names = "rx", "tx";
 				access-controllers = <&rifsc 23>;
+				power-domains = <&d1_pd>;
+				status = "disabled";
+			};
+
+			i2s3: audio-controller@400c0000 {
+				compatible = "st,stm32mp25-i2s";
+				reg = <0x400c0000 0x0 0x400>;
+				#sound-dai-cells = <0>;
+				interrupts = <GIC_SPI 112 IRQ_TYPE_LEVEL_HIGH>;
+				clocks = <&rcc CK_BUS_SPI3>, <&rcc CK_KER_SPI3>;
+				clock-names = "pclk", "i2sclk";
+				resets = <&rcc SPI3_R>;
+				dmas = <&hpdma 36 0x43 0x40012>,
+					<&hpdma 37 0x43 0x40021>;
+				dma-names = "rx", "tx";
+				access-controllers = <&rifsc 24>;
 				power-domains = <&d1_pd>;
 				status = "disabled";
 			};
@@ -944,6 +976,22 @@
 				access-controllers = <&rifsc 36>;
 				power-domains = <&d1_pd>;
 				wakeup-source;
+				status = "disabled";
+			};
+
+			i2s1: audio-controller@40230000 {
+				compatible = "st,stm32mp25-i2s";
+				reg = <0x40230000 0x0 0x400>;
+				#sound-dai-cells = <0>;
+				interrupts = <GIC_SPI 99 IRQ_TYPE_LEVEL_HIGH>;
+				clocks = <&rcc CK_BUS_SPI1>, <&rcc CK_KER_SPI1>;
+				clock-names = "pclk", "i2sclk";
+				resets = <&rcc SPI1_R>;
+				dmas = <&hpdma 32 0x43 0x40012>,
+					<&hpdma 33 0x43 0x40021>;
+				dma-names = "rx", "tx";
+				access-controllers = <&rifsc 22>;
+				power-domains = <&d1_pd>;
 				status = "disabled";
 			};
 
