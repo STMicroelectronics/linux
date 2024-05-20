@@ -2339,4 +2339,28 @@
 			};
 		};
 	};
+
+	mlahb: ahb@2 {
+		compatible = "st,mlahb", "simple-bus";
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges = <0x0 0x0 0x0 0xfffffffc>;
+		dma-ranges = <0x0 0x0 0x0 0xfffffffc>;
+
+		m33_rproc: m33@0 {
+			compatible = "st,stm32mp2-m33";
+			reg = <0 0>;
+			resets = <&scmi_reset RST_SCMI_C2_R>,
+				 <&scmi_reset RST_SCMI_C2_HOLDBOOT_R>;
+			reset-names = "mcu_rst", "hold_boot";
+			st,syscfg-cm-state = <&pwr 0x204 0x0000000c>;
+			interrupt-parent = <&intc>;
+			interrupts = <GIC_SPI 4 IRQ_TYPE_LEVEL_HIGH>;
+			nvmem-cells = <&rsc_tbl_addr>, <&rsc_tbl_size>;
+			nvmem-cell-names = "rsc-tbl-addr", "rsc-tbl-size";
+			power-domains = <&cluster_pd>, <&ret_pd>;
+			power-domain-names = "default", "sleep";
+			status = "disabled";
+		};
+	};
 };
