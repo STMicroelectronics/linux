@@ -67,6 +67,9 @@ properties:
       - items:
           - const: st,stm32mp15-hsotg
           - const: snps,dwc2
+      - items:
+          - const: st,stm32mp21-hsotg
+          - const: snps,dwc2
       - const: samsung,s3c6400-hsotg
       - const: intel,socfpga-agilex-hsotg
 
@@ -163,6 +166,15 @@ properties:
     $ref: /schemas/types.yaml#/definitions/flag
     description: If present indicates that we need to reset the PHY when we
       detect a wakeup. This is due to a hardware errata.
+
+  st,syscfg:
+    $ref: /schemas/types.yaml#/definitions/phandle-array
+    description: Used to enable address remapping to allow to access
+      the 4 GB of the DDR.
+    items:
+      - items:
+          - description: st,syscfg
+          - description: register offset within syscfg
 
   port:
     description:
