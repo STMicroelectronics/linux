@@ -50,15 +50,24 @@ static void dwc2_enable_common_interrupts(struct dwc2_hsotg *hsotg)
 	dwc2_writel(hsotg, 0xffffffff, GINTSTS);
 
 	/* Enable the interrupts in the GINTMSK */
-	intmsk = GINTSTS_MODEMIS | GINTSTS_OTGINT;
+	if (hsotg->hw_params.op_mode == GHWCFG2_OP_MODE_NO_HNP_SRP_CAPABLE ||
+	    hsotg->hw_params.op_mode == GHWCFG2_OP_MODE_NO_SRP_CAPABLE_DEVICE ||
+	    hsotg->hw_params.op_mode == GHWCFG2_OP_MODE_NO_SRP_CAPABLE_HOST)
+		intmsk = GINTSTS_MODEMIS;
+	else
+		intmsk = GINTSTS_MODEMIS | GINTSTS_OTGINT;
 
 	if (!hsotg->params.host_dma)
 		intmsk |= GINTSTS_RXFLVL;
 	if (!hsotg->params.external_id_pin_ctl)
 		intmsk |= GINTSTS_CONIDSTSCHNG;
-
-	intmsk |= GINTSTS_WKUPINT | GINTSTS_USBSUSP |
-		  GINTSTS_SESSREQINT;
+	if (hsotg->hw_params.op_mode == GHWCFG2_OP_MODE_NO_HNP_SRP_CAPABLE ||
+	    hsotg->hw_params.op_mode == GHWCFG2_OP_MODE_NO_SRP_CAPABLE_DEVICE ||
+	    hsotg->hw_params.op_mode == GHWCFG2_OP_MODE_NO_SRP_CAPABLE_HOST)
+		intmsk |= GINTSTS_WKUPINT | GINTSTS_USBSUSP;
+	else
+		intmsk |= GINTSTS_WKUPINT | GINTSTS_USBSUSP |
+			  GINTSTS_SESSREQINT;
 
 	if (dwc2_is_device_mode(hsotg) && hsotg->params.lpm)
 		intmsk |= GINTSTS_LPMTRANRCVD;

@@ -681,6 +681,12 @@ static void dwc2_handle_lpm_intr(struct dwc2_hsotg *hsotg)
 			 GINTSTS_USBSUSP | GINTSTS_PRTINT |		\
 			 GINTSTS_LPMTRANRCVD)
 
+#define GINTMSK_COMMON_NO_HNP_SRP (GINTSTS_WKUPINT | \
+			 GINTSTS_CONIDSTSCHNG |	\
+			 GINTSTS_MODEMIS | GINTSTS_DISCONNINT |		\
+			 GINTSTS_USBSUSP | GINTSTS_PRTINT |		\
+			 GINTSTS_LPMTRANRCVD)
+
 /*
  * This function returns the Core Interrupt register
  */
@@ -694,6 +700,11 @@ static u32 dwc2_read_common_intr(struct dwc2_hsotg *hsotg)
 	gintsts = dwc2_readl(hsotg, GINTSTS);
 	gintmsk = dwc2_readl(hsotg, GINTMSK);
 	gahbcfg = dwc2_readl(hsotg, GAHBCFG);
+
+	if (hsotg->hw_params.op_mode == GHWCFG2_OP_MODE_NO_HNP_SRP_CAPABLE ||
+	    hsotg->hw_params.op_mode == GHWCFG2_OP_MODE_NO_SRP_CAPABLE_DEVICE ||
+	    hsotg->hw_params.op_mode == GHWCFG2_OP_MODE_NO_SRP_CAPABLE_HOST)
+		gintmsk_common = GINTMSK_COMMON_NO_HNP_SRP;
 
 	/* If any common interrupts set */
 	if (gintsts & gintmsk_common)

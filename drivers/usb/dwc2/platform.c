@@ -12,10 +12,12 @@
 #include <linux/device.h>
 #include <linux/dma-mapping.h>
 #include <linux/of.h>
+#include <linux/mfd/syscon.h>
 #include <linux/mutex.h>
 #include <linux/platform_device.h>
 #include <linux/phy/phy.h>
 #include <linux/platform_data/s3c-hsotg.h>
+#include <linux/regmap.h>
 #include <linux/reset.h>
 
 #include <linux/usb/of.h>
@@ -97,20 +99,39 @@ static int dwc2_stm32_hw_enable(struct dwc2_hsotg *hsotg)
 	int ret;
 
 	/* params are only known, once dwc2_init_params() has been probed */
-	if (!hsotg->params.activate_stm_id_vb_detection)
-		return 0;
+	if (hsotg->params.activate_stm_id_vb_detection) {
+		ret = regulator_enable(hsotg->usb33d);
+		if (ret)
+			return ret;
 
-	ret = regulator_enable(hsotg->usb33d);
-	if (ret)
-		return ret;
+		ggpio = dwc2_readl(hsotg, GGPIO);
+		ggpio |= GGPIO_STM32_OTG_GCCFG_IDEN;
+		ggpio |= GGPIO_STM32_OTG_GCCFG_VBDEN;
+		dwc2_writel(hsotg, ggpio, GGPIO);
 
-	ggpio = dwc2_readl(hsotg, GGPIO);
-	ggpio |= GGPIO_STM32_OTG_GCCFG_IDEN;
-	ggpio |= GGPIO_STM32_OTG_GCCFG_VBDEN;
-	dwc2_writel(hsotg, ggpio, GGPIO);
+		/* ID/VBUS detection startup time */
+		usleep_range(5000, 7000);
+	}
 
-	/* ID/VBUS detection startup time */
-	usleep_range(5000, 7000);
+	if (hsotg->params.activate_stm32_otgarcr_en && hsotg->dev->dma_range_map) {
+		regmap_set_bits(hsotg->params.stm32_regmap,
+				hsotg->params.stm32_syscfg_otgarcr_reg_off,
+				STM32_SYSCFG_OTGARCR_OFFSET_AREN_MASK);
+	}
+
+	/* hsotg->role_sw is known after dwc2_drd_init() */
+	if (hsotg->params.activate_stm32_bvaloval_en && !hsotg->role_sw) {
+		u32 ggpio = dwc2_readl(hsotg, GGPIO);
+
+		if (hsotg->dr_mode == USB_DR_MODE_HOST) {
+			ggpio &= ~GGPIO_STM32_OTG_GCCFG_IDPULLUP_DIS;
+			ggpio &= ~GGPIO_STM32_OTG_GCCFG_VBVALOVAL;
+		} else if (hsotg->dr_mode == USB_DR_MODE_PERIPHERAL) {
+			ggpio |= GGPIO_STM32_OTG_GCCFG_IDPULLUP_DIS;
+			ggpio |= GGPIO_STM32_OTG_GCCFG_VBVALOVAL;
+		}
+		dwc2_writel(hsotg, ggpio, GGPIO);
+	}
 
 	return 0;
 }
@@ -517,6 +538,7 @@ int dwc2_check_core_version(struct dwc2_hsotg *hsotg)
  */
 static int dwc2_driver_probe(struct platform_device *dev)
 {
+	struct device_node *node = dev->dev.of_node;
 	struct dwc2_hsotg *hsotg;
 	struct resource *res;
 	int retval;
@@ -619,16 +641,29 @@ static int dwc2_driver_probe(struct platform_device *dev)
 	if (retval)
 		goto error;
 
+	if (hsotg->params.activate_stm32_otgarcr_en) {
+		hsotg->params.stm32_regmap = syscon_regmap_lookup_by_phandle(node, "st,syscfg");
+		if (IS_ERR(hsotg->params.stm32_regmap)) {
+			retval = dev_err_probe(&dev->dev, PTR_ERR(hsotg->params.stm32_regmap),
+					       "no st,syscfg node found\n");
+			goto error;
+		}
+
+		retval = of_property_read_u32_index(node, "st,syscfg", 1,
+						    &hsotg->params.stm32_syscfg_otgarcr_reg_off);
+		if (retval) {
+			retval = dev_err_probe(&dev->dev, retval, "can't get otgarcr offset\n");
+			goto error;
+		}
+		dev_vdbg(&dev->dev, "syscfg-otgarcr-reg offset 0x%x\n",
+			 hsotg->params.stm32_syscfg_otgarcr_reg_off);
+	}
+
 	if (hsotg->params.activate_stm_id_vb_detection) {
 		hsotg->usb33d = devm_regulator_get(hsotg->dev, "usb33d");
 		if (IS_ERR(hsotg->usb33d)) {
 			retval = PTR_ERR(hsotg->usb33d);
 			dev_err_probe(hsotg->dev, retval, "failed to request usb33d supply\n");
-			goto error;
-		}
-		retval = dwc2_stm32_hw_enable(hsotg);
-		if (retval) {
-			dev_err_probe(hsotg->dev, retval, "dwc2_stm32_hw_enable failed\n");
 			goto error;
 		}
 	}
@@ -637,6 +672,13 @@ static int dwc2_driver_probe(struct platform_device *dev)
 	if (retval) {
 		dev_err_probe(hsotg->dev, retval, "failed to initialize dual-role\n");
 		goto error;
+	}
+
+	/* Can be called after dwc2_init_params() and dwc2_drd_init() */
+	retval = dwc2_stm32_hw_enable(hsotg);
+	if (retval) {
+		dev_err_probe(hsotg->dev, retval, "dwc2_stm32_hw_enable failed\n");
+		goto error_drd;
 	}
 
 	if (hsotg->dr_mode != USB_DR_MODE_HOST) {

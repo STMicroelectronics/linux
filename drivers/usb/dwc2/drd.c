@@ -17,10 +17,62 @@
 	((gotgctl) |= GOTGCTL_BVALOEN | GOTGCTL_AVALOEN | GOTGCTL_VBVALOEN | \
 	 GOTGCTL_DBNCE_FLTR_BYPASS)
 
+static void dwc2_ovr_init_stm32mp21(struct dwc2_hsotg *hsotg)
+{
+	unsigned long flags;
+	u32 ggpio;
+
+	spin_lock_irqsave(&hsotg->lock, flags);
+
+	ggpio = dwc2_readl(hsotg, GGPIO);
+	if (hsotg->role_sw_default_mode == USB_DR_MODE_HOST) {
+		ggpio &= ~GGPIO_STM32_OTG_GCCFG_VBVALOVAL;
+		ggpio &= ~GGPIO_STM32_OTG_GCCFG_IDPULLUP_DIS;
+	} else if (hsotg->role_sw_default_mode == USB_DR_MODE_PERIPHERAL) {
+		ggpio |= GGPIO_STM32_OTG_GCCFG_IDPULLUP_DIS;
+		ggpio |= GGPIO_STM32_OTG_GCCFG_VBVALOVAL;
+	} else {
+		ggpio &= ~GGPIO_STM32_OTG_GCCFG_VBVALOVAL;
+		ggpio |= GGPIO_STM32_OTG_GCCFG_IDPULLUP_DIS;
+	}
+	dwc2_writel(hsotg, ggpio, GGPIO);
+
+	spin_unlock_irqrestore(&hsotg->lock, flags);
+
+	dwc2_force_mode(hsotg, (hsotg->dr_mode == USB_DR_MODE_HOST) ||
+			(hsotg->role_sw_default_mode == USB_DR_MODE_HOST));
+}
+
+static void dwc2_ovr_avalid_stm32mp21(struct dwc2_hsotg *hsotg, bool valid)
+{
+	u32 ggpio;
+
+	ggpio = dwc2_readl(hsotg, GGPIO);
+	ggpio &= ~GGPIO_STM32_OTG_GCCFG_IDPULLUP_DIS;
+	ggpio &= ~GGPIO_STM32_OTG_GCCFG_VBVALOVAL;
+	dwc2_writel(hsotg, ggpio, GGPIO);
+}
+
+static void dwc2_ovr_bvalid_stm32mp21(struct dwc2_hsotg *hsotg, bool valid)
+{
+	u32 ggpio;
+
+	ggpio = dwc2_readl(hsotg, GGPIO);
+	ggpio |= GGPIO_STM32_OTG_GCCFG_IDPULLUP_DIS;
+	if (!valid)
+		ggpio &= ~GGPIO_STM32_OTG_GCCFG_VBVALOVAL;
+	else
+		ggpio |= GGPIO_STM32_OTG_GCCFG_VBVALOVAL;
+	dwc2_writel(hsotg, ggpio, GGPIO);
+}
+
 static void dwc2_ovr_init(struct dwc2_hsotg *hsotg)
 {
 	unsigned long flags;
 	u32 gotgctl;
+
+	if (hsotg->params.activate_stm32_bvaloval_en)
+		dwc2_ovr_init_stm32mp21(hsotg);
 
 	spin_lock_irqsave(&hsotg->lock, flags);
 
@@ -42,6 +94,9 @@ static void dwc2_ovr_init(struct dwc2_hsotg *hsotg)
 static int dwc2_ovr_avalid(struct dwc2_hsotg *hsotg, bool valid)
 {
 	u32 gotgctl = dwc2_readl(hsotg, GOTGCTL);
+
+	if (hsotg->params.activate_stm32_bvaloval_en)
+		dwc2_ovr_avalid_stm32mp21(hsotg, valid);
 
 	/* Check if A-Session is already in the right state */
 	if ((valid && (gotgctl & GOTGCTL_AVALOVAL) && (gotgctl & GOTGCTL_VBVALOVAL)) ||
@@ -72,6 +127,9 @@ static int dwc2_ovr_avalid(struct dwc2_hsotg *hsotg, bool valid)
 static int dwc2_ovr_bvalid(struct dwc2_hsotg *hsotg, bool valid)
 {
 	u32 gotgctl = dwc2_readl(hsotg, GOTGCTL);
+
+	if (hsotg->params.activate_stm32_bvaloval_en)
+		dwc2_ovr_bvalid_stm32mp21(hsotg, valid);
 
 	/* Check if B-Session is already in the right state */
 	if ((valid && (gotgctl & GOTGCTL_BVALOVAL) && (gotgctl & GOTGCTL_VBVALOVAL)) ||
@@ -173,6 +231,19 @@ static int dwc2_drd_role_sw_set(struct usb_role_switch *sw, enum usb_role role)
 			already = dwc2_ovr_bvalid(hsotg, false);
 		else
 			dwc2_ovr_avalid(hsotg, false);
+	}
+
+	if (role == USB_ROLE_NONE && hsotg->current_role == USB_ROLE_DEVICE &&
+	    (hsotg->hw_params.op_mode == GHWCFG2_OP_MODE_NO_HNP_SRP_CAPABLE ||
+	     hsotg->hw_params.op_mode == GHWCFG2_OP_MODE_NO_SRP_CAPABLE_DEVICE ||
+	     hsotg->hw_params.op_mode == GHWCFG2_OP_MODE_NO_SRP_CAPABLE_HOST)) {
+		/*
+		 * OTGINT session end detection not available, so directly disconnect here.
+		 * Call from the locked section, to avoid race with resume interrupt, that may
+		 * raise here after (exit of clock gating).
+		 */
+		dwc2_hsotg_core_disconnect(hsotg);
+		dwc2_hsotg_disconnect(hsotg);
 	}
 
 	hsotg->current_role = role;

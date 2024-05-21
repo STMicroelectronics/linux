@@ -402,6 +402,9 @@ enum dwc2_ep0_state {
  *			detection using GGPIO register.
  *			0 - Deactivate the external level detection (default)
  *			1 - Activate the external level detection
+ * @activate_stm32_bvaloval_en: Internal ID/VBUS valid indicator
+ *			0: Deactivated (default)
+ *			1: Activated
  * @activate_ingenic_overcurrent_detection: Activate Ingenic overcurrent
  *			detection.
  *			0 - Deactivate the overcurrent detection
@@ -475,11 +478,15 @@ struct dwc2_core_params {
 	u8 hird_threshold;
 	bool activate_stm_fs_transceiver;
 	bool activate_stm_id_vb_detection;
+	bool activate_stm32_bvaloval_en;
 	bool activate_ingenic_overcurrent_detection;
+	bool activate_stm32_otgarcr_en;
 	bool ipg_isoc_en;
 	u16 max_packet_count;
 	u32 max_transfer_size;
 	u32 ahbcfg;
+	unsigned int stm32_syscfg_otgarcr_reg_off;
+	struct regmap *stm32_regmap;
 
 	/* GREFCLK parameters */
 	u32 ref_clk_per;
