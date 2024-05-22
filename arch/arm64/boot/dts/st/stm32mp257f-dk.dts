@@ -401,6 +401,13 @@
 	};
 };
 
+&spi6 {
+	pinctrl-names = "default", "sleep";
+	pinctrl-0 = <&spi6_pins_a>;
+	pinctrl-1 = <&spi6_sleep_pins_a>;
+	status = "disabled";
+};
+
 &syscfg {
 	bootph-all;
 };
