@@ -700,6 +700,30 @@
 	};
 
 	/omit-if-no-ref/
+	spi6_pins_a: spi6-0 {
+		pins1 {
+			pinmux = <STM32_PINMUX('F', 7, AF3)>, /* SPI6_SCK */
+				 <STM32_PINMUX('C', 7, AF3)>; /* SPI6_MOSI */
+			drive-push-pull;
+			bias-disable;
+			slew-rate = <1>;
+		};
+		pins2 {
+			pinmux = <STM32_PINMUX('C', 4, AF3)>; /* SPI6_MISO */
+			bias-disable;
+		};
+	};
+
+	/omit-if-no-ref/
+	spi6_sleep_pins_a: spi6-sleep-0 {
+		pins1 {
+			pinmux = <STM32_PINMUX('F', 7, ANALOG)>, /* SPI6_SCK */
+				 <STM32_PINMUX('C', 7, ANALOG)>, /* SPI6_MOSI */
+				 <STM32_PINMUX('C', 4, ANALOG)>; /* SPI6_MISO */
+		};
+	};
+
+	/omit-if-no-ref/
 	tim10_counter_pins_a: tim10-counter-0 {
 		pins {
 			pinmux = <STM32_PINMUX('B', 9, AF9)>; /* TIM10_CH1 */
