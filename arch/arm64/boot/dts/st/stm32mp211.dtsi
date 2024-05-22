@@ -1102,6 +1102,20 @@
 				status = "disabled";
 			};
 
+			dcmi: dcmi@404a0000 {
+				compatible = "st,stm32-dcmi";
+				reg = <0x404a0000 0x0 0x400>;
+				interrupts = <GIC_SPI 128 IRQ_TYPE_LEVEL_HIGH>;
+				resets = <&rcc DCMIPSSI_R>;
+				clocks = <&rcc CK_BUS_DCMIPSSI>;
+				clock-names = "mclk";
+				dmas = <&hpdma 105 0x60 0x3012>;
+				dma-names = "tx";
+				access-controllers = <&rifsc 88>;
+				power-domains = <&d1_pd>;
+				status = "disabled";
+			};
+
 			hash2: hash@42010000 {
 				compatible = "st,stm32mp13-hash";
 				reg = <0x42010000 0x0 0x400>;
