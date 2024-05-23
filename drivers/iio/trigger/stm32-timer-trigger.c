@@ -21,6 +21,8 @@
 #define MAX_TRIGGERS 7
 #define MAX_VALIDS 5
 
+#define STM32MP21_NUM_TRIGGERS 17
+
 /* List the triggers created by each timer */
 static const void *triggers_table[][MAX_TRIGGERS] = {
 	{ TIM1_TRGO, TIM1_TRGO2, TIM1_CH1, TIM1_CH2, TIM1_CH3, TIM1_CH4,},
@@ -935,6 +937,11 @@ static const struct stm32_timer_trigger_cfg stm32h7_timer_trg_cfg = {
 	.num_valids_table = ARRAY_SIZE(stm32h7_valids_table),
 };
 
+static const struct stm32_timer_trigger_cfg stm32mp21_timer_trg_cfg = {
+	/* The last timer instance is TIM17. */
+	.num_valids_table = STM32MP21_NUM_TRIGGERS,
+};
+
 static const struct stm32_timer_trigger_cfg stm32mp25_timer_trg_cfg = {
 	/*
 	 * valids_table not used: counter framework is now superseding the deprecated IIO
@@ -952,6 +959,9 @@ static const struct of_device_id stm32_trig_of_match[] = {
 	}, {
 		.compatible = "st,stm32h7-timer-trigger",
 		.data = (void *)&stm32h7_timer_trg_cfg,
+	}, {
+		.compatible = "st,stm32mp21-timer-trigger",
+		.data = (void *)&stm32mp21_timer_trg_cfg,
 	}, {
 		.compatible = "st,stm32mp25-timer-trigger",
 		.data = (void *)&stm32mp25_timer_trg_cfg,
