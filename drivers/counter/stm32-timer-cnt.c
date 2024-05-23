@@ -676,6 +676,7 @@ static void stm32_timer_cnt_detect_channels(struct device *dev,
 static const char * const stm32_timer_trigger_compat[] = {
 	"st,stm32-timer-trigger",
 	"st,stm32h7-timer-trigger",
+	"st,stm32mp21-timer-trigger",
 	"st,stm32mp25-timer-trigger",
 };
 
