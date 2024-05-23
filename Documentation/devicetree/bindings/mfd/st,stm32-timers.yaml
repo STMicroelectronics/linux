@@ -23,6 +23,7 @@ properties:
   compatible:
     enum:
       - st,stm32-timers
+      - st,stm32mp21-timers
       - st,stm32mp25-timers
 
   reg:
@@ -84,6 +85,7 @@ properties:
       compatible:
         enum:
           - st,stm32-pwm
+          - st,stm32mp21-pwm
           - st,stm32mp25-pwm
 
       "#pwm-cells":
@@ -122,6 +124,7 @@ properties:
       compatible:
         enum:
           - st,stm32-timer-counter
+          - st,stm32mp21-timer-counter
           - st,stm32mp25-timer-counter
 
     required:
@@ -137,6 +140,7 @@ patternProperties:
         enum:
           - st,stm32-timer-trigger
           - st,stm32h7-timer-trigger
+          - st,stm32mp21-timer-trigger
           - st,stm32mp25-timer-trigger
 
       reg:
