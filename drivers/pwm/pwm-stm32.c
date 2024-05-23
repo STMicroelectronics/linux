@@ -936,6 +936,7 @@ static DEFINE_SIMPLE_DEV_PM_OPS(stm32_pwm_pm_ops, stm32_pwm_suspend, stm32_pwm_r
 
 static const struct of_device_id stm32_pwm_of_match[] = {
 	{ .compatible = "st,stm32-pwm",	},
+	{ .compatible = "st,stm32mp21-pwm", },
 	{ .compatible = "st,stm32mp25-pwm", },
 	{ /* end node */ },
 };
