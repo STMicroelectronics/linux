@@ -119,6 +119,7 @@
 #define TIM_BDTR_BKF_MASK			0xF
 #define TIM_BDTR_BKF_SHIFT(x)			(16 + (x) * 4)
 
+#define STM32MP21_TIM_IPIDR	0x00120002
 #define STM32MP25_TIM_IPIDR	0x00120002
 
 enum stm32_timers_dmas {
