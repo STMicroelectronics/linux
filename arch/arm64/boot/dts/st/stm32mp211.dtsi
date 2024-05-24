@@ -1858,6 +1858,28 @@
 					wakeup-source;
 				};
 			};
+
+			usbotg_hs: usb@48300000 {
+				compatible = "st,stm32mp21-hsotg", "snps,dwc2";
+				reg = <0x48300000 0x0 0x10000>;
+				clocks = <&rcc CK_BUS_OTG>, <&usb2_phy2 0>;
+				clock-names = "otg", "utmi";
+				resets = <&rcc OTG_R>;
+				reset-names = "dwc2";
+				interrupts = <GIC_SPI 191 IRQ_TYPE_LEVEL_HIGH>;
+				access-controllers = <&rifsc 66>;
+				g-rx-fifo-size = <512>;
+				g-np-tx-fifo-size = <64>;
+				g-tx-fifo-size = <512 512 16 16 16 16 16 16>;
+				dr_mode = "otg";
+				otg-rev = <0x200>;
+				phys = <&usb2_phy2>;
+				phy-names = "usb2-phy";
+				st,syscfg = <&syscfg 0x2824>;
+				power-domains = <&d1_pd>;
+				wakeup-source;
+				status = "disabled";
+			};
 		};
 
 		risaf1: risaf@420a0000 {
