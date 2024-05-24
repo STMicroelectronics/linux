@@ -23,7 +23,9 @@ properties:
   compatible:
     oneOf:
       - items:
-          - const: st,stm32mp25-lptimer
+          - enum:
+              - st,stm32mp21-lptimer
+              - st,stm32mp25-lptimer
           - const: st,stm32-lptimer
       - items:
           - const: st,stm32-lptimer
@@ -64,7 +66,9 @@ properties:
       compatible:
         oneOf:
           - items:
-              - const: st,stm32mp25-pwm-lp
+              - enum:
+                  - st,stm32mp21-pwm-lp
+                  - st,stm32mp25-pwm-lp
               - const: st,stm32-pwm-lp
           - items:
               - const: st,stm32-pwm-lp
@@ -84,7 +88,9 @@ properties:
       compatible:
         oneOf:
           - items:
-              - const: st,stm32mp25-lptimer-counter
+              - enum:
+                  - st,stm32mp21-lptimer-counter
+                  - st,stm32mp25-lptimer-counter
               - const: st,stm32-lptimer-counter
           - items:
               - const: st,stm32-lptimer-counter
@@ -100,7 +106,9 @@ properties:
       compatible:
         oneOf:
           - items:
-              - const: st,stm32mp25-lptimer-timer
+              - enum:
+                  - st,stm32mp21-lptimer-timer
+                  - st,stm32mp25-lptimer-timer
               - const: st,stm32-lptimer-timer
           - items:
               - const: st,stm32-lptimer-timer
@@ -117,7 +125,9 @@ patternProperties:
       compatible:
         oneOf:
           - items:
-              - const: st,stm32mp25-lptimer-trigger
+              - enum:
+                  - st,stm32mp21-lptimer-trigger
+                  - st,stm32mp25-lptimer-trigger
               - const: st,stm32-lptimer-trigger
           - items:
               - const: st,stm32-lptimer-trigger
