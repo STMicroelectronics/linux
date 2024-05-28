@@ -335,8 +335,7 @@ static void stm32mp_exti_eoi(struct irq_data *d)
 
 	raw_spin_unlock(&chip_data->rlock);
 
-	if (d->parent_data->chip)
-		irq_chip_eoi_parent(d);
+	irq_chip_eoi_parent(d);
 }
 
 static void stm32mp_exti_mask(struct irq_data *d)
@@ -348,8 +347,7 @@ static void stm32mp_exti_mask(struct irq_data *d)
 	chip_data->mask_cache = stm32mp_exti_clr_bit(d, bank->imr_ofst);
 	raw_spin_unlock(&chip_data->rlock);
 
-	if (d->parent_data->chip)
-		irq_chip_mask_parent(d);
+	irq_chip_mask_parent(d);
 }
 
 static void stm32mp_exti_unmask(struct irq_data *d)
@@ -361,8 +359,7 @@ static void stm32mp_exti_unmask(struct irq_data *d)
 	chip_data->mask_cache = stm32mp_exti_set_bit(d, bank->imr_ofst);
 	raw_spin_unlock(&chip_data->rlock);
 
-	if (d->parent_data->chip)
-		irq_chip_unmask_parent(d);
+	irq_chip_unmask_parent(d);
 }
 
 static int stm32mp_exti_set_type(struct irq_data *d, unsigned int type)
@@ -417,14 +414,6 @@ static int stm32mp_exti_set_wake(struct irq_data *d, unsigned int on)
 	return 0;
 }
 
-static int stm32mp_exti_set_affinity(struct irq_data *d, const struct cpumask *dest, bool force)
-{
-	if (d->parent_data->chip)
-		return irq_chip_set_affinity_parent(d, dest, force);
-
-	return IRQ_SET_MASK_OK_DONE;
-}
-
 static int stm32mp_exti_suspend(struct device *dev)
 {
 	struct stm32mp_exti_host_data *host_data = dev_get_drvdata(dev);
@@ -474,7 +463,7 @@ static struct irq_chip stm32mp_exti_chip = {
 	.irq_set_type		= stm32mp_exti_set_type,
 	.irq_set_wake		= stm32mp_exti_set_wake,
 	.flags			= IRQCHIP_MASK_ON_SUSPEND,
-	.irq_set_affinity	= IS_ENABLED(CONFIG_SMP) ? stm32mp_exti_set_affinity : NULL,
+	.irq_set_affinity	= IS_ENABLED(CONFIG_SMP) ? irq_chip_set_affinity_parent : NULL,
 };
 
 static struct irq_chip stm32mp_exti_chip_direct = {
