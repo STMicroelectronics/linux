@@ -394,7 +394,12 @@ static int stm32mp_exti_set_type(struct irq_data *d, unsigned int type)
 		hwspin_unlock_in_atomic(hwlock);
 unlock:
 	raw_spin_unlock(&chip_data->rlock);
-	return err;
+
+	if (err)
+		return err;
+
+	/* configurable events only propagate level high type to GIC */
+	return irq_chip_set_type_parent(d, IRQ_TYPE_LEVEL_HIGH);
 }
 
 static int stm32mp_exti_set_wake(struct irq_data *d, unsigned int on)
@@ -411,7 +416,7 @@ static int stm32mp_exti_set_wake(struct irq_data *d, unsigned int on)
 
 	raw_spin_unlock(&chip_data->rlock);
 
-	return 0;
+	return irq_chip_set_wake_parent(d, on);
 }
 
 static int stm32mp_exti_suspend(struct device *dev)
@@ -457,6 +462,7 @@ static int stm32mp_exti_retrigger(struct irq_data *d)
 static struct irq_chip stm32mp_exti_chip = {
 	.name			= "stm32mp-exti",
 	.irq_eoi		= stm32mp_exti_eoi,
+	.irq_ack		= irq_chip_ack_parent,
 	.irq_mask		= stm32mp_exti_mask,
 	.irq_unmask		= stm32mp_exti_unmask,
 	.irq_request_resources	= irq_chip_request_resources_parent,
