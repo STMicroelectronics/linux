@@ -220,6 +220,13 @@ queue_init(void *priv, struct vb2_queue *src_vq, struct vb2_queue *dst_vq)
 	 */
 	src_vq->dma_attrs = DMA_ATTR_ALLOC_SINGLE_PAGES |
 			    DMA_ATTR_NO_KERNEL_MAPPING;
+	/*
+	 * The Kernel needs access to the JPEG source buffer for the
+	 * JPEG decoder to parse the JPEG headers.
+	 */
+	if (!ctx->is_encoder)
+		src_vq->dma_attrs &= ~DMA_ATTR_NO_KERNEL_MAPPING;
+
 	src_vq->buf_struct_size = sizeof(struct v4l2_m2m_buffer);
 	src_vq->timestamp_flags = V4L2_BUF_FLAG_TIMESTAMP_COPY;
 	src_vq->lock = &ctx->dev->vpu_mutex;
