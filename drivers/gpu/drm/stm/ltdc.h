@@ -66,7 +66,6 @@ struct ltdc_device {
 	u32 fifo_threshold;	/* fifo underrun threshold */
 	u32 transfer_err;	/* transfer error counter */
 	struct fps_info plane_fpsi[LTDC_MAX_LAYER];
-	struct drm_atomic_state *suspend_state;
 	int crc_skip_count;
 	bool crc_active;
 	bool vblank_active;

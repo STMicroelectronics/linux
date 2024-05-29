@@ -119,16 +119,14 @@ static void drv_unload(struct drm_device *ddev)
 static __maybe_unused int drv_suspend(struct device *dev)
 {
 	struct drm_device *ddev = dev_get_drvdata(dev);
-	struct ltdc_device *ldev = ddev->dev_private;
-	struct drm_atomic_state *state;
+	int ret;
 
-	WARN_ON(ldev->suspend_state);
+	DRM_DEBUG_DRIVER("\n");
 
-	state = drm_atomic_helper_suspend(ddev);
-	if (IS_ERR(state))
-		return PTR_ERR(state);
+	ret = drm_mode_config_helper_suspend(ddev);
+	if (ret)
+		return ret;
 
-	ldev->suspend_state = state;
 	pm_runtime_force_suspend(dev);
 
 	return 0;
@@ -137,20 +135,12 @@ static __maybe_unused int drv_suspend(struct device *dev)
 static __maybe_unused int drv_resume(struct device *dev)
 {
 	struct drm_device *ddev = dev_get_drvdata(dev);
-	struct ltdc_device *ldev = ddev->dev_private;
-	int ret;
 
-	if (WARN_ON(!ldev->suspend_state))
-		return -ENOENT;
+	DRM_DEBUG_DRIVER("\n");
 
 	pm_runtime_force_resume(dev);
-	ret = drm_atomic_helper_resume(ddev, ldev->suspend_state);
-	if (ret)
-		pm_runtime_force_suspend(dev);
 
-	ldev->suspend_state = NULL;
-
-	return ret;
+	return drm_mode_config_helper_resume(ddev);
 }
 
 static __maybe_unused int drv_runtime_suspend(struct device *dev)
