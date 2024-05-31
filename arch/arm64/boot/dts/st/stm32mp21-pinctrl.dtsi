@@ -45,6 +45,111 @@
 	};
 
 	/omit-if-no-ref/
+	i3c1_pins_a: i3c1-0 {
+		pins {
+			pinmux = <STM32_PINMUX('G', 13, AF10)>, /* I3C1_SCL */
+				 <STM32_PINMUX('A', 2, AF8)>; /* I3C1_SDA */
+			drive-push-pull;
+			bias-disable;
+			slew-rate = <3>;
+		};
+	};
+
+	/omit-if-no-ref/
+	i3c1_init_pins_a: i3c1-init-0 {
+		pins1 {
+			pinmux = <STM32_PINMUX('G', 13, AF10)>; /* I3C1_SCL */
+			drive-push-pull;
+			bias-disable;
+			slew-rate = <1>;
+		};
+		pins2 {
+			pinmux = <STM32_PINMUX('A', 2, AF8)>; /* I3C1_SDA */
+			drive-push-pull;
+			bias-pull-up;
+			slew-rate = <1>;
+		};
+	};
+
+	/omit-if-no-ref/
+	i3c1_sleep_pins_a: i3c1-sleep-0 {
+		pins {
+			pinmux = <STM32_PINMUX('G', 13, ANALOG)>, /* I3C1_SCL */
+				 <STM32_PINMUX('A', 2, ANALOG)>; /* I3C1_SDA */
+		};
+	};
+
+	/omit-if-no-ref/
+	i3c2_pins_a: i3c2-0 {
+		pins {
+			pinmux = <STM32_PINMUX('C', 12, AF4)>, /* I3C2_SCL */
+				 <STM32_PINMUX('G', 0, AF4)>; /* I3C2_SDA */
+			drive-push-pull;
+			bias-disable;
+			slew-rate = <3>;
+		};
+	};
+
+	/omit-if-no-ref/
+	i3c2_init_pins_a: i3c2-init-0 {
+		pins1 {
+			pinmux = <STM32_PINMUX('C', 12, AF4)>; /* I3C2_SCL */
+			drive-push-pull;
+			bias-disable;
+			slew-rate = <3>;
+		};
+		pins2 {
+			pinmux = <STM32_PINMUX('G', 0, AF4)>; /* I3C2_SDA */
+			drive-push-pull;
+			bias-pull-up;
+			slew-rate = <3>;
+		};
+	};
+
+	/omit-if-no-ref/
+	i3c2_sleep_pins_a: i3c2-sleep-0 {
+		pins {
+			pinmux = <STM32_PINMUX('C', 12, ANALOG)>, /* I3C2_SCL */
+				 <STM32_PINMUX('G', 0, ANALOG)>; /* I3C2_SDA */
+		};
+	};
+
+	/omit-if-no-ref/
+	i3c3_pins_a: i3c3-0 {
+		pins {
+			pinmux = <STM32_PINMUX('C', 12, AF3)>, /* I3C3_SCL */
+				 <STM32_PINMUX('G', 0, AF3)>; /* I3C3_SDA */
+			drive-push-pull;
+			bias-disable;
+			slew-rate = <3>;
+		};
+	};
+
+	/omit-if-no-ref/
+	i3c3_init_pins_a: i3c3-init-0 {
+		pins1 {
+			pinmux = <STM32_PINMUX('C', 12, AF3)>; /* I3C3_SCL */
+			drive-push-pull;
+			bias-disable;
+			slew-rate = <3>;
+		};
+		pins2 {
+			pinmux = <STM32_PINMUX('G', 0, AF3)>; /* I3C3_SDA */
+			drive-push-pull;
+			bias-pull-up;
+			slew-rate = <3>;
+		};
+	};
+
+	/omit-if-no-ref/
+	i3c3_sleep_pins_a: i3c3-sleep-0 {
+		pins {
+			pinmux = <STM32_PINMUX('C', 12, ANALOG)>, /* I3C3_SCL */
+				 <STM32_PINMUX('G', 0, ANALOG)>; /* I3C3_SDA */
+		};
+	};
+
+	/omit-if-no-ref/
 	rtc_rsvd_pins_a: rtc-rsvd-0 {
 		pins {
 			pinmux = <STM32_PINMUX('C', 13, ANALOG)>; /* RTC_OUT1 */
