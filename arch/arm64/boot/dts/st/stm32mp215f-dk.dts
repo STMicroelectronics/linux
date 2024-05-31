@@ -201,6 +201,14 @@
 	status = "okay";
 };
 
+&i3c1 {
+	pinctrl-names = "default", "init", "sleep";
+	pinctrl-0 = <&i3c1_pins_a>;
+	pinctrl-1 = <&i3c1_init_pins_a>;
+	pinctrl-2 = <&i3c1_sleep_pins_a>;
+	status = "disabled";
+};
+
 &ipcc1 {
 	status = "okay";
 };
