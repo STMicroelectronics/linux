@@ -41,6 +41,10 @@ static const struct drm_mode_config_funcs drv_mode_config_funcs = {
 	.atomic_commit = drm_atomic_helper_commit,
 };
 
+static const struct drm_mode_config_helper_funcs drv_mode_config_helpers = {
+	.atomic_commit_tail = drm_atomic_helper_commit_tail_rpm,
+};
+
 static int stm_gem_dma_dumb_create(struct drm_file *file,
 				   struct drm_device *dev,
 				   struct drm_mode_create_dumb *args)
@@ -90,6 +94,7 @@ static int drv_load(struct drm_device *ddev)
 	ddev->mode_config.max_width = STM_MAX_FB_WIDTH;
 	ddev->mode_config.max_height = STM_MAX_FB_HEIGHT;
 	ddev->mode_config.funcs = &drv_mode_config_funcs;
+	ddev->mode_config.helper_private = &drv_mode_config_helpers;
 	ddev->mode_config.normalize_zpos = true;
 
 	ret = ltdc_load(ddev);
