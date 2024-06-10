@@ -520,7 +520,12 @@ static struct platform_driver stm32_ipcc_driver = {
 	.remove		= stm32_ipcc_remove,
 };
 
-module_platform_driver(stm32_ipcc_driver);
+static int __init ipcc_driver_init(void)
+{
+	return platform_driver_register(&stm32_ipcc_driver);
+}
+
+arch_initcall(ipcc_driver_init);
 
 MODULE_AUTHOR("Ludovic Barre <ludovic.barre@st.com>");
 MODULE_AUTHOR("Fabien Dessenne <fabien.dessenne@st.com>");
