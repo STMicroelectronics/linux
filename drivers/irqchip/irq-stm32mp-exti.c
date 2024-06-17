@@ -19,6 +19,7 @@
 #include <linux/of_irq.h>
 #include <linux/platform_device.h>
 #include <linux/pm.h>
+#include <linux/pm_runtime.h>
 
 #include <dt-bindings/interrupt-controller/arm-gic.h>
 
@@ -893,6 +894,8 @@ static int stm32mp_exti_probe(struct platform_device *pdev)
 	if (ret)
 		return ret;
 
+	irq_domain_set_pm_device(domain, dev);
+
 	host_data->dt_has_irqs_desc = of_property_present(np, "interrupts-extended");
 
 	wakeup_np = of_parse_phandle(np, "wakeup-parent", 0);
@@ -931,7 +934,11 @@ static int stm32mp_exti_probe(struct platform_device *pdev)
 		ret = devm_add_action_or_reset(dev, stm32mp_exti_remove_irq, domain);
 		if (ret)
 			return ret;
+
+		irq_domain_set_pm_device(domain, dev);
 	}
+
+	devm_pm_runtime_enable(dev);
 
 	return 0;
 }
