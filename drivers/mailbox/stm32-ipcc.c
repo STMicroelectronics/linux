@@ -16,6 +16,8 @@
 #include <linux/pm_wakeirq.h>
 #include <linux/workqueue.h>
 
+#include "mailbox.h"
+
 #define IPCC_XCR		0x000
 #define XCR_RXOIE		BIT(0)
 #define XCR_TXOIE		BIT(16)
@@ -204,8 +206,9 @@ static int stm32_ipcc_send_data(struct mbox_chan *link, void *data)
 			    TX_BIT_CHAN(chan));
 
 	/* unmask 'tx channel free' interrupt */
-	stm32_ipcc_clr_bits(&ipcc->lock, ipcc->reg_proc + IPCC_XMR,
-			    TX_BIT_CHAN(chan));
+	if (link->txdone_method == TXDONE_BY_IRQ)
+		stm32_ipcc_clr_bits(&ipcc->lock, ipcc->reg_proc + IPCC_XMR,
+				    TX_BIT_CHAN(chan));
 
 	return 0;
 }
