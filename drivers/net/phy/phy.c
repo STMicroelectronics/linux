@@ -953,7 +953,6 @@ void phy_stop_machine(struct phy_device *phydev)
 void phy_error(struct phy_device *phydev)
 {
 	WARN_ON(1);
-
 	mutex_lock(&phydev->lock);
 	phydev->state = PHY_HALTED;
 	mutex_unlock(&phydev->lock);
@@ -1223,7 +1222,10 @@ void phy_state_machine(struct work_struct *work)
 	 */
 	mutex_lock(&phydev->lock);
 	if (phy_polling_mode(phydev) && phy_is_started(phydev))
+	{
+		// printk("phydev poll - port=%d\n", phydev->port);
 		phy_queue_state_machine(phydev, PHY_STATE_TIME);
+	}
 	mutex_unlock(&phydev->lock);
 }
 

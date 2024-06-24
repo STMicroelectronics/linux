@@ -284,7 +284,7 @@ static bool dsa_is_port_initialized(struct dsa_switch *ds, int p)
 {
 	const struct dsa_port *dp = dsa_to_port(ds, p);
 
-	return dp->type == DSA_PORT_TYPE_USER && dp->slave;
+	return (dp->type == DSA_PORT_TYPE_USER || dp->type == DSA_PORT_TYPE_IMP) && dp->slave;
 }
 
 int dsa_switch_suspend(struct dsa_switch *ds)

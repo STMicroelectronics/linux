@@ -1122,6 +1122,20 @@ config SENSORS_MCP9902
 	  This driver can also be built as a module. If so, the module
 	  will be called mcp9902.
 
+config SENSORS_MCP9902_DATUM
+	tristate "Microchip MCP9902 and compatibles with Datum SPI/I2C clocks shorted"
+	depends on I2C
+	help
+	  If you say yes here you get support for MCP9902.
+	  The MCP9902 is a single channel temperature sensor
+	  with internal thermal diode.
+
+	  This driver can also be built as a module. If so, the module
+	  will be called mcp9902-datum.
+
+	  This driver is for use with the Datum Systems Inc. SPI/I2C shorted bus
+	  management system that fixes the I2C and SPI bus clocks shorted together.
+
 config SENSORS_MLXREG_FAN
 	tristate "Mellanox FAN driver"
 	depends on MELLANOX_PLATFORM
@@ -1872,6 +1886,22 @@ config SENSORS_INA2XX
 	  Default value for Rshunt is 10 mOhms.
 	  This driver can also be built as a module. If so, the module
 	  will be called ina2xx.
+
+config SENSORS_INA2XX_DATUM
+	tristate "Texas Instruments INA219 and compatibles with Datum SPI/I2C clocks shorted"
+	depends on I2C
+	select REGMAP_I2C
+	help
+	  If you say yes here you get support for INA219, INA220, INA226,
+	  INA230, and INA231 power monitor chips.
+
+	  The INA2xx driver is configured for the default configuration of
+	  the part as described in the datasheet.
+	  Default value for Rshunt is 10 mOhms.
+	  This driver can also be built as a module. If so, the module
+	  will be called ina2xx-datum.
+	  This driver is for use with the Datum Systems Inc. SPI/I2C shorted bus
+	  management system that fixes the I2C and SPI bus clocks shorted together.
 
 config SENSORS_INA3221
 	tristate "Texas Instruments INA3221 Triple Power Monitor"

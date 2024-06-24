@@ -24,16 +24,12 @@
 #define B53_CTRL_PAGE			0x00 /* Control */
 #define B53_STAT_PAGE			0x01 /* Status */
 #define B53_MGMT_PAGE			0x02 /* Management Mode */
-#define B53_MIB_AC_PAGE			0x03 /* MIB Autocast */
+#define B53_ICR PAGE			0x03 /* Interrrupt Control Register */
 #define B53_ARLCTRL_PAGE		0x04 /* ARL Control */
 #define B53_ARLIO_PAGE			0x05 /* ARL Access */
-#define B53_FRAMEBUF_PAGE		0x06 /* Management frame access */
-#define B53_MEM_ACCESS_PAGE		0x08 /* Memory access */
 
 /* PHY Registers */
 #define B53_PORT_MII_PAGE(i)		(0x10 + (i)) /* Port i MII Registers */
-#define B53_IM_PORT_PAGE		0x18 /* Inverse MII Port (to EMAC) */
-#define B53_ALL_PORT_PAGE		0x19 /* All ports MII (broadcast) */
 
 /* MIB registers */
 #define B53_MIB_PAGE(i)			(0x20 + (i))
@@ -355,6 +351,45 @@
 #define B53_ARL_SRCH_RSTL(x)		(B53_ARL_SRCH_RSTL_0 + ((x) * 0x10))
 
 /*************************************************************************
+ * Port MII Registers
+ *************************************************************************/
+ #define B53_GMII_CTL			0x00
+ #define  GMII_CTL_RESET		BIT(15)
+ #define  GMII_CTL_LOOPBACK		BIT(14)
+ #define  GMII_CTL_SPD_SEL_LSB		BIT(13)
+ #define  GMII_AN_EN			BIT(12)
+ #define  GMII_PWR_DOWN			BIT(11)
+ #define  GMII_ISOLATE			BIT(10)
+ #define  GMII_RESTART_AN		BIT(9)
+ #define  GMII_DUPLEX			BIT(8)
+ #define  GMII_COLL_TEST		BIT(7)
+ #define  GMII_SPD_SEL_MSB		BIT(6)
+ #define B53_GMII_STS			0x02
+ #define B53_PHY_IDH			0x04
+ #define B53_PHY_IDL			0x06
+ #define B53_AN_ADV			0x08
+ #define B53_AN_LPA			0x0a
+ #define B53_AN_EXP			0x0c
+ #define B53_AN_NXP			0x0e
+ #define B53_LP_NXP			0x10
+ #define B53_B1000T_CTL			0x12
+ #define B53_B1000T_STS			0x14
+ #define B53_EXT_STS			0x1e
+ #define B53_PHY_EXT_CTL		0x20
+ #define B53_PHY_EXT_STS		0x22
+ #define B53_REC_ERR_CNT		0x24
+ #define B53_FALSE_CARR_CNT		0x26
+ #define B53_REC_NOTOK_CNT		0x28
+ #define B53_DSP_COEFFICIENT		0x2a
+ #define B53_DSP_COEFFICIENT_ADDR	0x2e
+ #define B53_AUX_CTL			0x30
+ #define B53_AUX_STS			0x32
+ #define B53_INTERRUPT_STS		0x34
+ #define B53_INTERRUPT_MSK		0x36
+ #define B53_MISC_SHADOW		0x38
+ #define B53_LED_CTRL			0x3a
+
+/*************************************************************************
  * Port VLAN Registers
  *************************************************************************/
 
@@ -363,6 +398,8 @@
 
 /* Join all VLANs register (16 bit) */
 #define B53_JOIN_ALL_VLAN_EN		0x50
+#define   VJA_ALL_PORTS_MASK		0x12f
+
 
 /*************************************************************************
  * 802.1Q Page Registers
@@ -472,6 +509,7 @@
 #define B53_JUMBO_PORT_MASK		0x01
 #define B53_JUMBO_PORT_MASK_63XX	0x04
 #define   JPM_10_100_JUMBO_EN		BIT(24) /* GigE always enabled */
+#define   JPM_RESERVED_BITS		0xfefffe00
 
 /* Good Frame Max Size without 802.1Q TAG (16 bit) */
 #define B53_JUMBO_MAX_SIZE		0x05

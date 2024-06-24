@@ -109,6 +109,7 @@ struct b53_device {
 	struct mutex reg_mutex;
 	struct mutex stats_mutex;
 	const struct b53_io_ops *ops;
+	struct gpio_desc *reset_gpiod;
 
 	/* chip specific data */
 	u32 chip_id;
@@ -121,6 +122,12 @@ struct b53_device {
 	u8 num_arl_bins;
 	u16 num_arl_buckets;
 	enum dsa_tag_protocol tag_protocol;
+	enum dsa_tag_protocol tag_protocol_imp;
+
+	/* raw register read data*/
+	u8 page;
+	u8 reg;
+	u8 size;
 
 	/* used ports mask */
 	u16 enabled_ports;
@@ -152,63 +159,63 @@ struct b53_device {
 		if (dev->enabled_ports & BIT(i))
 
 
-static inline int is5325(struct b53_device *dev)
-{
-	return dev->chip_id == BCM5325_DEVICE_ID;
-}
+// static inline int is5325(struct b53_device *dev)
+// {
+// 	return dev->chip_id == BCM5325_DEVICE_ID;
+// }
 
-static inline int is5365(struct b53_device *dev)
-{
-#ifdef CONFIG_BCM47XX
-	return dev->chip_id == BCM5365_DEVICE_ID;
-#else
-	return 0;
-#endif
-}
+// static inline int is5365(struct b53_device *dev)
+// {
+// #ifdef CONFIG_BCM47XX
+// 	return dev->chip_id == BCM5365_DEVICE_ID;
+// #else
+// 	return 0;
+// #endif
+// }
 
-static inline int is5397_98(struct b53_device *dev)
-{
-	return dev->chip_id == BCM5397_DEVICE_ID ||
-		dev->chip_id == BCM5398_DEVICE_ID;
-}
+// static inline int is5397_98(struct b53_device *dev)
+// {
+// 	return dev->chip_id == BCM5397_DEVICE_ID ||
+// 		dev->chip_id == BCM5398_DEVICE_ID;
+// }
 
-static inline int is539x(struct b53_device *dev)
-{
-	return dev->chip_id == BCM5395_DEVICE_ID ||
-		dev->chip_id == BCM5397_DEVICE_ID ||
-		dev->chip_id == BCM5398_DEVICE_ID;
-}
+// static inline int is539x(struct b53_device *dev)
+// {
+// 	return dev->chip_id == BCM5395_DEVICE_ID ||
+// 		dev->chip_id == BCM5397_DEVICE_ID ||
+// 		dev->chip_id == BCM5398_DEVICE_ID;
+// }
 
-static inline int is531x5(struct b53_device *dev)
-{
-	return dev->chip_id == BCM53115_DEVICE_ID ||
-		dev->chip_id == BCM53125_DEVICE_ID ||
-		dev->chip_id == BCM53128_DEVICE_ID ||
-		dev->chip_id == BCM53134_DEVICE_ID;
-}
+// static inline int is531x5(struct b53_device *dev)
+// {
+// 	return dev->chip_id == BCM53115_DEVICE_ID ||
+// 		dev->chip_id == BCM53125_DEVICE_ID ||
+// 		dev->chip_id == BCM53128_DEVICE_ID ||
+// 		dev->chip_id == BCM53134_DEVICE_ID;
+// }
 
-static inline int is63xx(struct b53_device *dev)
-{
-	return dev->chip_id == BCM63XX_DEVICE_ID;
-}
+// static inline int is63xx(struct b53_device *dev)
+// {
+// 	return dev->chip_id == BCM63XX_DEVICE_ID;
+// }
 
-static inline int is5301x(struct b53_device *dev)
-{
-	return dev->chip_id == BCM53010_DEVICE_ID ||
-		dev->chip_id == BCM53011_DEVICE_ID ||
-		dev->chip_id == BCM53012_DEVICE_ID ||
-		dev->chip_id == BCM53018_DEVICE_ID ||
-		dev->chip_id == BCM53019_DEVICE_ID;
-}
+// static inline int is5301x(struct b53_device *dev)
+// {
+// 	return dev->chip_id == BCM53010_DEVICE_ID ||
+// 		dev->chip_id == BCM53011_DEVICE_ID ||
+// 		dev->chip_id == BCM53012_DEVICE_ID ||
+// 		dev->chip_id == BCM53018_DEVICE_ID ||
+// 		dev->chip_id == BCM53019_DEVICE_ID;
+// }
 
-static inline int is58xx(struct b53_device *dev)
-{
-	return dev->chip_id == BCM58XX_DEVICE_ID ||
-		dev->chip_id == BCM583XX_DEVICE_ID ||
-		dev->chip_id == BCM7445_DEVICE_ID ||
-		dev->chip_id == BCM7278_DEVICE_ID ||
-		dev->chip_id == BCM53134_DEVICE_ID;
-}
+// static inline int is58xx(struct b53_device *dev)
+// {
+// 	return dev->chip_id == BCM58XX_DEVICE_ID ||
+// 		dev->chip_id == BCM583XX_DEVICE_ID ||
+// 		dev->chip_id == BCM7445_DEVICE_ID ||
+// 		dev->chip_id == BCM7278_DEVICE_ID ||
+// 		dev->chip_id == BCM53134_DEVICE_ID;
+// }
 
 #define B53_CPU_PORT_25	5
 #define B53_CPU_PORT	8
@@ -378,6 +385,8 @@ int b53_mirror_add(struct dsa_switch *ds, int port,
 		   struct dsa_mall_mirror_tc_entry *mirror, bool ingress);
 enum dsa_tag_protocol b53_get_tag_protocol(struct dsa_switch *ds, int port,
 					   enum dsa_tag_protocol mprot);
+int b53_change_imp_tag_protocol(struct dsa_switch *ds, int port,
+				enum dsa_tag_protocol mprot);					   
 void b53_mirror_del(struct dsa_switch *ds, int port,
 		    struct dsa_mall_mirror_tc_entry *mirror);
 int b53_enable_port(struct dsa_switch *ds, int port, struct phy_device *phy);

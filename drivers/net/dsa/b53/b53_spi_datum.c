@@ -23,6 +23,8 @@
 #include <linux/delay.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
+#include <linux/mutex.h>
+#include <linux/pm_runtime.h>
 #include <linux/spi/spi.h>
 #include <linux/platform_data/b53.h>
 
@@ -40,6 +42,18 @@
 #define B53_SPI_CMD_FAST	0x10
 
 #define B53_SPI_PAGE_SELECT	0xff
+
+DEFINE_MUTEX(datum_b53_spi_mutex);
+EXPORT_SYMBOL(datum_b53_spi_mutex);
+
+static inline void spi_lock(void) { mutex_lock(&datum_b53_spi_mutex); }
+
+static inline void spi_unlock(struct device *dev)
+{
+	if(!pm_runtime_suspended(dev))
+		usleep_range(100, 200);
+	mutex_unlock(&datum_b53_spi_mutex);
+}
 
 static inline int b53_spi_read_reg(struct spi_device *spi, u8 reg, u8 *val,
 				   unsigned int len)
@@ -129,6 +143,7 @@ static int b53_spi_read(struct b53_device *dev, u8 page, u8 reg, u8 *data,
 	struct spi_device *spi = dev->priv;
 	int ret;
 
+	spi_lock();
 	ret = b53_prepare_reg_access(spi, page);
 	if (ret)
 		return ret;
@@ -137,7 +152,10 @@ static int b53_spi_read(struct b53_device *dev, u8 page, u8 reg, u8 *data,
 	if (ret)
 		return ret;
 
-	return b53_spi_read_reg(spi, B53_SPI_DATA, data, len);
+	ret = b53_spi_read_reg(spi, B53_SPI_DATA, data, len);
+	spi_unlock(spi->dev.parent->parent);
+
+	return ret;
 }
 
 static int b53_spi_read8(struct b53_device *dev, u8 page, u8 reg, u8 *val)
@@ -200,9 +218,12 @@ static int b53_spi_read64(struct b53_device *dev, u8 page, u8 reg, u64 *val)
 static int b53_spi_write8(struct b53_device *dev, u8 page, u8 reg, u8 value)
 {
 	struct spi_device *spi = dev->priv;
+	struct device *device = spi->dev.parent->parent;
 	int ret;
 	u8 txbuf[3];
+	int retval;
 
+	spi_lock();
 	ret = b53_prepare_reg_access(spi, page);
 	if (ret)
 		return ret;
@@ -211,15 +232,21 @@ static int b53_spi_write8(struct b53_device *dev, u8 page, u8 reg, u8 value)
 	txbuf[1] = reg;
 	txbuf[2] = value;
 
-	return spi_write(spi, txbuf, sizeof(txbuf));
+	retval =  spi_write(spi, txbuf, sizeof(txbuf));
+	spi_unlock(device);
+
+	return retval;
 }
 
 static int b53_spi_write16(struct b53_device *dev, u8 page, u8 reg, u16 value)
 {
 	struct spi_device *spi = dev->priv;
+	struct device *device = spi->dev.parent->parent;
 	int ret;
 	u8 txbuf[4];
+	int retval;
 
+	spi_lock();
 	ret = b53_prepare_reg_access(spi, page);
 	if (ret)
 		return ret;
@@ -228,15 +255,21 @@ static int b53_spi_write16(struct b53_device *dev, u8 page, u8 reg, u16 value)
 	txbuf[1] = reg;
 	put_unaligned_le16(value, &txbuf[2]);
 
-	return spi_write(spi, txbuf, sizeof(txbuf));
+	retval =  spi_write(spi, txbuf, sizeof(txbuf));
+	spi_unlock(device);
+
+	return retval;
 }
 
 static int b53_spi_write32(struct b53_device *dev, u8 page, u8 reg, u32 value)
 {
 	struct spi_device *spi = dev->priv;
+	struct device *device = spi->dev.parent->parent;
 	int ret;
 	u8 txbuf[6];
+	int retval;
 
+	spi_lock();
 	ret = b53_prepare_reg_access(spi, page);
 	if (ret)
 		return ret;
@@ -245,15 +278,21 @@ static int b53_spi_write32(struct b53_device *dev, u8 page, u8 reg, u32 value)
 	txbuf[1] = reg;
 	put_unaligned_le32(value, &txbuf[2]);
 
-	return spi_write(spi, txbuf, sizeof(txbuf));
+	retval = spi_write(spi, txbuf, sizeof(txbuf));
+	spi_unlock(device);
+
+	return retval;
 }
 
 static int b53_spi_write48(struct b53_device *dev, u8 page, u8 reg, u64 value)
 {
 	struct spi_device *spi = dev->priv;
+	struct device *device = spi->dev.parent->parent;
 	int ret;
 	u8 txbuf[10];
+	int retval;
 
+	spi_lock();
 	ret = b53_prepare_reg_access(spi, page);
 	if (ret)
 		return ret;
@@ -262,15 +301,21 @@ static int b53_spi_write48(struct b53_device *dev, u8 page, u8 reg, u64 value)
 	txbuf[1] = reg;
 	put_unaligned_le64(value, &txbuf[2]);
 
-	return spi_write(spi, txbuf, sizeof(txbuf) - 2);
+	retval =  spi_write(spi, txbuf, sizeof(txbuf) - 2);
+	spi_unlock(device);
+
+	return retval;
 }
 
 static int b53_spi_write64(struct b53_device *dev, u8 page, u8 reg, u64 value)
 {
 	struct spi_device *spi = dev->priv;
+	struct device *device = spi->dev.parent->parent;
 	int ret;
 	u8 txbuf[10];
+	int retval;
 
+	spi_lock();
 	ret = b53_prepare_reg_access(spi, page);
 	if (ret)
 		return ret;
@@ -279,7 +324,10 @@ static int b53_spi_write64(struct b53_device *dev, u8 page, u8 reg, u64 value)
 	txbuf[1] = reg;
 	put_unaligned_le64(value, &txbuf[2]);
 
-	return spi_write(spi, txbuf, sizeof(txbuf));
+	retval = spi_write(spi, txbuf, sizeof(txbuf));
+	spi_unlock(device);
+
+	return retval;
 }
 
 static const struct b53_io_ops b53_spi_ops = {
@@ -297,6 +345,7 @@ static const struct b53_io_ops b53_spi_ops = {
 
 static int b53_spi_probe(struct spi_device *spi)
 {
+	struct device *device = spi->dev.parent->parent;
 	struct b53_device *dev;
 	int ret;
 	struct net_device *ndev = dev_get_by_name(&init_net, "eth0");
@@ -310,6 +359,8 @@ static int b53_spi_probe(struct spi_device *spi)
 
 	if (spi->dev.platform_data)
 		dev->pdata = spi->dev.platform_data;
+
+	pm_runtime_set_autosuspend_delay(device, 0);
 
 	ret = b53_switch_register(dev);
 	if (ret)
@@ -343,36 +394,20 @@ static void b53_spi_shutdown(struct spi_device *spi)
 }
 
 static const struct of_device_id b53_spi_of_match[] = {
-	{ .compatible = "brcm,bcm5325" },
-	{ .compatible = "brcm,bcm5365" },
-	{ .compatible = "brcm,bcm5395" },
-	{ .compatible = "brcm,bcm5397" },
-	{ .compatible = "brcm,bcm5398" },
-	{ .compatible = "brcm,bcm53115" },
-	{ .compatible = "brcm,bcm53125" },
-	{ .compatible = "brcm,bcm53128" },
-	{ .compatible = "brcm,bcm53134" },
+	{ .compatible = "brcm,bcm53134-datum" },
 	{ /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, b53_spi_of_match);
 
 static const struct spi_device_id b53_spi_ids[] = {
-	{ .name = "bcm5325" },
-	{ .name = "bcm5365" },
-	{ .name = "bcm5395" },
-	{ .name = "bcm5397" },
-	{ .name = "bcm5398" },
-	{ .name = "bcm53115" },
-	{ .name = "bcm53125" },
-	{ .name = "bcm53128" },
-	{ .name = "bcm53134" },
+	{ .name = "bcm53134-datum" },
 	{ /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(spi, b53_spi_ids);
 
 static struct spi_driver b53_spi_driver = {
 	.driver = {
-		.name	= "b53-switch",
+		.name	= "b53-switch-datum",
 		.of_match_table = b53_spi_of_match,
 	},
 	.probe	= b53_spi_probe,

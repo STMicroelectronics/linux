@@ -461,6 +461,24 @@ static int dsa_port_setup(struct dsa_port *dp)
 		dsa_port_enabled = true;
 
 		break;
+	case DSA_PORT_TYPE_IMP:
+		err = dsa_port_link_register_of(dp);
+		if (err)
+			break;
+		dsa_port_link_registered = true;
+
+		err = dsa_port_enable(dp, NULL);
+		if (err)
+			break;
+		dsa_port_enabled = true;
+
+		of_get_mac_address(dp->dn, dp->mac);
+		err = dsa_slave_create(dp);
+		if (err)
+			break;
+
+		devlink_port_type_eth_set(dlp, dp->slave);
+		break;
 	case DSA_PORT_TYPE_DSA:
 		err = dsa_port_link_register_of(dp);
 		if (err)
@@ -526,6 +544,9 @@ static int dsa_port_devlink_setup(struct dsa_port *dp)
 	case DSA_PORT_TYPE_DSA:
 		attrs.flavour = DEVLINK_PORT_FLAVOUR_DSA;
 		break;
+	case DSA_PORT_TYPE_IMP:
+		attrs.flavour = DEVLINK_PORT_FLAVOUR_PHYSICAL;
+		break;
 	case DSA_PORT_TYPE_USER:
 		attrs.flavour = DEVLINK_PORT_FLAVOUR_PHYSICAL;
 		break;
@@ -561,6 +582,19 @@ static void dsa_port_teardown(struct dsa_port *dp)
 		dsa_port_disable(dp);
 		dsa_port_link_unregister_of(dp);
 		break;
+	case DSA_PORT_TYPE_IMP:
+		if (dp->slave) {
+			dsa_slave_destroy(dp->slave);
+			dp->slave = NULL;
+		}
+		break;
+		// dsa_port_disable(dp);
+		// dsa_port_link_unregister_of(dp);
+		// if (dp->slave) {
+		// 	dsa_slave_destroy(dp->slave);
+		// 	dp->slave = NULL;
+		// }
+		// break;
 	case DSA_PORT_TYPE_DSA:
 		dsa_port_disable(dp);
 		dsa_port_link_unregister_of(dp);
@@ -1224,6 +1258,17 @@ static int dsa_port_parse_dsa(struct dsa_port *dp)
 	return 0;
 }
 
+static int dsa_port_parse_imp(struct dsa_port *dp, const char *name)
+{
+	if (!name)
+		name = "imp%d";
+
+	dp->type = DSA_PORT_TYPE_IMP;
+	dp->name = name;
+
+	return 0;
+}
+
 static enum dsa_tag_protocol dsa_get_tag_protocol(struct dsa_port *dp,
 						  struct net_device *master)
 {
@@ -1247,6 +1292,8 @@ static enum dsa_tag_protocol dsa_get_tag_protocol(struct dsa_port *dp,
 	/* If the master device is not itself a DSA slave in a disjoint DSA
 	 * tree, then return immediately.
 	 */
+	tag_protocol =  ds->ops->get_tag_protocol(ds, dp->index, tag_protocol);
+
 	return ds->ops->get_tag_protocol(ds, dp->index, tag_protocol);
 }
 
@@ -1335,6 +1382,7 @@ static int dsa_port_parse_cpu(struct dsa_port *dp, struct net_device *master,
 	return 0;
 }
 
+
 static int dsa_port_parse_of(struct dsa_port *dp, struct device_node *dn)
 {
 	struct device_node *ethernet = of_parse_phandle(dn, "ethernet", 0);
@@ -1342,7 +1390,6 @@ static int dsa_port_parse_of(struct dsa_port *dp, struct device_node *dn)
 	bool link = of_property_read_bool(dn, "link");
 
 	dp->dn = dn;
-
 	if (ethernet) {
 		struct net_device *master;
 		const char *user_protocol;
@@ -1356,11 +1403,16 @@ static int dsa_port_parse_of(struct dsa_port *dp, struct device_node *dn)
 		return dsa_port_parse_cpu(dp, master, user_protocol);
 	}
 
+	if(of_property_read_bool(dn, "port-imp")) {
+		return dsa_port_parse_imp(dp, name);
+	}
+
 	if (link)
 		return dsa_port_parse_dsa(dp);
 
 	return dsa_port_parse_user(dp, name);
 }
+
 
 static int dsa_switch_parse_ports_of(struct dsa_switch *ds,
 				     struct device_node *dn)
@@ -1369,6 +1421,7 @@ static int dsa_switch_parse_ports_of(struct dsa_switch *ds,
 	struct dsa_port *dp;
 	int err = 0;
 	u32 reg;
+	int np = 0;
 
 	ports = of_get_child_by_name(dn, "ports");
 	if (!ports) {
@@ -1402,6 +1455,7 @@ static int dsa_switch_parse_ports_of(struct dsa_switch *ds,
 			of_node_put(port);
 			goto out_put_node;
 		}
+		np++;
 	}
 
 out_put_node:
@@ -1465,7 +1519,8 @@ static int dsa_switch_parse_of(struct dsa_switch *ds, struct device_node *dn)
 	if (err)
 		return err;
 
-	return dsa_switch_parse_ports_of(ds, dn);
+	err = dsa_switch_parse_ports_of(ds, dn);
+	return err;
 }
 
 static int dsa_port_parse(struct dsa_port *dp, const char *name,
@@ -1592,7 +1647,6 @@ static int dsa_switch_probe(struct dsa_switch *ds)
 		dsa_switch_release_ports(ds);
 		dsa_tree_put(dst);
 	}
-
 	return err;
 }
 
