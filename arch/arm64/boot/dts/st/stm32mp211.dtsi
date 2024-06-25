@@ -1445,6 +1445,18 @@
 			st,mem-map = <0x0a040000 0x20000>;
 		};
 
+		dts: thermal-sensor@44070000 {
+			compatible = "moortec,mr75203";
+			reg = <0x44070000 0x0 0x80>,
+			      <0x44070080 0x0 0x180>,
+			      <0x44070200 0x0 0x200>,
+			      <0x44070400 0x0 0xc00>;
+			reg-names = "common", "ts", "pd", "vm";
+			clocks = <&rcc CK_KER_DTS>;
+			resets = <&rcc DTS_R>;
+			#thermal-sensor-cells = <1>;
+		};
+
 		hdp: pinctrl@44090000 {
 			compatible = "st,stm32mp211-hdp";
 			reg = <0x44090000 0x0 0x400>;
