@@ -95,7 +95,12 @@
  */
 #define INA226_TOTAL_CONV_TIME_DEFAULT	2200
 
-extern struct mutex datum_b53_spi_mutex;
+/*
+ * SPI2-I2C3 Clocks Shorted Mutex Control
+ */
+
+void datum_b53_spi_mutex_lock(void);
+void datum_b53_spi_mutex_unlock(struct device *dev);
 
 static struct regmap_config ina2xx_regmap_config = {
 	.reg_bits = 8,
@@ -155,15 +160,6 @@ static const struct ina2xx_config ina2xx_config[] = {
  */
 static const int ina226_avg_tab[] = { 1, 4, 16, 64, 128, 256, 512, 1024 };
 
-static inline void spi_lock(void) { mutex_lock(&datum_b53_spi_mutex); }
-
-static inline void spi_unlock(struct device *dev)
-{
-	if(!pm_runtime_suspended(dev))
-		usleep_range(100, 200);
-	mutex_unlock(&datum_b53_spi_mutex);
-}
-
 static int ina226_reg_to_interval(u16 config)
 {
 	int avg = ina226_avg_tab[INA226_READ_AVG(config)];
@@ -203,11 +199,11 @@ static int ina2xx_calibrate(struct ina2xx_data *data)
 	struct device *device = dev->parent->parent;
 	int retval;
 
-	spi_lock();
+	datum_b53_spi_mutex_lock();
 	retval =  regmap_write(data->regmap, INA2XX_CALIBRATION,
 			    data->config->calibration_value);
 
-	spi_unlock(device);
+	datum_b53_spi_mutex_unlock(device);
 
 	return retval;
 }
@@ -221,10 +217,10 @@ static int ina2xx_init(struct ina2xx_data *data)
 	struct device *device = dev->parent->parent;
 	int ret;
 
-	spi_lock();
+	datum_b53_spi_mutex_lock();
 	ret = regmap_write(data->regmap, INA2XX_CONFIG,
 			       data->config->config_default);
-	spi_unlock(device);
+	datum_b53_spi_mutex_unlock(device);
 	if (ret < 0)
 		return ret;
 
@@ -241,9 +237,9 @@ static int ina2xx_read_reg(struct device *dev, int reg, unsigned int *regval)
 
 	for (retry = 5; retry; retry--) {
 
-		spi_lock();
+		datum_b53_spi_mutex_lock();
 		ret = regmap_read(data->regmap, reg, regval);
-		spi_unlock(device);
+		datum_b53_spi_mutex_unlock(device);
 
 		if (ret < 0)
 			return ret;
@@ -261,10 +257,10 @@ static int ina2xx_read_reg(struct device *dev, int reg, unsigned int *regval)
 		if (*regval == 0) {
 			unsigned int cal;
 
-			spi_lock();
+			datum_b53_spi_mutex_lock();
 			ret = regmap_read(data->regmap, INA2XX_CALIBRATION,
 					  &cal);
-			spi_unlock(device);
+			datum_b53_spi_mutex_unlock(device);
 
 			if (ret < 0)
 				return ret;
@@ -410,7 +406,7 @@ static ssize_t ina226_alert_show(struct device *dev,
 	int ret;
 
 	mutex_lock(&data->config_lock);
-	spi_lock();
+	datum_b53_spi_mutex_lock();
 	ret = regmap_read(data->regmap, INA226_MASK_ENABLE, &regval);
 	if (ret)
 		goto abort;
@@ -424,7 +420,7 @@ static ssize_t ina226_alert_show(struct device *dev,
 
 	ret = sysfs_emit(buf, "%d\n", val);
 abort:
-	spi_unlock(device);
+	datum_b53_spi_mutex_unlock(device);
 	mutex_unlock(&data->config_lock);
 	return ret;
 }
@@ -449,7 +445,7 @@ static ssize_t ina226_alert_store(struct device *dev,
 	 * if the value is non-zero.
 	 */
 	mutex_lock(&data->config_lock);
-	spi_lock();
+	datum_b53_spi_mutex_lock();
 	ret = regmap_update_bits(data->regmap, INA226_MASK_ENABLE,
 				 INA226_ALERT_CONFIG_MASK, 0);
 	if (ret < 0)
@@ -472,7 +468,7 @@ static ssize_t ina226_alert_store(struct device *dev,
 
 	ret = count;
 abort:
-	spi_unlock(device);
+	datum_b53_spi_mutex_unlock(device);
 	mutex_unlock(&data->config_lock);
 	return ret;
 }
@@ -487,9 +483,9 @@ static ssize_t ina226_alarm_show(struct device *dev,
 	int alarm = 0;
 	int ret;
 
-	spi_lock();
+	datum_b53_spi_mutex_lock();
 	ret = regmap_read(data->regmap, INA226_MASK_ENABLE, &regval);
-	spi_unlock(device);
+	datum_b53_spi_mutex_unlock(device);
 	if (ret)
 		return ret;
 
@@ -563,12 +559,12 @@ static ssize_t ina226_interval_store(struct device *dev,
 	if (val > INT_MAX || val == 0)
 		return -EINVAL;
 
-	spi_lock();
+	datum_b53_spi_mutex_lock();
 	status = regmap_update_bits(data->regmap, INA2XX_CONFIG,
 				    INA226_AVG_RD_MASK,
 				    ina226_interval_to_reg(val));
 
-	spi_unlock(device);
+	datum_b53_spi_mutex_unlock(device);
 	if (status < 0)
 		return status;
 
@@ -583,9 +579,9 @@ static ssize_t ina226_interval_show(struct device *dev,
 	int status;
 	unsigned int regval;
 
-	spi_lock();
+	datum_b53_spi_mutex_lock();
 	status = regmap_read(data->regmap, INA2XX_CONFIG, &regval);
-	spi_unlock(device);
+	datum_b53_spi_mutex_unlock(device);
 	if (status)
 		return status;
 
