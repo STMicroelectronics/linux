@@ -58,19 +58,11 @@ static const unsigned short normal_i2c[] = {
 #define MCP9902_REG_W_TCRIT_HYST			0x21
 
 /*
- * I2C3-SPI2 Clocks Shorted Mutex
+ * SPI2-I2C3 Clocks Shorted Mutex Control
  */
 
-extern struct mutex datum_b53_spi_mutex;
-
-static inline void spi_lock(void) { mutex_lock(&datum_b53_spi_mutex); }
-
-static inline void spi_unlock(struct device *dev)
-{
-	if(!pm_runtime_suspended(dev))
-		usleep_range(100, 200);
-	mutex_unlock(&datum_b53_spi_mutex);
-}
+void datum_b53_spi_mutex_lock(void);
+void datum_b53_spi_mutex_unlock(struct device *dev);
 
 /*
  * Conversions
@@ -150,7 +142,7 @@ static struct mcp9902_data *mcp9902_update_device(struct device *dev)
 	int j;
 
 	mutex_lock(&data->update_lock);
-	spi_lock();
+	datum_b53_spi_mutex_lock();
 
 	if (time_after(jiffies, data->last_updated + HZ * 2) || !data->valid) {
 		dev_dbg(&client->dev, "Updating mcp9902 data.\n");
@@ -169,7 +161,7 @@ static struct mcp9902_data *mcp9902_update_device(struct device *dev)
 		data->valid = 1;
 	}
 
-	spi_unlock(adapter->dev.parent);
+	datum_b53_spi_mutex_unlock(adapter->dev.parent);
 	mutex_unlock(&data->update_lock);
 
 	return data;
@@ -216,10 +208,10 @@ static ssize_t temp_store(struct device *dev,
 
 	mutex_lock(&data->update_lock);
 	data->temp[attr->index] = temp_to_reg(val);
-	spi_lock();
+	datum_b53_spi_mutex_lock();
 	i2c_smbus_write_byte_data(client, regs_write[attr->index],
 				  data->temp[attr->index]);
-	spi_unlock(adapter->dev.parent);
+	datum_b53_spi_mutex_unlock(adapter->dev.parent);
 	mutex_unlock(&data->update_lock);
 	return count;
 }
@@ -292,10 +284,10 @@ static int mcp9902_detect(struct i2c_client *client,
 		return -ENODEV;
 
 	/* identification */
-	spi_lock();
+	datum_b53_spi_mutex_lock();
 	man_id = i2c_smbus_read_byte_data(client, MCP9902_REG_R_MAN_ID);
 	chip_id = i2c_smbus_read_byte_data(client, MCP9902_REG_R_CHIP_ID);
-	spi_unlock(adapter->dev.parent);
+	datum_b53_spi_mutex_unlock(adapter->dev.parent);
 	if (man_id != 0x5D || chip_id != 0x04) {
 		dev_info(&adapter->dev,
 			 "Unsupported chip (man_id=0x%02X, chip_id=0x%02X).\n",
@@ -317,10 +309,10 @@ static void mcp9902_init_client(struct i2c_client *client)
 	/*
 	 * Start the conversions.
 	 */
-	spi_lock();
+	datum_b53_spi_mutex_lock();
 	i2c_smbus_write_byte_data(client, MCP9902_REG_W_CONVRATE, 5);	/* 2 Hz */
 	i2c_smbus_write_byte_data(client, MCP9902_REG_W_CONFIG, 0x9F);	/* run - extended temp */
-	spi_unlock(adapter->dev.parent);
+	datum_b53_spi_mutex_unlock(adapter->dev.parent);
 }
 
 static int mcp9902_probe(struct i2c_client *new_client,

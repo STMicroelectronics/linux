@@ -8,6 +8,13 @@
 
 #include "dsa_priv.h"
 
+/*
+ * SPI2-I2C3 Clocks Shorted Mutex Control
+ */
+
+void datum_b53_spi_mutex_lock(void);
+void datum_b53_spi_mutex_force_unlock(void);
+
 static int dsa_master_get_regs_len(struct net_device *dev)
 {
 	struct dsa_port *cpu_dp = dev->dsa_ptr;
@@ -409,7 +416,6 @@ static ssize_t pvlan_store(struct device *d, struct device_attribute *attr,
 	// No port with the given index was found
 	return -EINVAL;
 }
-	
 static DEVICE_ATTR_RW(pvlan);
 
 static ssize_t rdreg_show(struct device *d, struct device_attribute *attr,
@@ -468,7 +474,6 @@ static ssize_t rdreg_store(struct device *d, struct device_attribute *attr,
 
 	return count;
 }
-
 static DEVICE_ATTR_RW(rdreg);
 
 static ssize_t wrreg_show(struct device *d, struct device_attribute *attr,
@@ -500,8 +505,54 @@ static ssize_t wrreg_store(struct device *d, struct device_attribute *attr,
 
 	return count;
 }
-
 static DEVICE_ATTR_RW(wrreg);
+
+static ssize_t spi_mutex_show(struct device *d, struct device_attribute *attr,
+			char *buf)
+{
+	int len = 0;
+	extern bool datum_spi2_i2c3_clock_short;
+
+	if(datum_spi2_i2c3_clock_short)
+		len = sprintf(buf, "1\n");
+	else
+		len = sprintf(buf, "0\n");
+	return len;
+}
+
+static ssize_t spi_mutex_store(struct device *d, struct device_attribute *attr,
+			 const char *buf, size_t count)
+{
+	// struct net_device *dev = to_net_dev(d);
+	// struct dsa_port *cpu_dp = dev->dsa_ptr;
+	// struct dsa_switch *ds = cpu_dp->ds;
+	// u8 page;
+	// u8 reg;
+	// u8 size;
+	int err;
+	int mutex_enable;
+	extern bool datum_spi2_i2c3_clock_short;
+
+	// Parse the input
+	if(count != 2)
+		return -EINVAL;  // Invalid format - one character expected plus null termination
+	err = sscanf(buf, "%d" , &mutex_enable);
+	if (err != 1)
+		return -EINVAL;  // Invalid format - one string parsed
+	if(mutex_enable != 0 && mutex_enable != 1)
+		return -EINVAL;  // Invalid format - not "0" or "1"
+	// Write the value to the private data
+	datum_b53_spi_mutex_lock();
+	if(mutex_enable)
+		datum_spi2_i2c3_clock_short = true;
+	else
+		datum_spi2_i2c3_clock_short = false;
+
+	datum_b53_spi_mutex_force_unlock();
+	return count;
+}
+static DEVICE_ATTR_RW(spi_mutex);
+
 
 static struct attribute *dsa_slave_attrs[] = {
 	&dev_attr_tagging_cpu.attr,
@@ -509,6 +560,7 @@ static struct attribute *dsa_slave_attrs[] = {
 	&dev_attr_pvlan.attr,
 	&dev_attr_rdreg.attr,
 	&dev_attr_wrreg.attr,
+	&dev_attr_spi_mutex.attr,
 	NULL
 };
 
