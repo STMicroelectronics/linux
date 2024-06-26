@@ -13,7 +13,7 @@
  */
 
 void datum_b53_spi_mutex_lock(void);
-void datum_b53_spi_mutex_unlock(struct device *dev);
+void datum_b53_spi_mutex_force_unlock(void);
 
 static int dsa_master_get_regs_len(struct net_device *dev)
 {
@@ -548,7 +548,7 @@ static ssize_t spi_mutex_store(struct device *d, struct device_attribute *attr,
 	else
 		datum_spi2_i2c3_clock_short = false;
 
-	datum_b53_spi_mutex_unlock(d);
+	datum_b53_spi_mutex_force_unlock();
 	return count;
 }
 static DEVICE_ATTR_RW(spi_mutex);

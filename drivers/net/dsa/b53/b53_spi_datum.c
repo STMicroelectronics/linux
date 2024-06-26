@@ -66,6 +66,11 @@ inline void datum_b53_spi_mutex_unlock(struct device *dev)
 }
 EXPORT_SYMBOL(datum_b53_spi_mutex_unlock);
 
+inline void datum_b53_spi_mutex_force_unlock(void)
+{
+	mutex_unlock(&datum_b53_spi_mutex);
+}
+EXPORT_SYMBOL(datum_b53_spi_mutex_force_unlock);
 
 static inline int b53_spi_read_reg(struct spi_device *spi, u8 reg, u8 *val,
 				   unsigned int len)
