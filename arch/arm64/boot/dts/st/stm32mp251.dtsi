@@ -2129,8 +2129,22 @@
 				clock-names = "lcd", "bus";
 				resets = <&rcc LTDC_R>;
 				power-domains = <&d1_pd>;
-				access-controllers = <&rifsc 80>;
 				status = "disabled";
+
+				access-controllers = <&rifsc 80>;
+				access-controller-names = "cmn";
+				l1l2 {
+					access-controllers = <&rifsc 119>;
+					access-controller-names = "l1l2";
+				};
+				l3 {
+					access-controllers = <&rifsc 120>;
+					access-controller-names = "l3";
+				};
+				rot {
+					access-controllers = <&rifsc 121>;
+					access-controller-names = "rot";
+				};
 			};
 
 			csi: csi@48020000 {
