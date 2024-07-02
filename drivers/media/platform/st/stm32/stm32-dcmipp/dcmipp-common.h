@@ -11,6 +11,7 @@
 #ifndef _DCMIPP_COMMON_H_
 #define _DCMIPP_COMMON_H_
 
+#include <linux/bus/stm32_firewall_device.h>
 #include <linux/interrupt.h>
 #include <linux/slab.h>
 #include <media/media-device.h>
@@ -92,6 +93,8 @@ struct dcmipp_device {
 	struct dcmipp_ent_device	**entity;
 
 	struct v4l2_async_notifier	notifier;
+
+	struct stm32_firewall		firewall;
 };
 
 #define DCMIPP_ENT_LINK(src, srcpad, sink, sinkpad, link_flags) {	\
