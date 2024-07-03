@@ -722,6 +722,8 @@ stpmic1_boost_register(struct platform_device *pdev, int id,
 		return rdev;
 	}
 
+	usb_data->boost_rdev = rdev;
+
 	/* setup an irq handler for over-current detection */
 	irq = of_irq_get(config.of_node, 0);
 	if (irq > 0) {
@@ -763,8 +765,6 @@ static int stpmic1_regulator_probe(struct platform_device *pdev)
 			stpmic1_boost_register(pdev, i, &stpmic1_matches[i],
 					       &stpmic1_regulator_cfgs[i],
 					       usb_data);
-
-			usb_data->boost_rdev = rdev;
 		} else {
 			rdev =
 			stpmic1_regulator_register(pdev, i, &stpmic1_matches[i],

@@ -1340,14 +1340,13 @@ static int gc2145_start_streaming(struct gc2145 *gc2145)
 
 	/*
 	 * Adjust the MIPI Fifo Full Level
-	 * TODO - would need to understand better the constraints
 	 * 640x480 RGB: 0x0190
-	 * 1280x720 / 1600x1200 (aka no scaler) non RAW: 0x0010
+	 * 1280x720 / 1600x1200 (aka no scaler) non RAW: 0x0001
 	 * 1600x1200 RAW: 0x0190
 	 */
 	if (gc2145_format->colorspace != V4L2_COLORSPACE_RAW) {
-		if ((gc2145->mode->width == 720) || (gc2145->mode->width == 1200))
-			fifo_full_lvl = 0x0010;
+		if (gc2145->mode->width == 1280 || gc2145->mode->width == 1600)
+			fifo_full_lvl = 0x0001;
 		else
 			fifo_full_lvl = 0x0190;
 	} else

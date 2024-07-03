@@ -1088,10 +1088,33 @@ static int edt_ft5x06_ts_probe(struct i2c_client *client,
 	struct device_node *np;
 	struct input_dev *input;
 	unsigned long irq_flags;
+	struct device_link *dlink;
 	int error;
 	char fw_version[EDT_NAME_LEN];
 
 	dev_dbg(&client->dev, "probing for EDT FT5x06 I2C\n");
+
+	np = of_parse_phandle(client->dev.of_node, "panel", 0);
+	if (np) {
+		panel = of_find_mipi_dsi_device_by_node(np);
+		of_node_put(np);
+		if (!panel)
+			return -EPROBE_DEFER;
+
+		dlink = device_link_add(&client->dev, &panel->dev, DL_FLAG_AUTOREMOVE_CONSUMER);
+
+		if (IS_ERR(dlink)) {
+			error = PTR_ERR(dlink);
+			dev_err(&client->dev,
+				"Failed to add link to device %d\n", error);
+			return error;
+		}
+
+		if (dlink && dlink->status != DL_STATE_CONSUMER_PROBE)
+			return -EPROBE_DEFER;
+
+		put_device(&panel->dev);
+	}
 
 	tsdata = devm_kzalloc(&client->dev, sizeof(*tsdata), GFP_KERNEL);
 	if (!tsdata) {
@@ -1262,18 +1285,6 @@ static int edt_ft5x06_ts_probe(struct i2c_client *client,
 	error = input_register_device(input);
 	if (error)
 		return error;
-
-	np = of_parse_phandle(client->dev.of_node, "panel", 0);
-	if (np) {
-		panel = of_find_mipi_dsi_device_by_node(np);
-		of_node_put(np);
-		if (!panel)
-			return -EPROBE_DEFER;
-
-		device_link_add(&client->dev, &panel->dev, DL_FLAG_STATELESS |
-				DL_FLAG_AUTOREMOVE_SUPPLIER);
-		put_device(&panel->dev);
-	}
 
 	edt_ft5x06_ts_prepare_debugfs(tsdata, dev_driver_string(&client->dev));
 

@@ -10,6 +10,7 @@
 #include <linux/delay.h>
 #include <linux/gpio/consumer.h>
 #include <linux/module.h>
+#include <linux/pm_runtime.h>
 #include <linux/regulator/consumer.h>
 
 #include <video/mipi_display.h>
@@ -290,16 +291,15 @@ static int otm8009a_disable(struct drm_panel *panel)
 static int otm8009a_unprepare(struct drm_panel *panel)
 {
 	struct otm8009a *ctx = panel_to_otm8009a(panel);
+	int ret;
 
 	if (!ctx->prepared)
 		return 0;
 
-	if (ctx->reset_gpio) {
-		gpiod_set_value_cansleep(ctx->reset_gpio, 1);
-		msleep(20);
-	}
-
-	regulator_disable(ctx->supply);
+	pm_runtime_mark_last_busy(panel->dev);
+	ret = pm_runtime_put_autosuspend(panel->dev);
+	if (ret < 0)
+		return ret;
 
 	ctx->prepared = false;
 
@@ -314,18 +314,10 @@ static int otm8009a_prepare(struct drm_panel *panel)
 	if (ctx->prepared)
 		return 0;
 
-	ret = regulator_enable(ctx->supply);
+	ret = pm_runtime_get_sync(panel->dev);
 	if (ret < 0) {
-		dev_err(panel->dev, "failed to enable supply: %d\n", ret);
+		pm_runtime_put_autosuspend(panel->dev);
 		return ret;
-	}
-
-	if (ctx->reset_gpio) {
-		gpiod_set_value_cansleep(ctx->reset_gpio, 0);
-		gpiod_set_value_cansleep(ctx->reset_gpio, 1);
-		msleep(20);
-		gpiod_set_value_cansleep(ctx->reset_gpio, 0);
-		msleep(100);
 	}
 
 	ret = otm8009a_init_sequence(ctx);
@@ -454,14 +446,6 @@ static int otm8009a_probe(struct mipi_dsi_device *dsi)
 		return ret;
 	}
 
-	/* Reset the panel to avoid visual artifacts */
-	if (ctx->reset_gpio) {
-		gpiod_set_value_cansleep(ctx->reset_gpio, 0);
-		gpiod_set_value_cansleep(ctx->reset_gpio, 1);
-		msleep(20);
-		gpiod_set_value_cansleep(ctx->reset_gpio, 0);
-	}
-
 	ctx->supply = devm_regulator_get(dev, "power");
 	if (IS_ERR(ctx->supply)) {
 		ret = PTR_ERR(ctx->supply);
@@ -483,7 +467,7 @@ static int otm8009a_probe(struct mipi_dsi_device *dsi)
 		       DRM_MODE_CONNECTOR_DSI);
 
 	ctx->bl_dev = devm_backlight_device_register(dev, dev_name(dev),
-						     dsi->host->dev, ctx,
+						     dev, ctx,
 						     &otm8009a_backlight_ops,
 						     NULL);
 	if (IS_ERR(ctx->bl_dev)) {
@@ -506,6 +490,10 @@ static int otm8009a_probe(struct mipi_dsi_device *dsi)
 		return ret;
 	}
 
+	pm_runtime_enable(ctx->dev);
+	pm_runtime_set_autosuspend_delay(ctx->dev, 1000);
+	pm_runtime_use_autosuspend(ctx->dev);
+
 	return 0;
 }
 
@@ -516,8 +504,49 @@ static int otm8009a_remove(struct mipi_dsi_device *dsi)
 	mipi_dsi_detach(dsi);
 	drm_panel_remove(&ctx->panel);
 
+	pm_runtime_dont_use_autosuspend(ctx->dev);
+	pm_runtime_disable(ctx->dev);
+
 	return 0;
 }
+
+static __maybe_unused int orisetech_otm8009a_suspend(struct device *dev)
+{
+	struct otm8009a *ctx = dev_get_drvdata(dev);
+
+	gpiod_set_value_cansleep(ctx->reset_gpio, 1);
+	msleep(20);
+
+	regulator_disable(ctx->supply);
+
+	return 0;
+}
+
+static __maybe_unused int orisetech_otm8009a_resume(struct device *dev)
+{
+	struct otm8009a *ctx = dev_get_drvdata(dev);
+	int ret;
+
+	ret = regulator_enable(ctx->supply);
+	if (ret < 0) {
+		dev_err(ctx->dev, "failed to enable supply: %d\n", ret);
+		return ret;
+	}
+
+	gpiod_set_value_cansleep(ctx->reset_gpio, 0);
+	gpiod_set_value_cansleep(ctx->reset_gpio, 1);
+	msleep(20);
+	gpiod_set_value_cansleep(ctx->reset_gpio, 0);
+	msleep(100);
+
+	return 0;
+}
+
+static const struct dev_pm_ops orisetech_otm8009a_pm_ops = {
+	SET_RUNTIME_PM_OPS(orisetech_otm8009a_suspend, orisetech_otm8009a_resume, NULL)
+	SET_SYSTEM_SLEEP_PM_OPS(pm_runtime_force_suspend,
+				pm_runtime_force_resume)
+};
 
 static const struct of_device_id orisetech_otm8009a_of_match[] = {
 	{ .compatible = "orisetech,otm8009a" },
@@ -531,6 +560,7 @@ static struct mipi_dsi_driver orisetech_otm8009a_driver = {
 	.driver = {
 		.name = "panel-orisetech-otm8009a",
 		.of_match_table = orisetech_otm8009a_of_match,
+		.pm = &orisetech_otm8009a_pm_ops,
 	},
 };
 module_mipi_dsi_driver(orisetech_otm8009a_driver);

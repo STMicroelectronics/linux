@@ -806,9 +806,15 @@ static void ltdc_crtc_atomic_disable(struct drm_crtc *crtc,
 	drm_crtc_vblank_off(crtc);
 
 	/* Disable all layers */
-	for (layer_index = 0; layer_index < ldev->caps.nb_layers; layer_index++)
+	for (layer_index = 0; layer_index < ldev->caps.nb_layers; layer_index++) {
 		regmap_write_bits(ldev->regmap, LTDC_L1CR + layer_index * LAY_OFS,
 				  LXCR_CLUTEN | LXCR_LEN, 0);
+
+		/* immediately commit disable of layer */
+		if (ldev->caps.plane_reg_shadow)
+			regmap_write_bits(ldev->regmap, LTDC_L1RCR + layer_index * LAY_OFS,
+					  LXRCR_IMR | LXRCR_VBR | LXRCR_GRMSK, LXRCR_IMR);
+	}
 
 	/* disable IRQ */
 	regmap_clear_bits(ldev->regmap, LTDC_IER, IER_FUWIE | IER_FUEIE | IER_RRIE | IER_TERRIE);
@@ -1060,6 +1066,20 @@ static void ltdc_crtc_atomic_flush(struct drm_crtc *crtc,
 	}
 }
 
+static int ltdc_crtc_atomic_check(struct drm_crtc *crtc,
+				  struct drm_atomic_state *state)
+{
+	struct drm_crtc_state *crtc_state = drm_atomic_get_new_crtc_state(state, crtc);
+
+	DRM_DEBUG_ATOMIC("\n");
+
+	/* force a full mode set if active state changed */
+	if (crtc_state->active_changed)
+		crtc_state->mode_changed = true;
+
+	return 0;
+}
+
 static bool ltdc_crtc_get_scanout_position(struct drm_crtc *crtc,
 					   bool in_vblank_irq,
 					   int *vpos, int *hpos,
@@ -1120,6 +1140,7 @@ static const struct drm_crtc_helper_funcs ltdc_crtc_helper_funcs = {
 	.atomic_flush = ltdc_crtc_atomic_flush,
 	.atomic_enable = ltdc_crtc_atomic_enable,
 	.atomic_disable = ltdc_crtc_atomic_disable,
+	.atomic_check = ltdc_crtc_atomic_check,
 	.get_scanout_position = ltdc_crtc_get_scanout_position,
 };
 
@@ -1954,7 +1975,6 @@ int ltdc_load(struct drm_device *ddev)
 	struct drm_panel *panel;
 	struct drm_crtc *crtc;
 	struct reset_control *rstc;
-	struct resource *res;
 	int irq, i, nb_endpoints;
 	int ret = -ENODEV;
 
@@ -2021,8 +2041,7 @@ int ltdc_load(struct drm_device *ddev)
 		reset_control_deassert(rstc);
 	}
 
-	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	ldev->regs = devm_ioremap_resource(dev, res);
+	ldev->regs = devm_platform_ioremap_resource(pdev, 0);
 	if (IS_ERR(ldev->regs)) {
 		DRM_ERROR("Unable to get ltdc registers\n");
 		ret = PTR_ERR(ldev->regs);

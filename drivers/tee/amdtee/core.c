@@ -275,19 +275,22 @@ int amdtee_open_session(struct tee_context *ctx,
 	}
 
 	/* Open session with loaded TA */
-	handle_open_session(arg, &session_info, param);
+	handle_open_session(arg, &session_info, normal_param);
 	if (arg->ret != TEEC_SUCCESS) {
 		pr_err("open_session failed %d\n", arg->ret);
 		handle_unload_ta(ta_handle);
 		kref_put(&sess->refcount, destroy_session);
-	goto out;
+		goto out;
 	}
- 
+
 	/* Find an empty session index for the given TA */
 	spin_lock(&sess->lock);
 	i = find_first_zero_bit(sess->sess_mask, TEE_NUM_SESSIONS);
-	if (i < TEE_NUM_SESSIONS)
+	if (i < TEE_NUM_SESSIONS) {
+		sess->session_info[i] = session_info;
+		set_session_id(ta_handle, i, &arg->session);
 		set_bit(i, sess->sess_mask);
+	}
 	spin_unlock(&sess->lock);
 
 	if (i >= TEE_NUM_SESSIONS) {

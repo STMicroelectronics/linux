@@ -10,6 +10,7 @@
 #include <linux/gpio/consumer.h>
 #include <linux/mod_devicetable.h>
 #include <linux/module.h>
+#include <linux/pm_runtime.h>
 #include <linux/regulator/consumer.h>
 
 #include <video/mipi_display.h>
@@ -260,14 +261,10 @@ static int rm68200_unprepare(struct drm_panel *panel)
 	if (ret)
 		dev_warn(panel->dev, "failed to enter sleep mode: %d\n", ret);
 
-	msleep(120);
-
-	if (ctx->reset_gpio) {
-		gpiod_set_value_cansleep(ctx->reset_gpio, 1);
-		msleep(20);
-	}
-
-	regulator_disable(ctx->supply);
+	pm_runtime_mark_last_busy(panel->dev);
+	ret = pm_runtime_put_autosuspend(panel->dev);
+	if (ret < 0)
+		return ret;
 
 	ctx->prepared = false;
 
@@ -283,17 +280,10 @@ static int rm68200_prepare(struct drm_panel *panel)
 	if (ctx->prepared)
 		return 0;
 
-	ret = regulator_enable(ctx->supply);
+	ret = pm_runtime_get_sync(panel->dev);
 	if (ret < 0) {
-		dev_err(ctx->dev, "failed to enable supply: %d\n", ret);
+		pm_runtime_put_autosuspend(panel->dev);
 		return ret;
-	}
-
-	if (ctx->reset_gpio) {
-		gpiod_set_value_cansleep(ctx->reset_gpio, 1);
-		msleep(20);
-		gpiod_set_value_cansleep(ctx->reset_gpio, 0);
-		msleep(100);
 	}
 
 	rm68200_init_sequence(ctx);
@@ -412,6 +402,10 @@ static int rm68200_probe(struct mipi_dsi_device *dsi)
 		return ret;
 	}
 
+	pm_runtime_enable(ctx->dev);
+	pm_runtime_set_autosuspend_delay(ctx->dev, 1000);
+	pm_runtime_use_autosuspend(ctx->dev);
+
 	return 0;
 }
 
@@ -422,8 +416,48 @@ static int rm68200_remove(struct mipi_dsi_device *dsi)
 	mipi_dsi_detach(dsi);
 	drm_panel_remove(&ctx->panel);
 
+	pm_runtime_dont_use_autosuspend(ctx->dev);
+	pm_runtime_disable(ctx->dev);
+
 	return 0;
 }
+
+static __maybe_unused int raydium_rm68200_suspend(struct device *dev)
+{
+	struct rm68200 *ctx = dev_get_drvdata(dev);
+
+	gpiod_set_value_cansleep(ctx->reset_gpio, 1);
+	msleep(20);
+
+	regulator_disable(ctx->supply);
+
+	return 0;
+}
+
+static __maybe_unused int raydium_rm68200_resume(struct device *dev)
+{
+	struct rm68200 *ctx = dev_get_drvdata(dev);
+	int ret;
+
+	ret = regulator_enable(ctx->supply);
+	if (ret < 0) {
+		dev_err(ctx->dev, "failed to enable supply: %d\n", ret);
+		return ret;
+	}
+
+	gpiod_set_value_cansleep(ctx->reset_gpio, 1);
+	msleep(20);
+	gpiod_set_value_cansleep(ctx->reset_gpio, 0);
+	msleep(100);
+
+	return 0;
+}
+
+static const struct dev_pm_ops raydium_rm68200_pm_ops = {
+	SET_RUNTIME_PM_OPS(raydium_rm68200_suspend, raydium_rm68200_resume, NULL)
+	SET_SYSTEM_SLEEP_PM_OPS(pm_runtime_force_suspend,
+				pm_runtime_force_resume)
+};
 
 static const struct of_device_id raydium_rm68200_of_match[] = {
 	{ .compatible = "raydium,rm68200" },
@@ -437,6 +471,7 @@ static struct mipi_dsi_driver raydium_rm68200_driver = {
 	.driver = {
 		.name = "panel-raydium-rm68200",
 		.of_match_table = raydium_rm68200_of_match,
+		.pm = &raydium_rm68200_pm_ops,
 	},
 };
 module_mipi_dsi_driver(raydium_rm68200_driver);

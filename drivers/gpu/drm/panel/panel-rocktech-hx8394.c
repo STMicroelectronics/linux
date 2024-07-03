@@ -9,6 +9,7 @@
 #include <linux/gpio/consumer.h>
 #include <linux/mod_devicetable.h>
 #include <linux/module.h>
+#include <linux/pm_runtime.h>
 #include <linux/regulator/consumer.h>
 
 #include <video/mipi_display.h>
@@ -207,17 +208,10 @@ static int hx8394_prepare(struct drm_panel *panel)
 	if (ctx->prepared)
 		return 0;
 
-	ret = regulator_enable(ctx->supply);
+	ret = pm_runtime_get_sync(panel->dev);
 	if (ret < 0) {
-		dev_err(ctx->dev, "failed to enable supply: %d\n", ret);
+		pm_runtime_put_autosuspend(panel->dev);
 		return ret;
-	}
-
-	if (ctx->reset_gpio) {
-		gpiod_set_value_cansleep(ctx->reset_gpio, 1);
-		msleep(1);
-		gpiod_set_value_cansleep(ctx->reset_gpio, 0);
-		msleep(50);
 	}
 
 	ret = hx8394_read_id(ctx);
@@ -264,14 +258,10 @@ static int hx8394_unprepare(struct drm_panel *panel)
 	if (ret)
 		dev_warn(panel->dev, "failed to enter sleep mode: %d\n", ret);
 
-	msleep(120);
-
-	if (ctx->reset_gpio) {
-		gpiod_set_value_cansleep(ctx->reset_gpio, 1);
-		msleep(20);
-	}
-
-	regulator_disable(ctx->supply);
+	pm_runtime_mark_last_busy(panel->dev);
+	ret = pm_runtime_put_autosuspend(panel->dev);
+	if (ret < 0)
+		return ret;
 
 	ctx->prepared = false;
 
@@ -363,6 +353,10 @@ static int hx8394_probe(struct mipi_dsi_device *dsi)
 		return ret;
 	}
 
+	pm_runtime_enable(ctx->dev);
+	pm_runtime_set_autosuspend_delay(ctx->dev, 1000);
+	pm_runtime_use_autosuspend(ctx->dev);
+
 	return 0;
 }
 
@@ -373,8 +367,48 @@ static int hx8394_remove(struct mipi_dsi_device *dsi)
 	mipi_dsi_detach(dsi);
 	drm_panel_remove(&ctx->panel);
 
+	pm_runtime_dont_use_autosuspend(ctx->dev);
+	pm_runtime_disable(ctx->dev);
+
 	return 0;
 }
+
+static __maybe_unused int rocktech_hx8394_suspend(struct device *dev)
+{
+	struct hx8394 *ctx = dev_get_drvdata(dev);
+
+	gpiod_set_value_cansleep(ctx->reset_gpio, 1);
+	msleep(20);
+
+	regulator_disable(ctx->supply);
+
+	return 0;
+}
+
+static __maybe_unused int rocktech_hx8394_resume(struct device *dev)
+{
+	struct hx8394 *ctx = dev_get_drvdata(dev);
+	int ret;
+
+	ret = regulator_enable(ctx->supply);
+	if (ret < 0) {
+		dev_err(ctx->dev, "failed to enable supply: %d\n", ret);
+		return ret;
+	}
+
+	gpiod_set_value_cansleep(ctx->reset_gpio, 1);
+	mdelay(1);
+	gpiod_set_value_cansleep(ctx->reset_gpio, 0);
+	msleep(50);
+
+	return 0;
+}
+
+static const struct dev_pm_ops rocktech_hx8394_pm_ops = {
+	SET_RUNTIME_PM_OPS(rocktech_hx8394_suspend, rocktech_hx8394_resume, NULL)
+	SET_SYSTEM_SLEEP_PM_OPS(pm_runtime_force_suspend,
+				pm_runtime_force_resume)
+};
 
 static const struct of_device_id rocktech_hx8394_of_match[] = {
 	{ .compatible = "rocktech,hx8394" },
@@ -388,6 +422,7 @@ static struct mipi_dsi_driver rocktech_hx8394_driver = {
 	.driver = {
 		.name = "panel-rocktech-hx8394",
 		.of_match_table = rocktech_hx8394_of_match,
+		.pm = &rocktech_hx8394_pm_ops,
 	},
 };
 module_mipi_dsi_driver(rocktech_hx8394_driver);

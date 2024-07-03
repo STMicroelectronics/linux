@@ -58,6 +58,8 @@ static int smsc_phy_ack_interrupt(struct phy_device *phydev)
 
 static int smsc_phy_config_intr(struct phy_device *phydev)
 {
+	struct smsc_phy_priv *priv = phydev->priv;
+	u16 intmask = 0;
 	int rc;
 
 	if (phydev->interrupts == PHY_INTERRUPT_ENABLED) {
@@ -65,12 +67,16 @@ static int smsc_phy_config_intr(struct phy_device *phydev)
 		if (rc)
 			return rc;
 
-		rc = phy_write(phydev, MII_LAN83C185_IM,
-			MII_LAN83C185_ISF_INT_PHYLIB_EVENTS);
+		intmask = MII_LAN83C185_ISF_INT_PHYLIB_EVENTS;
+		if (priv->wakeup_enable)
+			intmask |= MII_LAN83C185_ISF_INT8;
+
+		rc = phy_write(phydev, MII_LAN83C185_IM, intmask);
 	} else {
 		rc = phy_write(phydev, MII_LAN83C185_IM, 0);
 		if (rc)
 			return rc;
+
 		rc = smsc_phy_ack_interrupt(phydev);
 	}
 
@@ -79,7 +85,6 @@ static int smsc_phy_config_intr(struct phy_device *phydev)
 
 static irqreturn_t smsc_phy_handle_interrupt(struct phy_device *phydev)
 {
-	struct smsc_phy_priv *priv = phydev->priv;
 	int irq_status;
 
 	irq_status = phy_read(phydev, MII_LAN83C185_ISF);

@@ -316,6 +316,7 @@ struct mmci_host;
  * @opendrain: bitmask identifying the OPENDRAIN bit inside MMCIPOWER register
  * @dma_lli: true if variant has dma link list feature.
  * @stm32_idmabsize_mask: stm32 sdmmc idma buffer size.
+ * @use_sdio_irq: allow SD I/O card to interrupt the host
  */
 struct variant_data {
 	unsigned int		clkreg;
@@ -360,6 +361,7 @@ struct variant_data {
 	u32			start_err;
 	u32			opendrain;
 	u8			dma_lli:1;
+	u8			use_sdio_irq:1;
 	u32			stm32_idmabsize_mask;
 	void (*init)(struct mmci_host *host);
 };
@@ -383,6 +385,8 @@ struct mmci_host_ops {
 	bool (*busy_complete)(struct mmci_host *host, u32 status, u32 err_msk);
 	void (*pre_sig_volt_switch)(struct mmci_host *host);
 	int (*post_sig_volt_switch)(struct mmci_host *host, struct mmc_ios *ios);
+	void (*enable_sdio_irq)(struct mmci_host *host, int enable);
+	void (*sdio_irq)(struct mmci_host *host, u32 status);
 };
 
 struct mmci_host {

@@ -1158,9 +1158,32 @@ static int goodix_ts_probe(struct i2c_client *client,
 	struct goodix_ts_data *ts;
 	struct mipi_dsi_device *panel;
 	struct device_node *np;
+	struct device_link *dlink;
 	int error;
 
 	dev_dbg(&client->dev, "I2C Address: 0x%02x\n", client->addr);
+
+	np = of_parse_phandle(client->dev.of_node, "panel", 0);
+	if (np) {
+		panel = of_find_mipi_dsi_device_by_node(np);
+		of_node_put(np);
+		if (!panel)
+			return -EPROBE_DEFER;
+
+		dlink = device_link_add(&client->dev, &panel->dev, DL_FLAG_AUTOREMOVE_CONSUMER);
+
+		if (IS_ERR(dlink)) {
+			error = PTR_ERR(dlink);
+			dev_err(&client->dev,
+				"Failed to add link to device %d\n", error);
+			return error;
+		}
+
+		if (dlink && dlink->status != DL_STATE_CONSUMER_PROBE)
+			return -EPROBE_DEFER;
+
+		put_device(&panel->dev);
+	}
 
 	if (!i2c_check_functionality(client->adapter, I2C_FUNC_I2C)) {
 		dev_err(&client->dev, "I2C check functionality failed.\n");
@@ -1273,17 +1296,6 @@ reset:
 		error = goodix_configure_dev(ts);
 		if (error)
 			return error;
-	}
-
-	np = of_parse_phandle(client->dev.of_node, "panel", 0);
-	if (np) {
-		panel = of_find_mipi_dsi_device_by_node(np);
-		of_node_put(np);
-		if (!panel)
-			return -EPROBE_DEFER;
-		device_link_add(&client->dev, &panel->dev, DL_FLAG_STATELESS |
-				DL_FLAG_AUTOREMOVE_SUPPLIER);
-		put_device(&panel->dev);
 	}
 
 	return 0;

@@ -18,8 +18,8 @@ config STM32_HSLV
 
 config STM32_PM_DOMAINS
 	bool "STM32 PM domains"
-	depends on MACH_STM32MP157
+	depends on MACH_STM32MP157 || MACH_STM32MP13
 	select PM_GENERIC_DOMAINS
-	default y if MACH_STM32MP157
+	default y if MACH_STM32MP157 || MACH_STM32MP13
 
 endif # ARCH_STM32
