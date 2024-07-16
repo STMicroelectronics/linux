@@ -290,7 +290,6 @@ enum stm32h7_adc_dmngt {
  * @rate:		clock rate used for analog circuitry
  * @vref_mv:		vref voltage (mv)
  * @lock:		spinlock
- * @trig_id:		identifies HW trigger list (diversity added since stm32mp25)
  */
 struct stm32_adc_common {
 	void __iomem			*base;
@@ -298,7 +297,6 @@ struct stm32_adc_common {
 	unsigned long			rate;
 	int				vref_mv;
 	spinlock_t			lock;		/* lock for common register */
-	int				trig_id;
 };
 
 #endif

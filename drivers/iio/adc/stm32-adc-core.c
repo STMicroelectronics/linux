@@ -731,10 +731,6 @@ static int stm32_adc_probe_identification(struct platform_device *pdev,
 		 */
 		if (priv->nb_irqs > priv->nb_adc_max)
 			priv->nb_irqs = priv->nb_adc_max;
-
-		/* Identifies ADC3 trigger list, e.g. stm32mp25_adc3_trigs */
-		if (priv->nb_adc_max == 1)
-			priv->common.trig_id = 1;
 	}
 
 	val = readl_relaxed(priv->common.base + STM32MP1_ADC_VERR);
