@@ -405,6 +405,12 @@ patternProperties:
         items:
           - const: vrefint
 
+      st,adc-trigger-sel:
+        description: Selects the HW trigger configuration available on this ADC
+        $ref: /schemas/types.yaml#/definitions/uint32
+        enum: [0, 1]
+        default: 0
+
     patternProperties:
       "^channel@([0-9]|1[0-9])$":
         type: object
