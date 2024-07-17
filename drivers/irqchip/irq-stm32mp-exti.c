@@ -476,10 +476,9 @@ static int stm32mp_exti_resume(struct device *dev)
 	struct stm32mp_exti_chip_data *chip_data;
 	int i;
 
+	stm32mp_exti_resume_gpio_mux(host_data);
 	for (i = 0; i < host_data->drv_data->bank_nr; i++) {
 		chip_data = &host_data->chips_data[i];
-		if (i == 0)
-			stm32mp_exti_resume_gpio_mux(host_data);
 		stm32mp_chip_resume(chip_data, chip_data->mask_cache);
 	}
 
