@@ -1167,7 +1167,8 @@ static int optee_it_alloc(struct irq_domain *d, unsigned int virq,
 
 	hwirq = fwspec->param[0];
 
-	irq_domain_set_hwirq_and_chip(d, virq, hwirq, &optee_it_irq_chip, d->host_data);
+	irq_domain_set_info(d, virq, hwirq, &optee_it_irq_chip, d->host_data,
+			    handle_simple_irq, NULL, NULL);
 
 	return 0;
 }
