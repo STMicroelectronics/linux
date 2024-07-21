@@ -67,30 +67,6 @@ do {									\
 } while (0)
 
 /**
- * struct dcmipp_platform_data - platform data to components
- *
- * @entity_name:	The name of the entity to be created
- *
- * Board setup code will often provide additional information using the device's
- * platform_data field to hold additional information.
- * When injecting a new platform_device in the component system the core needs
- * to provide to the corresponding submodules the name of the entity that should
- * be used when registering the subdevice in the Media Controller system.
- */
-struct dcmipp_platform_data {
-	char entity_name[32];
-};
-
-struct dcmipp_bind_data {
-	/* Internal v4l2 parent device*/
-	struct v4l2_device		*v4l2_dev;
-
-	/* Hardware resources */
-	struct reset_control		*rstc;
-	void __iomem			*regs;
-};
-
-/**
  * struct dcmipp_ent_device - core struct that represents a node in the topology
  *
  * @ent:		the pointer to struct media_entity for the node
@@ -121,6 +97,7 @@ struct dcmipp_ent_device {
 	enum v4l2_mbus_type		bus_type;
 	irq_handler_t handler;
 	irqreturn_t handler_ret;
+	u32 cmsr2;
 	irq_handler_t thread_fn;
 };
 
@@ -236,5 +213,45 @@ static inline void reg_clear_dbg(struct device *dev, const char *regname,
 	reg_write_dbg(dev, regname, base, reg, readl_relaxed(base + reg) & ~mask);
 }
 
-#endif
+/* DCMIPP subdev init / release entry points */
+struct dcmipp_ent_device *dcmipp_inp_ent_init(struct device *dev,
+					      const char *entity_name,
+					      struct v4l2_device *v4l2_dev,
+					      void __iomem *regs);
+void dcmipp_inp_ent_release(struct dcmipp_ent_device *ved);
+struct dcmipp_ent_device *
+dcmipp_byteproc_ent_init(struct device *dev, const char *entity_name,
+			 struct v4l2_device *v4l2_dev, void __iomem *regs);
+void dcmipp_byteproc_ent_release(struct dcmipp_ent_device *ved);
+struct dcmipp_ent_device *dcmipp_bytecap_ent_init(struct device *dev,
+						  const char *entity_name,
+						  struct v4l2_device *v4l2_dev,
+						  void __iomem *regs);
+void dcmipp_bytecap_ent_release(struct dcmipp_ent_device *ved);
+struct dcmipp_ent_device *dcmipp_isp_ent_init(struct device *dev,
+					      const char *entity_name,
+					      struct v4l2_device *v4l2_dev,
+					      void __iomem *regs);
+void dcmipp_isp_ent_release(struct dcmipp_ent_device *ved);
+struct dcmipp_ent_device *dcmipp_pixelproc_ent_init(struct device *dev,
+						    const char *entity_name,
+						    struct v4l2_device *v4l2_dev,
+						    void __iomem *regs);
+void dcmipp_pixelproc_ent_release(struct dcmipp_ent_device *ved);
+struct dcmipp_ent_device *dcmipp_pixelcap_ent_init(struct device *dev,
+						   const char *entity_name,
+						   struct v4l2_device *v4l2_dev,
+						   void __iomem *regs);
+void dcmipp_pixelcap_ent_release(struct dcmipp_ent_device *ved);
+struct dcmipp_ent_device *dcmipp_statcap_ent_init(struct device *dev,
+						  const char *entity_name,
+						  struct v4l2_device *v4l2_dev,
+						  void __iomem *regs);
+void dcmipp_statcap_ent_release(struct dcmipp_ent_device *ved);
+struct dcmipp_ent_device *dcmipp_isp_params_ent_init(struct device *dev,
+						     const char *entity_name,
+						     struct v4l2_device *v4l2_dev,
+						     void __iomem *regs);
+void dcmipp_isp_params_ent_release(struct dcmipp_ent_device *ved);
 
+#endif

@@ -67,7 +67,6 @@ properties:
   rs485-rx-during-tx: true
 
   power-domains:
-    $ref: ../power/power-domain.yaml
     maxItems: 1
 
   rx-threshold:
@@ -81,6 +80,11 @@ properties:
       If value is set to 1, TX FIFO threshold is disabled.
     enum: [1, 2, 4, 8, 12, 14, 16]
     default: 8
+
+  feature-domains:
+    $ref: /schemas/types.yaml#/definitions/phandle-array
+    description: |
+      Phandle to the rifsc device to check access right.
 
 allOf:
   - $ref: rs485.yaml#

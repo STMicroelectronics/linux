@@ -11,6 +11,8 @@
 #ifndef _LTDC_H_
 #define _LTDC_H_
 
+#define LTDC_MAX_LAYER	4
+
 struct ltdc_caps {
 	u32 hw_version;		/* hardware version */
 	u32 nb_layers;		/* number of supported layers */
@@ -30,36 +32,50 @@ struct ltdc_caps {
 	bool crc;		/* cyclic redundancy check supported */
 	bool dynamic_zorder;	/* dynamic z-order */
 	bool plane_rotation;	/* plane rotation */
+	bool crtc_rotation;	/* crtc rotation */
 	bool fifo_threshold;	/* fifo underrun threshold supported */
+	bool plane_scaling[LTDC_MAX_LAYER];	/* plane scaling ability */
 };
-
-#define LTDC_MAX_LAYER	4
 
 struct fps_info {
 	unsigned int counter;
 	ktime_t last_timestamp;
 };
 
+struct ltdc_plat_data {
+	int pad_max_freq_hz;	/* max frequency supported by pad */
+};
+
 struct ltdc_device {
 	void __iomem *regs;
 	struct regmap *regmap;
 	struct clk *pixel_clk;	/* lcd pixel clock */
+	struct clk *bus_clk;	/* bus clock */
+	struct clk *ltdc_clk;	/* kernel clock */
+	struct clk *lvds_clk;	/* lvds clock */
 	struct mutex err_lock;	/* protecting error_status */
 	struct ltdc_caps caps;
 	u32 irq_status;
 	u32 fifo_err;		/* fifo underrun error counter */
 	u32 fifo_warn;		/* fifo underrun warning counter */
+	u32 fifo_rot;		/* fifo underrun rotation counter */
 	u32 fifo_threshold;	/* fifo underrun threshold */
 	u32 transfer_err;	/* transfer error counter */
 	struct fps_info plane_fpsi[LTDC_MAX_LAYER];
 	struct drm_atomic_state *suspend_state;
 	int crc_skip_count;
 	bool crc_active;
+	bool vblank_active;
+	u32 crc;
+	u32 max_burst_length;
+	struct reserved_mem *rot_mem;
 };
 
+int ltdc_parse_device_tree(struct device *dev);
+int ltdc_get_clk(struct device *dev, struct ltdc_device *ldev);
 int ltdc_load(struct drm_device *ddev);
 void ltdc_unload(struct drm_device *ddev);
-void ltdc_suspend(struct drm_device *ddev);
-int ltdc_resume(struct drm_device *ddev);
+void ltdc_suspend(struct ltdc_device *ldev);
+int ltdc_resume(struct ltdc_device *ldev);
 
 #endif

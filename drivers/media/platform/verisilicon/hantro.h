@@ -32,6 +32,8 @@ struct hantro_codec_ops;
 struct hantro_postproc_ops;
 
 #define HANTRO_JPEG_ENCODER	BIT(0)
+#define HANTRO_VP8_ENCODER	BIT(1)
+#define HANTRO_H264_ENCODER	BIT(2)
 #define HANTRO_ENCODERS		0x0000ffff
 #define HANTRO_MPEG2_DECODER	BIT(16)
 #define HANTRO_VP8_DECODER	BIT(17)
@@ -111,6 +113,7 @@ struct hantro_variant {
  * @HANTRO_MODE_VP8_DEC: VP8 decoder.
  * @HANTRO_MODE_HEVC_DEC: HEVC decoder.
  * @HANTRO_MODE_VP9_DEC: VP9 decoder.
+ * @HANTRO_MODE_VP8_ENC: VP8 encoder.
  */
 enum hantro_codec_mode {
 	HANTRO_MODE_NONE = -1,
@@ -120,6 +123,8 @@ enum hantro_codec_mode {
 	HANTRO_MODE_VP8_DEC,
 	HANTRO_MODE_HEVC_DEC,
 	HANTRO_MODE_VP9_DEC,
+	HANTRO_MODE_VP8_ENC,
+	HANTRO_MODE_H264_ENC,
 };
 
 /*
@@ -203,6 +208,7 @@ struct hantro_dev {
 	void __iomem *enc_base;
 	void __iomem *dec_base;
 	void __iomem *ctrl_base;
+	u32 max_burst_length;
 
 	struct mutex vpu_mutex;	/* video_device lock */
 	spinlock_t irqlock;
@@ -217,6 +223,8 @@ struct hantro_dev {
  * @fh:			V4L2 file handler.
  * @is_encoder:		Decoder or encoder context?
  *
+ * @str:		Placeholder for debug string
+ *
  * @sequence_cap:       Sequence counter for capture queue
  * @sequence_out:       Sequence counter for output queue
  *
@@ -228,6 +236,7 @@ struct hantro_dev {
  * @ctrl_handler:	Control handler used to register controls.
  * @jpeg_quality:	User-specified JPEG compression quality.
  * @bit_depth:		Bit depth of current frame
+ * @rotation:		Image clockwise rotation in degrees
  *
  * @codec_ops:		Set of operations related to codec mode.
  * @postproc:		Post-processing context.
@@ -243,6 +252,8 @@ struct hantro_ctx {
 	struct v4l2_fh fh;
 	bool is_encoder;
 
+	char str[400];
+
 	u32 sequence_cap;
 	u32 sequence_out;
 
@@ -254,6 +265,7 @@ struct hantro_ctx {
 	struct v4l2_ctrl_handler ctrl_handler;
 	int jpeg_quality;
 	int bit_depth;
+	int rotation;
 
 	const struct hantro_codec_ops *codec_ops;
 	struct hantro_postproc_ctx postproc;
@@ -265,6 +277,8 @@ struct hantro_ctx {
 		struct hantro_vp8_dec_hw_ctx vp8_dec;
 		struct hantro_hevc_dec_hw_ctx hevc_dec;
 		struct hantro_vp9_dec_hw_ctx vp9_dec;
+		struct hantro_vp8_enc_hw_ctx vp8_enc;
+		struct hantro_h264_enc_hw_ctx h264_enc;
 	};
 };
 
@@ -360,6 +374,12 @@ extern int hantro_debug;
 
 #define vpu_err(fmt, args...)					\
 	pr_err("%s:%d: " fmt, __func__, __LINE__, ##args)
+
+static inline unsigned int hantro_rounded_luma_size(unsigned int w,
+						    unsigned int h)
+{
+	return round_up(w, MB_DIM) * round_up(h, MB_DIM);
+}
 
 /* Structure access helpers. */
 static inline struct hantro_ctx *fh_to_ctx(struct v4l2_fh *fh)
@@ -481,5 +501,10 @@ void hantro_postproc_free(struct hantro_ctx *ctx);
 int hantro_postproc_alloc(struct hantro_ctx *ctx);
 int hanto_postproc_enum_framesizes(struct hantro_ctx *ctx,
 				   struct v4l2_frmsizeenum *fsize);
+
+void hantro_h1_set_axi_ctrl(struct hantro_dev *vpu, struct hantro_ctx *ctx);
+void hantro_h1_set_color_conv(struct hantro_dev *vpu, struct hantro_ctx *ctx);
+void hantro_h1_set_src_img_ctrl(struct hantro_dev *vpu, struct hantro_ctx *ctx);
+
 
 #endif /* HANTRO_H_ */

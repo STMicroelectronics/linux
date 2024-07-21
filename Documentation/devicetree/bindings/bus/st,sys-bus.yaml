@@ -21,6 +21,7 @@ properties:
     enum:
       - st,stm32mp13-sys-bus
       - st,stm32mp15-sys-bus
+      - st,stm32mp25-sys-bus
 
   reg:
     maxItems: 1
@@ -68,6 +69,11 @@ examples:
     // - the hash1 device refers to etzpc as his domain controller.
     // - same goes for rng1.
     // Access rights are verified before creating devices.
+
+    #include <dt-bindings/interrupt-controller/arm-gic.h>
+    #include <dt-bindings/clock/stm32mp1-clks.h>
+    #include <dt-bindings/reset/stm32mp1-resets.h>
+    #include <dt-bindings/bus/stm32mp15_sys_bus.h>
 
     etzpc: etzpc@0x5C007000 {
         compatible = "st,stm32mp15-sys-bus";

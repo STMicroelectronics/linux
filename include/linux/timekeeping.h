@@ -266,6 +266,11 @@ struct system_device_crosststamp {
 	ktime_t sys_monoraw;
 };
 
+struct device_device_crosststamp {
+	ktime_t device;
+	ktime_t peer_device;
+};
+
 /**
  * struct system_counterval_t - system counter value with the pointer to the
  *				corresponding clocksource

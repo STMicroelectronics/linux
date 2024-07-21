@@ -15,36 +15,18 @@
 
 #define H1_JPEG_QUANT_TABLE_COUNT 16
 
-static void hantro_h1_set_src_img_ctrl(struct hantro_dev *vpu,
-				       struct hantro_ctx *ctx)
-{
-	u32 overfill_r, overfill_b;
-	u32 reg;
-
-	/*
-	 * The format width and height are already macroblock aligned
-	 * by .vidioc_s_fmt_vid_cap_mplane() callback. Destination
-	 * format width and height can be further modified by
-	 * .vidioc_s_selection(), and the width is 4-aligned.
-	 */
-	overfill_r = ctx->src_fmt.width - ctx->dst_fmt.width;
-	overfill_b = ctx->src_fmt.height - ctx->dst_fmt.height;
-
-	reg = H1_REG_IN_IMG_CTRL_ROW_LEN(ctx->src_fmt.width)
-		| H1_REG_IN_IMG_CTRL_OVRFLR_D4(overfill_r / 4)
-		| H1_REG_IN_IMG_CTRL_OVRFLB(overfill_b)
-		| H1_REG_IN_IMG_CTRL_FMT(ctx->vpu_src_fmt->enc_fmt);
-	vepu_write_relaxed(vpu, reg, H1_REG_IN_IMG_CTRL);
-}
-
 static void hantro_h1_jpeg_enc_set_buffers(struct hantro_dev *vpu,
 					   struct hantro_ctx *ctx,
 					   struct vb2_buffer *src_buf,
 					   struct vb2_buffer *dst_buf)
 {
+	const u32 src_addr_regs[] = { H1_REG_ADDR_IN_PLANE_0,
+				      H1_REG_ADDR_IN_PLANE_1,
+				      H1_REG_ADDR_IN_PLANE_2 };
 	struct v4l2_pix_format_mplane *pix_fmt = &ctx->src_fmt;
-	dma_addr_t src[3];
+	size_t luma_size;
 	u32 size_left;
+	int i;
 
 	size_left = vb2_plane_size(dst_buf, 0) - ctx->vpu_dst_fmt->header_size;
 	if (WARN_ON(vb2_plane_size(dst_buf, 0) < ctx->vpu_dst_fmt->header_size))
@@ -57,23 +39,25 @@ static void hantro_h1_jpeg_enc_set_buffers(struct hantro_dev *vpu,
 			   H1_REG_ADDR_OUTPUT_STREAM);
 	vepu_write_relaxed(vpu, size_left, H1_REG_STR_BUF_LIMIT);
 
-	if (pix_fmt->num_planes == 1) {
-		src[0] = vb2_dma_contig_plane_dma_addr(src_buf, 0);
-		/* single plane formats we supported are all interlaced */
-		vepu_write_relaxed(vpu, src[0], H1_REG_ADDR_IN_PLANE_0);
-	} else if (pix_fmt->num_planes == 2) {
-		src[0] = vb2_dma_contig_plane_dma_addr(src_buf, 0);
-		src[1] = vb2_dma_contig_plane_dma_addr(src_buf, 1);
-		vepu_write_relaxed(vpu, src[0], H1_REG_ADDR_IN_PLANE_0);
-		vepu_write_relaxed(vpu, src[1], H1_REG_ADDR_IN_PLANE_1);
-	} else {
-		src[0] = vb2_dma_contig_plane_dma_addr(src_buf, 0);
-		src[1] = vb2_dma_contig_plane_dma_addr(src_buf, 1);
-		src[2] = vb2_dma_contig_plane_dma_addr(src_buf, 2);
-		vepu_write_relaxed(vpu, src[0], H1_REG_ADDR_IN_PLANE_0);
-		vepu_write_relaxed(vpu, src[1], H1_REG_ADDR_IN_PLANE_1);
-		vepu_write_relaxed(vpu, src[2], H1_REG_ADDR_IN_PLANE_2);
-	}
+	luma_size = hantro_rounded_luma_size(ctx->src_fmt.width,
+					     ctx->src_fmt.height);
+
+	vepu_write_relaxed(vpu,
+			   vb2_dma_contig_plane_dma_addr(src_buf, 0) +
+			   src_buf->planes[0].data_offset,
+			   src_addr_regs[0]);
+	vepu_write_relaxed(vpu,
+			   vb2_dma_contig_plane_dma_addr(src_buf, 0) +
+			   src_buf->planes[0].data_offset +
+			   luma_size,
+			   src_addr_regs[1]);
+
+	for (i = 1; i < pix_fmt->num_planes; ++i)
+		/* Multiplanes. */
+		vepu_write_relaxed(vpu,
+				   vb2_dma_contig_plane_dma_addr(src_buf, i) +
+				   src_buf->planes[i].data_offset,
+				   src_addr_regs[i]);
 }
 
 static void
@@ -132,15 +116,10 @@ int hantro_h1_jpeg_enc_run(struct hantro_ctx *ctx)
 	hantro_h1_jpeg_enc_set_qtable(vpu, jpeg_ctx.hw_luma_qtable,
 				      jpeg_ctx.hw_chroma_qtable);
 
-	reg = H1_REG_AXI_CTRL_OUTPUT_SWAP16
-		| H1_REG_AXI_CTRL_INPUT_SWAP16
-		| H1_REG_AXI_CTRL_BURST_LEN(16)
-		| H1_REG_AXI_CTRL_OUTPUT_SWAP32
-		| H1_REG_AXI_CTRL_INPUT_SWAP32
-		| H1_REG_AXI_CTRL_OUTPUT_SWAP8
-		| H1_REG_AXI_CTRL_INPUT_SWAP8;
+	hantro_h1_set_color_conv(vpu, ctx);
+
 	/* Make sure that all registers are written at this point. */
-	vepu_write(vpu, reg, H1_REG_AXI_CTRL);
+	hantro_h1_set_axi_ctrl(vpu, ctx);
 
 	reg = H1_REG_ENC_CTRL_WIDTH(MB_WIDTH(ctx->src_fmt.width))
 		| H1_REG_ENC_CTRL_HEIGHT(MB_HEIGHT(ctx->src_fmt.height))

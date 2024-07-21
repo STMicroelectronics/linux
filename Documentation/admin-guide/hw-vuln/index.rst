@@ -19,3 +19,6 @@ are configurable at compile, boot or run time.
    l1d_flush.rst
    processor_mmio_stale_data.rst
    cross-thread-rsb.rst
+   gather_data_sampling.rst
+   srso
+   reg-file-data-sampling

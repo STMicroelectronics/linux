@@ -99,6 +99,18 @@
 #define STM32_RTC_VERR_MAJREV_SHIFT	4
 #define STM32_RTC_VERR_MAJREV		GENMASK(7, 4)
 
+/* STM32_RTC_SECCFGR bit fields */
+#define STM32_RTC_SECCFGR		0x20
+#define STM32_RTC_SECCFGR_ALRA_SEC	BIT(0)
+#define STM32_RTC_SECCFGR_INIT_SEC	BIT(14)
+#define STM32_RTC_SECCFGR_SEC		BIT(15)
+
+/* STM32_RTC_RXCIDCFGR bit fields */
+#define STM32_RTC_RXCIDCFGR(x)		(0x80 + 0x4 * (x))
+#define STM32_RTC_RXCIDCFGR_CFEN	BIT(0)
+#define STM32_RTC_RXCIDCFGR_CID		GENMASK(6, 4)
+#define STM32_RTC_RXCIDCFGR_CID1	1
+
 /* STM32_RTC_WPR key constants */
 #define RTC_WPR_1ST_KEY			0xCA
 #define RTC_WPR_2ND_KEY			0x53
@@ -139,6 +151,7 @@ struct stm32_rtc_data {
 	bool need_accuracy;
 	bool has_lsco;
 	bool has_alarm_out;
+	bool rif_protected;
 };
 
 struct stm32_rtc {
@@ -155,6 +168,14 @@ struct stm32_rtc {
 	struct clk *clk_lsco;
 	int out_alarm;
 };
+
+struct stm32_rtc_rif_resource {
+	unsigned int num;
+	u32 bit;
+};
+
+static const struct stm32_rtc_rif_resource STM32_RTC_RES_ALRA = {0, STM32_RTC_SECCFGR_ALRA_SEC};
+static const struct stm32_rtc_rif_resource STM32_RTC_RES_INIT = {5, STM32_RTC_SECCFGR_INIT_SEC};
 
 /*
  *  -------------------------------------------------------------------------
@@ -721,6 +742,7 @@ static const struct stm32_rtc_data stm32_rtc_data = {
 	.need_accuracy = false,
 	.has_lsco = false,
 	.has_alarm_out = false,
+	.rif_protected = false,
 	.regs = {
 		.tr = 0x00,
 		.dr = 0x04,
@@ -746,6 +768,7 @@ static const struct stm32_rtc_data stm32h7_rtc_data = {
 	.need_accuracy = false,
 	.has_lsco = false,
 	.has_alarm_out = false,
+	.rif_protected = false,
 	.regs = {
 		.tr = 0x00,
 		.dr = 0x04,
@@ -780,6 +803,7 @@ static const struct stm32_rtc_data stm32mp1_data = {
 	.need_accuracy = true,
 	.has_lsco = true,
 	.has_alarm_out = true,
+	.rif_protected = false,
 	.regs = {
 		.tr = 0x00,
 		.dr = 0x04,
@@ -799,13 +823,59 @@ static const struct stm32_rtc_data stm32mp1_data = {
 	.clear_events = stm32mp1_rtc_clear_events,
 };
 
+static const struct stm32_rtc_data stm32mp25_data = {
+	.has_pclk = true,
+	.need_dbp = false,
+	.need_accuracy = true,
+	.has_lsco = true,
+	.has_alarm_out = true,
+	.rif_protected = true,
+	.regs = {
+		.tr = 0x00,
+		.dr = 0x04,
+		.cr = 0x18,
+		.isr = 0x0C, /* named RTC_ICSR on stm32mp25 */
+		.prer = 0x10,
+		.alrmar = 0x40,
+		.wpr = 0x24,
+		.sr = 0x50,
+		.scr = 0x5C,
+		.cfgr = 0x60,
+		.verr = 0x3F4,
+	},
+	.events = {
+		.alra = STM32_RTC_SR_ALRA,
+	},
+	.clear_events = stm32mp1_rtc_clear_events,
+};
+
 static const struct of_device_id stm32_rtc_of_match[] = {
 	{ .compatible = "st,stm32-rtc", .data = &stm32_rtc_data },
 	{ .compatible = "st,stm32h7-rtc", .data = &stm32h7_rtc_data },
 	{ .compatible = "st,stm32mp1-rtc", .data = &stm32mp1_data },
+	{ .compatible = "st,stm32mp25-rtc", .data = &stm32mp25_data },
 	{}
 };
 MODULE_DEVICE_TABLE(of, stm32_rtc_of_match);
+
+static int stm32_rtc_check_rif(struct stm32_rtc *stm32_rtc,
+			       struct stm32_rtc_rif_resource res)
+{
+	u32 rxcidcfgr = readl_relaxed(stm32_rtc->base + STM32_RTC_RXCIDCFGR(res.num));
+	u32 seccfgr;
+
+	/* Check if RTC available for our CID */
+	if ((rxcidcfgr & STM32_RTC_RXCIDCFGR_CFEN) &&
+	    (FIELD_GET(STM32_RTC_RXCIDCFGR_CID, rxcidcfgr) != STM32_RTC_RXCIDCFGR_CID1))
+		return -EACCES;
+
+	/* Check if RTC available for insecure world */
+	seccfgr = readl_relaxed(stm32_rtc->base + STM32_RTC_SECCFGR);
+	if ((seccfgr & STM32_RTC_SECCFGR_SEC) | (seccfgr & res.bit))
+		return -EACCES;
+
+	return 0;
+}
 
 static int stm32_rtc_init(struct platform_device *pdev,
 			  struct stm32_rtc *rtc)
@@ -962,6 +1032,16 @@ static int stm32_rtc_probe(struct platform_device *pdev)
 		regmap_update_bits(rtc->dbp, rtc->dbp_reg,
 				   rtc->dbp_mask, rtc->dbp_mask);
 
+	if (rtc->data->rif_protected) {
+		ret = stm32_rtc_check_rif(rtc, STM32_RTC_RES_INIT);
+		if (!ret)
+			ret = stm32_rtc_check_rif(rtc, STM32_RTC_RES_ALRA);
+		if (ret) {
+			dev_err(&pdev->dev, "Failed to probe RTC due to RIF configuration\n");
+			goto err;
+		}
+	}
+
 	/*
 	 * After a system reset, RTC_ISR.INITS flag can be read to check if
 	 * the calendar has been initialized or not. INITS flag is reset by a
@@ -998,6 +1078,9 @@ static int stm32_rtc_probe(struct platform_device *pdev)
 			ret);
 		goto err;
 	}
+
+	rtc->rtc_dev->range_min = RTC_TIMESTAMP_BEGIN_2000;
+	rtc->rtc_dev->range_max = RTC_TIMESTAMP_END_2099;
 
 	/* Handle RTC alarm interrupts */
 	ret = devm_request_threaded_irq(&pdev->dev, rtc->irq_alarm, NULL,

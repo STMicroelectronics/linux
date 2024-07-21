@@ -25,6 +25,7 @@ struct display_connector {
 	int			hpd_irq;
 
 	struct regulator	*dp_pwr;
+	struct regulator	*hdmi_pwr;
 	struct gpio_desc	*ddc_en;
 };
 
@@ -315,6 +316,38 @@ static int display_connector_probe(struct platform_device *pdev)
 		}
 	}
 
+	/* Get the PWR for HDMI connector. */
+	if (type == DRM_MODE_CONNECTOR_HDMIA) {
+		int ret;
+
+		conn->hdmi_pwr = devm_regulator_get_optional(&pdev->dev, "hdmi-pwr");
+
+		if (IS_ERR(conn->hdmi_pwr)) {
+			ret = PTR_ERR(conn->hdmi_pwr);
+
+			switch (ret) {
+			case -ENODEV:
+				conn->hdmi_pwr = NULL;
+				break;
+
+			case -EPROBE_DEFER:
+				return -EPROBE_DEFER;
+
+			default:
+				dev_err(&pdev->dev, "failed to get HDMI regulator: %d\n", ret);
+				return ret;
+			}
+		}
+
+		if (conn->hdmi_pwr) {
+			ret = regulator_enable(conn->hdmi_pwr);
+			if (ret) {
+				dev_err(&pdev->dev, "failed to enable HDMI regulator: %d\n", ret);
+				return ret;
+			}
+		}
+	}
+
 	/* Get the DP PWR for DP connector. */
 	if (type == DRM_MODE_CONNECTOR_DisplayPort) {
 		int ret;
@@ -391,6 +424,9 @@ static int display_connector_remove(struct platform_device *pdev)
 
 	if (conn->dp_pwr)
 		regulator_disable(conn->dp_pwr);
+
+	if (conn->hdmi_pwr)
+		regulator_disable(conn->hdmi_pwr);
 
 	drm_bridge_remove(&conn->bridge);
 

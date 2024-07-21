@@ -1,0 +1,244 @@
+# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/memory-controllers/st,stm32-omi.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: STM32 OSPI Memory Interface (OMI)
+
+maintainers:
+  - Patrice Chotard <patrice.chotard@foss.st.com>
+
+description: |
+  STM32 OSPI Memory Interface allows a SPI flash or HyperFlash connected to
+  the SoC to be accessed via the external address space.
+
+  The flash chip itself should be represented by a subnode of the STM32 OSPI
+  Memory Interface node. The flash interface is selected based on the
+  "compatible" property of this subnode:
+  - if it contains "jedec,spi-nor", then SPI is used;
+  - if it contains "spi-nand", then SPI is used.
+  - if it contains "cfi-flash", then HyperFlash is used.
+
+properties:
+  compatible:
+    items:
+      - const: st,stm32mp25-omi
+
+  reg:
+    description: registers
+
+  "#address-cells":
+    enum: [1, 2]
+
+  "#size-cells":
+    enum: [0, 1]
+
+  memory-region:
+    description: Phandle to a node describing memory-map region to be used
+
+  clocks:
+    maxItems: 1
+
+  interrupts:
+    maxItems: 1
+
+  resets:
+    maxItems: 2
+
+  dmas:
+    description: tx and rx DMA channel
+    minItems: 1
+    maxItems: 2
+
+  dma-names:
+    items:
+      enum: [tx, rx]
+    minItems: 1
+    maxItems: 2
+
+  st,syscfg-dlyb:
+    description: |
+      Use to set the OSPI delay block within SYSCFG to:
+        Tune the phase of the RX sampling clock (or DQS) in order
+        to sample the data in their valid window.
+        Tune the phase of the TX launch clock in order to meet setup
+        and hold constraints of TX signals versus the memory clock.
+    $ref: "/schemas/types.yaml#/definitions/phandle-array"
+    items:
+      minItems: 2
+      maxItems: 2
+
+  feature-domains:
+    $ref: /schemas/types.yaml#/definitions/phandle-array
+    description: |
+      Phandle to the rifsc device to check access right.
+
+  power-domains:
+    maxItems: 1
+
+required:
+  - compatible
+  - reg
+  - "#address-cells"
+  - "#size-cells"
+  - clocks
+  - interrupts
+  - st,syscfg-dlyb
+
+patternProperties:
+  "flash@[0-9a-f]+$":
+    type: object
+    properties:
+      compatible:
+        oneOf:
+          - items:
+              - enum:
+                  - cypress,hyperflash
+              - const: cfi-flash
+          - enum:
+              - jedec,spi-nor
+              - spi-nand
+              - st,octal-bus
+
+    allOf:
+      - if:
+          properties:
+            compatible:
+              enum:
+                - jedec,spi-nor
+                - spi-nand
+                - st,octal-bus
+
+        then:
+          $ref: "/schemas/spi/spi-controller.yaml#"
+
+      - if:
+          properties:
+            compatible:
+              contains:
+                enum:
+                  - cfi-flash
+
+        then:
+          $ref: "/schemas/mtd/mtd-physmap.yaml#"
+
+          properties:
+            st,max-frequency:
+              $ref: /schemas/types.yaml#/definitions/uint32
+              description:
+                Maximum clocking speed of the device in Hz.
+
+            st,tacc-ns:
+              description:
+                Device initial access time.
+
+            st,wzl:
+              $ref: /schemas/types.yaml#/definitions/flag
+              description:
+                Enable write zero latency
+
+          required:
+            - st,max-frequency
+
+      - if:
+          properties:
+            compatible:
+              contains:
+                enum:
+                  - st,octal-bus
+
+        then:
+          required:
+            - spi-max-frequency
+
+additionalProperties: false
+
+examples:
+  - |
+    #include <dt-bindings/interrupt-controller/arm-gic.h>
+    #include <dt-bindings/bus/stm32mp25_sys_bus.h>
+    #include <dt-bindings/clock/stm32mp25-clks.h>
+    #include <dt-bindings/reset/stm32mp25-resets.h>
+    spi@40430000 {
+      compatible = "st,stm32mp25-omi";
+      reg = <0x40430000 0x400>;
+      memory-region = <&mm_ospi1>;
+      interrupts = <GIC_SPI 163 IRQ_TYPE_LEVEL_HIGH>;
+      dmas = <&hpdma 2 0x62 0x00003121 0x0>,
+             <&hpdma 2 0x42 0x00003112 0x0>;
+      dma-names = "tx", "rx";
+      st,syscfg-dlyb = <&syscfg 0x1000>;
+      clocks = <&scmi_clk CK_SCMI_OSPI1>;
+      resets = <&scmi_reset RST_SCMI_OSPI1DLL>, <&scmi_reset RST_SCMI_OSPI1DLL>;
+      feature-domains = <&rifsc STM32MP25_RIFSC_OCTOSPI1_ID>;
+      power-domains = <&CLUSTER_PD>;
+
+      #address-cells = <1>;
+      #size-cells = <0>;
+
+      flash@0 {
+        compatible = "jedec,spi-nor";
+        reg = <0>;
+        spi-rx-bus-width = <4>;
+        spi-max-frequency = <108000000>;
+      };
+    };
+
+  - |
+    #include <dt-bindings/interrupt-controller/arm-gic.h>
+    #include <dt-bindings/bus/stm32mp25_sys_bus.h>
+    #include <dt-bindings/clock/stm32mp25-clks.h>
+    #include <dt-bindings/reset/stm32mp25-resets.h>
+    memory-controller@40430000 {
+      compatible = "st,stm32mp25-omi";
+      reg = <0x40430000 0x400>;
+      memory-region = <&mm_ospi1>;
+      interrupts = <GIC_SPI 163 IRQ_TYPE_LEVEL_HIGH>;
+      dmas = <&hpdma 2 0x42 0x00003013 0x0>;
+      dma-names = "rx";
+      st,syscfg-dlyb = <&syscfg 0x1000>;
+      clocks = <&scmi_clk CK_SCMI_OSPI1>;
+      resets = <&scmi_reset RST_SCMI_OSPI1>, <&scmi_reset RST_SCMI_OSPI1DLL>;
+      feature-domains = <&rifsc STM32MP25_RIFSC_OCTOSPI1_ID>;
+      power-domains = <&CLUSTER_PD>;
+
+      #address-cells = <2>;
+      #size-cells = <1>;
+
+      flash@0 {
+        compatible = "cypress,hyperflash", "cfi-flash";
+        reg = <0x2 0x0 0x4000000>;
+        st,max-frequency = <100000000>;
+        st,tacc-ns = <48>;
+      };
+    };
+  - |
+    #include <dt-bindings/interrupt-controller/arm-gic.h>
+    #include <dt-bindings/bus/stm32mp25_sys_bus.h>
+    #include <dt-bindings/clock/stm32mp25-clks.h>
+    #include <dt-bindings/reset/stm32mp25-resets.h>
+    memory-controller@40430000 {
+      compatible = "st,stm32mp25-omi";
+      reg = <0x40430000 0x400>;
+      memory-region = <&mm_ospi1>;
+      interrupts = <GIC_SPI 163 IRQ_TYPE_LEVEL_HIGH>;
+      dmas = <&hpdma 2 0x62 0x00003121 0x0>,
+             <&hpdma 2 0x42 0x00003112 0x0>;
+      dma-names = "tx", "rx";
+      st,syscfg-dlyb = <&syscfg 0x1000>;
+      clocks = <&scmi_clk CK_SCMI_OSPI1>;
+      resets = <&scmi_reset RST_SCMI_OSPI1>, <&scmi_reset RST_SCMI_OSPI1DLL>;
+      feature-domains = <&rifsc STM32MP25_RIFSC_OCTOSPI1_ID>;
+      power-domains = <&CLUSTER_PD>;
+      cs-gpios = <&gpiod 1 GPIO_ACTIVE_LOW>;
+
+      #address-cells = <1>;
+      #size-cells = <0>;
+
+      flash@0 {
+        compatible = "st,octal-bus";
+        reg = <0>;
+        spi-max-frequency = <50000000>;
+      };
+    };

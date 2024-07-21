@@ -95,13 +95,21 @@ struct ptp_clock_caps {
 	int cross_timestamping;
 	/* Whether the clock supports adjust phase */
 	int adjust_phase;
-	int rsv[12];   /* Reserved for future use. */
+	/* Whether the clock supports precise cross timestamps with peer clock */
+	int peer_cross_timestamping;
+	int rsv[11];   /* Reserved for future use. */
 };
 
 struct ptp_extts_request {
 	unsigned int index;  /* Which channel to configure. */
 	unsigned int flags;  /* Bit field for PTP_xxx flags. */
 	unsigned int rsv[2]; /* Reserved for future use. */
+};
+
+struct ptp_ptp_offset_precise {
+	struct ptp_clock_time device;
+	struct ptp_clock_time peer;
+	unsigned int rsv[4];    /* Reserved for future use. */
 };
 
 struct ptp_perout_request {
@@ -223,6 +231,8 @@ struct ptp_pin_desc {
 	_IOWR(PTP_CLK_MAGIC, 17, struct ptp_sys_offset_precise)
 #define PTP_SYS_OFFSET_EXTENDED2 \
 	_IOWR(PTP_CLK_MAGIC, 18, struct ptp_sys_offset_extended)
+#define PTP_PTP_OFFSET_PRECISE \
+	_IOWR(PTP_CLK_MAGIC, 19, struct ptp_ptp_offset_precise)
 
 struct ptp_extts_event {
 	struct ptp_clock_time t; /* Time event occured. */

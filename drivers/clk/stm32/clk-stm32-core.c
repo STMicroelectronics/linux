@@ -141,6 +141,29 @@ static int stm32_mux_set_parent(void __iomem *base,
 	return 0;
 }
 
+#ifdef CONFIG_PM_SLEEP
+static void stm32_gate_force_endisable(void __iomem *base,
+				       struct clk_stm32_clock_data *data,
+				       u16 gate_id,
+				       int enable)
+{
+	const struct stm32_gate_cfg *gate = &data->gates[gate_id];
+	void __iomem *addr = base + gate->offset;
+
+	if (enable) {
+		if (gate->set_clr != 0)
+			writel(BIT(gate->bit_idx), addr);
+		else
+			writel(readl(addr) | BIT(gate->bit_idx), addr);
+	} else {
+		if (gate->set_clr != 0)
+			writel(BIT(gate->bit_idx), addr + gate->set_clr);
+		else
+			writel(readl(addr) & ~BIT(gate->bit_idx), addr);
+	}
+}
+#endif
+
 static void stm32_gate_endisable(void __iomem *base,
 				 struct clk_stm32_clock_data *data,
 				 u16 gate_id, int enable)
@@ -335,11 +358,28 @@ static void clk_stm32_gate_disable_unused(struct clk_hw *hw)
 	spin_unlock_irqrestore(gate->lock, flags);
 }
 
+#ifdef CONFIG_PM_SLEEP
+static void clk_stm32_pm_gate_restore(struct clk_hw *hw)
+{
+	struct clk_stm32_gate *gate = to_clk_stm32_gate(hw);
+	unsigned long flags = 0;
+
+	if (__clk_get_enable_count(hw->clk)) {
+		spin_lock_irqsave(gate->lock, flags);
+		stm32_gate_force_endisable(gate->base, gate->clock_data, gate->gate_id, 1);
+		spin_unlock_irqrestore(gate->lock, flags);
+	}
+}
+#endif
+
 const struct clk_ops clk_stm32_gate_ops = {
 	.enable		= clk_stm32_gate_enable,
 	.disable	= clk_stm32_gate_disable,
 	.is_enabled	= clk_stm32_gate_is_enabled,
 	.disable_unused	= clk_stm32_gate_disable_unused,
+#ifdef CONFIG_PM_SLEEP
+	.restore_context = clk_stm32_pm_gate_restore,
+#endif
 };
 
 static int clk_stm32_divider_set_rate(struct clk_hw *hw, unsigned long rate,
@@ -611,6 +651,21 @@ static void clk_stm32_composite_disable_unused(struct clk_hw *hw)
 	spin_unlock_irqrestore(composite->lock, flags);
 }
 
+#ifdef CONFIG_PM_SLEEP
+static void clk_stm32_pm_composite_restore(struct clk_hw *hw)
+{
+	struct clk_stm32_composite *composite = to_clk_stm32_composite(hw);
+	unsigned long flags = 0;
+
+	if (__clk_get_enable_count(hw->clk)) {
+		spin_lock_irqsave(composite->lock, flags);
+		stm32_gate_force_endisable(composite->base, composite->clock_data,
+					   composite->gate_id, 1);
+		spin_unlock_irqrestore(composite->lock, flags);
+	}
+}
+#endif
+
 const struct clk_ops clk_stm32_composite_ops = {
 	.set_rate	= clk_stm32_composite_set_rate,
 	.recalc_rate	= clk_stm32_composite_recalc_rate,
@@ -621,6 +676,9 @@ const struct clk_ops clk_stm32_composite_ops = {
 	.disable	= clk_stm32_composite_gate_disable,
 	.is_enabled	= clk_stm32_composite_is_enabled,
 	.disable_unused	= clk_stm32_composite_disable_unused,
+#ifdef CONFIG_PM_SLEEP
+	.restore_context = clk_stm32_pm_composite_restore,
+#endif
 };
 
 struct clk_hw *clk_stm32_mux_register(struct device *dev,

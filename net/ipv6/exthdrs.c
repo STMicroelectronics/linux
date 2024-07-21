@@ -180,6 +180,8 @@ static bool ip6_parse_tlv(bool hopbyhop,
 				case IPV6_TLV_IOAM:
 					if (!ipv6_hop_ioam(skb, off))
 						return false;
+
+					nh = skb_network_header(skb);
 					break;
 				case IPV6_TLV_JUMBO:
 					if (!ipv6_hop_jumbo(skb, off))
@@ -569,24 +571,6 @@ looped_back:
 		return -1;
 	}
 
-	if (skb_cloned(skb)) {
-		if (pskb_expand_head(skb, IPV6_RPL_SRH_WORST_SWAP_SIZE, 0,
-				     GFP_ATOMIC)) {
-			__IP6_INC_STATS(net, ip6_dst_idev(skb_dst(skb)),
-					IPSTATS_MIB_OUTDISCARDS);
-			kfree_skb(skb);
-			return -1;
-		}
-	} else {
-		err = skb_cow_head(skb, IPV6_RPL_SRH_WORST_SWAP_SIZE);
-		if (unlikely(err)) {
-			kfree_skb(skb);
-			return -1;
-		}
-	}
-
-	hdr = (struct ipv6_rpl_sr_hdr *)skb_transport_header(skb);
-
 	if (!pskb_may_pull(skb, ipv6_rpl_srh_size(n, hdr->cmpri,
 						  hdr->cmpre))) {
 		kfree_skb(skb);
@@ -630,6 +614,17 @@ looped_back:
 	skb_pull(skb, ((hdr->hdrlen + 1) << 3));
 	skb_postpull_rcsum(skb, oldhdr,
 			   sizeof(struct ipv6hdr) + ((hdr->hdrlen + 1) << 3));
+	if (unlikely(!hdr->segments_left)) {
+		if (pskb_expand_head(skb, sizeof(struct ipv6hdr) + ((chdr->hdrlen + 1) << 3), 0,
+				     GFP_ATOMIC)) {
+			__IP6_INC_STATS(net, ip6_dst_idev(skb_dst(skb)), IPSTATS_MIB_OUTDISCARDS);
+			kfree_skb(skb);
+			kfree(buf);
+			return -1;
+		}
+
+		oldhdr = ipv6_hdr(skb);
+	}
 	skb_push(skb, ((chdr->hdrlen + 1) << 3) + sizeof(struct ipv6hdr));
 	skb_reset_network_header(skb);
 	skb_mac_header_rebuild(skb);
@@ -980,6 +975,14 @@ static bool ipv6_hop_ioam(struct sk_buff *skb, int optoff)
 
 		if (!skb_valid_dst(skb))
 			ip6_route_input(skb);
+
+		/* About to mangle packet header */
+		if (skb_ensure_writable(skb, optoff + 2 + hdr->opt_len))
+			goto drop;
+
+		/* Trace pointer may have changed */
+		trace = (struct ioam6_trace_hdr *)(skb_network_header(skb)
+						   + optoff + sizeof(*hdr));
 
 		ioam6_fill_trace_data(skb, ns, trace, true);
 		break;

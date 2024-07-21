@@ -69,6 +69,7 @@ config X86
 	select ARCH_ENABLE_THP_MIGRATION if X86_64 && TRANSPARENT_HUGEPAGE
 	select ARCH_HAS_ACPI_TABLE_UPGRADE	if ACPI
 	select ARCH_HAS_CACHE_LINE_SIZE
+	select ARCH_HAS_CPU_FINALIZE_INIT
 	select ARCH_HAS_CURRENT_STACK_POINTER
 	select ARCH_HAS_DEBUG_VIRTUAL
 	select ARCH_HAS_DEBUG_VM_PGTABLE	if !X86_PAE
@@ -271,6 +272,7 @@ config X86
 	select HAVE_GENERIC_VDSO
 	select HOTPLUG_SMT			if SMP
 	select IRQ_FORCED_THREADING
+	select LOCK_MM_AND_FIND_VMA
 	select NEED_PER_CPU_EMBED_FIRST_CHUNK
 	select NEED_PER_CPU_PAGE_FIRST_CHUNK
 	select NEED_SG_DMA_LENGTH
@@ -1980,6 +1982,23 @@ config EFI_STUB
 
 	  See Documentation/admin-guide/efi-stub.rst for more information.
 
+config EFI_HANDOVER_PROTOCOL
+	bool "EFI handover protocol (DEPRECATED)"
+	depends on EFI_STUB
+	default y
+	help
+	  Select this in order to include support for the deprecated EFI
+	  handover protocol, which defines alternative entry points into the
+	  EFI stub.  This is a practice that has no basis in the UEFI
+	  specification, and requires a priori knowledge on the part of the
+	  bootloader about Linux/x86 specific ways of passing the command line
+	  and initrd, and where in memory those assets may be loaded.
+
+	  If in doubt, say Y. Even though the corresponding support is not
+	  present in upstream GRUB or other bootloaders, most distros build
+	  GRUB with numerous downstream patches applied, and may rely on the
+	  handover protocol as as result.
+
 config EFI_MIXED
 	bool "EFI mixed-mode support"
 	depends on EFI_STUB && X86_64
@@ -2510,6 +2529,13 @@ config CPU_IBRS_ENTRY
 	  This mitigates both spectre_v2 and retbleed at great cost to
 	  performance.
 
+config CPU_SRSO
+	bool "Mitigate speculative RAS overflow on AMD"
+	depends on CPU_SUP_AMD && X86_64 && RETHUNK
+	default y
+	help
+	  Enable the SRSO mitigation needed on AMD Zen1-4 machines.
+
 config SLS
 	bool "Mitigate Straight-Line-Speculation"
 	depends on CC_HAS_SLS && X86_64
@@ -2519,6 +2545,36 @@ config SLS
 	  Compile the kernel with straight-line-speculation options to guard
 	  against straight line speculation. The kernel image might be slightly
 	  larger.
+
+config GDS_FORCE_MITIGATION
+	bool "Force GDS Mitigation"
+	depends on CPU_SUP_INTEL
+	default n
+	help
+	  Gather Data Sampling (GDS) is a hardware vulnerability which allows
+	  unprivileged speculative access to data which was previously stored in
+	  vector registers.
+
+	  This option is equivalent to setting gather_data_sampling=force on the
+	  command line. The microcode mitigation is used if present, otherwise
+	  AVX is disabled as a mitigation. On affected systems that are missing
+	  the microcode any userspace code that unconditionally uses AVX will
+	  break with this option set.
+
+	  Setting this option on systems not vulnerable to GDS has no effect.
+
+	  If in doubt, say N.
+
+config MITIGATION_RFDS
+	bool "RFDS Mitigation"
+	depends on CPU_SUP_INTEL
+	default y
+	help
+	  Enable mitigation for Register File Data Sampling (RFDS) by default.
+	  RFDS is a hardware vulnerability which affects Intel Atom CPUs. It
+	  allows unprivileged speculative access to stale data previously
+	  stored in floating point, vector and integer registers.
+	  See also <file:Documentation/admin-guide/hw-vuln/reg-file-data-sampling.rst>
 
 endif
 

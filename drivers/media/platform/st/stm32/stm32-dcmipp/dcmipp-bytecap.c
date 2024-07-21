@@ -8,7 +8,6 @@
  *          for STMicroelectronics.
  */
 
-#include <linux/component.h>
 #include <linux/delay.h>
 #include <linux/iopoll.h>
 #include <linux/module.h>
@@ -73,6 +72,18 @@ static const struct dcmipp_bytecap_pix_map dcmipp_bytecap_pix_map_list[] = {
 	PIXMAP_MBUS_PFMT(SGBRG8_1X8, SGBRG8),
 	PIXMAP_MBUS_PFMT(SGRBG8_1X8, SGRBG8),
 	PIXMAP_MBUS_PFMT(SRGGB8_1X8, SRGGB8),
+	PIXMAP_MBUS_PFMT(SBGGR10_1X10, SBGGR10),
+	PIXMAP_MBUS_PFMT(SGBRG10_1X10, SGBRG10),
+	PIXMAP_MBUS_PFMT(SGRBG10_1X10, SGRBG10),
+	PIXMAP_MBUS_PFMT(SRGGB10_1X10, SRGGB10),
+	PIXMAP_MBUS_PFMT(SBGGR12_1X12, SBGGR12),
+	PIXMAP_MBUS_PFMT(SGBRG12_1X12, SGBRG12),
+	PIXMAP_MBUS_PFMT(SGRBG12_1X12, SGRBG12),
+	PIXMAP_MBUS_PFMT(SRGGB12_1X12, SRGGB12),
+	PIXMAP_MBUS_PFMT(SBGGR14_1X14, SBGGR14),
+	PIXMAP_MBUS_PFMT(SGBRG14_1X14, SGBRG14),
+	PIXMAP_MBUS_PFMT(SGRBG14_1X14, SGRBG14),
+	PIXMAP_MBUS_PFMT(SRGGB14_1X14, SRGGB14),
 	PIXMAP_MBUS_PFMT(JPEG_1X8, JPEG),
 };
 
@@ -120,7 +131,6 @@ struct dcmipp_bytecap_device {
 	struct dcmipp_ent_device ved;
 	struct video_device vdev;
 	struct device *dev;
-	struct device *cdev;
 	struct v4l2_pix_format format;
 	struct vb2_queue queue;
 	struct list_head buffers;
@@ -142,7 +152,6 @@ struct dcmipp_bytecap_device {
 	struct dcmipp_buf *active, *next;
 
 	void __iomem *regs;
-	struct reset_control *rstc;
 
 	u32 cmier;
 	u32 cmsr2;
@@ -168,49 +177,6 @@ static const struct v4l2_pix_format fmt_default = {
 	.quantization = DCMIPP_QUANTIZATION_DEFAULT,
 	.xfer_func = DCMIPP_XFER_FUNC_DEFAULT,
 };
-
-static inline int frame_size(u32 width, u32 height, u32 format)
-{
-	switch (format) {
-	case V4L2_PIX_FMT_SBGGR8:
-	case V4L2_PIX_FMT_SGBRG8:
-	case V4L2_PIX_FMT_SGRBG8:
-	case V4L2_PIX_FMT_SRGGB8:
-	case V4L2_PIX_FMT_GREY:
-		return (width * height);
-	case V4L2_PIX_FMT_RGB565:
-	case V4L2_PIX_FMT_YUYV:
-	case V4L2_PIX_FMT_YVYU:
-	case V4L2_PIX_FMT_UYVY:
-	case V4L2_PIX_FMT_VYUY:
-		return (width * height * 2);
-	case V4L2_PIX_FMT_JPEG:
-		return (width * height);
-	default:
-		return 0;
-	}
-}
-
-static inline int frame_stride(u32 width, u32 format)
-{
-	switch (format) {
-	case V4L2_PIX_FMT_SBGGR8:
-	case V4L2_PIX_FMT_SGBRG8:
-	case V4L2_PIX_FMT_SGRBG8:
-	case V4L2_PIX_FMT_SRGGB8:
-	case V4L2_PIX_FMT_GREY:
-	case V4L2_PIX_FMT_JPEG:
-		return width;
-	case V4L2_PIX_FMT_RGB565:
-	case V4L2_PIX_FMT_YUYV:
-	case V4L2_PIX_FMT_YVYU:
-	case V4L2_PIX_FMT_UYVY:
-	case V4L2_PIX_FMT_VYUY:
-		return (width * 2);
-	default:
-		return 0;
-	}
-}
 
 static inline int hdw_pixel_alignment(u32 format)
 {
@@ -292,8 +258,13 @@ static int dcmipp_bytecap_try_fmt_vid_cap(struct file *file, void *priv,
 			"resolution updated: %dx%d -> %dx%d\n",
 			in_w, in_h, format->width, format->height);
 
-	format->bytesperline = frame_stride(format->width, format->pixelformat);
-	format->sizeimage = frame_size(format->width, format->height, format->pixelformat);
+	if (format->pixelformat == V4L2_PIX_FMT_JPEG) {
+		format->bytesperline = format->width;
+		format->sizeimage = format->bytesperline * format->height;
+	} else {
+		v4l2_fill_pixfmt(format, format->pixelformat,
+				 format->width, format->height);
+	}
 
 	if (format->field == V4L2_FIELD_ANY)
 		format->field = fmt_default.field;
@@ -372,7 +343,6 @@ static int dcmipp_bytecap_enum_framesizes(struct file *file, void *fh,
 	return 0;
 }
 
-/* TODO - based on the explanation text, should also use v4l2_pipeline_link_notify */
 static int dcmipp_bytecap_open(struct file *file)
 {
 	struct dcmipp_bytecap_device *vcap = video_drvdata(file);
@@ -447,9 +417,12 @@ static int dcmipp_pipeline_s_stream(struct dcmipp_bytecap_device *vcap,
 				    int state)
 {
 	struct media_entity *entity = &vcap->vdev.entity;
+	struct media_device *mdev = entity->graph_obj.mdev;
 	struct v4l2_subdev *subdev;
 	struct media_pad *pad;
-	int ret;
+	int ret = 0;
+
+	mutex_lock(&mdev->graph_mutex);
 
 	/* Start/stop all entities within pipeline */
 	while (1) {
@@ -464,21 +437,43 @@ static int dcmipp_pipeline_s_stream(struct dcmipp_bytecap_device *vcap,
 		entity = pad->entity;
 		subdev = media_entity_to_v4l2_subdev(entity);
 
+		if (state) {
+			/* Increment stream_count to indicate that entity is streamon */
+			entity->stream_count++;
+
+			/*
+			 * Do not streamon entities already started and streamon
+			 * by another capture pipeline
+			 */
+			if (entity->stream_count > 1)
+				continue;
+		} else {
+			/* Decrement stream_count to indicate that entity is streamoff. */
+			entity->stream_count--;
+
+			/*
+			 * Only streamoff if entity is not owned anymore
+			 * by other pipelines
+			 */
+			if (entity->stream_count > 0)
+				continue;
+		}
+
 		ret = v4l2_subdev_call(subdev, video, s_stream, state);
 		if (ret < 0 && ret != -ENOIOCTLCMD) {
 			dev_err(vcap->dev, "%s: \"%s\" failed to %s streaming (%d)\n",
 				__func__, subdev->name,
 				state ? "start" : "stop", ret);
 
-			if (!state)
-				v4l2_subdev_call(subdev, core, s_power, state);
-
-			return ret;
+			goto out;
 		}
 
 		dev_dbg(vcap->dev, "\"%s\" is %s\n",
 			subdev->name, state ? "started" : "stopped");
 	}
+
+out:
+	mutex_unlock(&mdev->graph_mutex);
 
 	return 0;
 }
@@ -503,6 +498,8 @@ static int dcmipp_bytecap_start_streaming(struct vb2_queue *vq,
 {
 	struct dcmipp_bytecap_device *vcap = vb2_get_drv_priv(vq);
 	struct media_entity *entity = &vcap->vdev.entity;
+	struct media_device *mdev = entity->graph_obj.mdev;
+	struct media_pipeline *pipe;
 	struct dcmipp_buf *buf, *node;
 	int ret;
 
@@ -517,15 +514,28 @@ static int dcmipp_bytecap_start_streaming(struct vb2_queue *vq,
 	vcap->underrun_count = 0;
 	vcap->nactive_count = 0;
 
-	ret = pm_runtime_get_sync(vcap->cdev);
+	ret = pm_runtime_get_sync(vcap->dev);
 	if (ret < 0) {
 		dev_err(vcap->dev, "%s: Failed to start streaming, cannot get sync (%d)\n",
 			__func__, ret);
 		goto err_pm_put;
 	}
 
-	/* Start the media pipeline */
-	ret = media_pipeline_start(entity->pads, &vcap->pipe);
+	/*
+	 * Start the media pipeline
+	 *
+	 * Pipeline is shared between all elements of the pipeline
+	 * including video capture nodes.
+	 * Instead of creating a common media_pipeline struct
+	 * global variable, use the one of the first capture
+	 * node. All the elements of the pipeline -including
+	 * other capture nodes- will be then assigned to this
+	 * pipeline (entity->pipe) in __media_pipeline_start().
+	 */
+	mutex_lock(&mdev->graph_mutex);
+	pipe = entity->pads[0].pipe ? : &vcap->pipe;
+	ret = __video_device_pipeline_start(&vcap->vdev, pipe);
+	mutex_unlock(&mdev->graph_mutex);
 	if (ret) {
 		dev_err(vcap->dev, "%s: Failed to start streaming, media pipeline start error (%d)\n",
 			__func__, ret);
@@ -563,7 +573,9 @@ static int dcmipp_bytecap_start_streaming(struct vb2_queue *vq,
 
 	/* Enable interruptions */
 	vcap->cmier |= DCMIPP_CMIER_P0ALL;
+	spin_lock(&vcap->vdev.v4l2_dev->lock);
 	reg_set(vcap, DCMIPP_CMIER, vcap->cmier);
+	spin_unlock(&vcap->vdev.v4l2_dev->lock);
 
 	vcap->state = RUNNING;
 
@@ -574,7 +586,7 @@ static int dcmipp_bytecap_start_streaming(struct vb2_queue *vq,
 err_media_pipeline_stop:
 	media_pipeline_stop(entity->pads);
 err_pm_put:
-	pm_runtime_put(vcap->cdev);
+	pm_runtime_put(vcap->dev);
 	spin_lock_irq(&vcap->irqlock);
 	/*
 	 * Return all buffers to vb2 in QUEUED state.
@@ -619,7 +631,9 @@ static void dcmipp_bytecap_stop_streaming(struct vb2_queue *vq)
 	media_pipeline_stop(vcap->vdev.entity.pads);
 
 	/* Disable interruptions */
+	spin_lock(&vcap->vdev.v4l2_dev->lock);
 	reg_clear(vcap, DCMIPP_CMIER, vcap->cmier);
+	spin_unlock(&vcap->vdev.v4l2_dev->lock);
 
 	/* Stop capture */
 	reg_clear(vcap, DCMIPP_P0FCTCR, DCMIPP_P0FCTCR_CPTREQ);
@@ -651,18 +665,7 @@ static void dcmipp_bytecap_stop_streaming(struct vb2_queue *vq)
 
 	spin_unlock_irq(&vcap->irqlock);
 
-	pm_runtime_put(vcap->cdev);
-
-	if (ret) {
-		/* Reset IP on timeout */
-		if (reset_control_assert(vcap->rstc))
-			dev_warn(vcap->dev, "Failed to assert the reset line\n");
-
-		usleep_range(3000, 5000);
-
-		if (reset_control_deassert(vcap->rstc))
-			dev_warn(vcap->dev, "Failed to deassert the reset line\n");
-	}
+	pm_runtime_put(vcap->dev);
 
 	if (vcap->errors_count)
 		dev_warn(vcap->dev, "Some errors found while streaming: errors=%d (overrun=%d, limit=%d, nactive=%d), underrun=%d, buffers=%d\n",
@@ -798,14 +801,12 @@ static void dcmipp_bytecap_release(struct video_device *vdev)
 	kfree(vcap);
 }
 
-static void dcmipp_bytecap_comp_unbind(struct device *comp,
-				       struct device *master,
-				       void *master_data)
+void dcmipp_bytecap_ent_release(struct dcmipp_ent_device *ved)
 {
-	struct dcmipp_ent_device *ved = dev_get_drvdata(comp);
 	struct dcmipp_bytecap_device *vcap =
 		container_of(ved, struct dcmipp_bytecap_device, ved);
 
+	mutex_destroy(&vcap->lock);
 	media_entity_cleanup(ved->ent);
 	vb2_video_unregister_device(&vcap->vdev);
 }
@@ -945,9 +946,10 @@ static irqreturn_t dcmipp_bytecap_irq_callback(int irq, void *arg)
 {
 	struct dcmipp_bytecap_device *vcap =
 			container_of(arg, struct dcmipp_bytecap_device, ved);
+	struct dcmipp_ent_device *ved = arg;
 
 	/* Store interrupt status register */
-	vcap->cmsr2 = reg_read(vcap, DCMIPP_CMSR2);
+	vcap->cmsr2 = ved->cmsr2 & vcap->cmier;
 	vcap->it_count++;
 
 	/* Clear interrupt */
@@ -956,11 +958,11 @@ static irqreturn_t dcmipp_bytecap_irq_callback(int irq, void *arg)
 	return IRQ_WAKE_THREAD;
 }
 
-static int dcmipp_bytecap_comp_bind(struct device *comp, struct device *master,
-				    void *master_data)
+struct dcmipp_ent_device *dcmipp_bytecap_ent_init(struct device *dev,
+						  const char *entity_name,
+						  struct v4l2_device *v4l2_dev,
+						  void __iomem *regs)
 {
-	struct dcmipp_bind_data *bind_data = master_data;
-	struct dcmipp_platform_data *pdata = comp->platform_data;
 	struct dcmipp_bytecap_device *vcap;
 	struct v4l2_pix_format *format;
 	struct video_device *vdev;
@@ -970,7 +972,7 @@ static int dcmipp_bytecap_comp_bind(struct device *comp, struct device *master,
 	/* Allocate the dcmipp_bytecap_device struct */
 	vcap = kzalloc(sizeof(*vcap), GFP_KERNEL);
 	if (!vcap)
-		return -ENOMEM;
+		return ERR_PTR(-ENOMEM);
 
 	/* Allocate the pads */
 	vcap->ved.pads =
@@ -982,7 +984,7 @@ static int dcmipp_bytecap_comp_bind(struct device *comp, struct device *master,
 	}
 
 	/* Initialize the media entity */
-	vcap->vdev.entity.name = pdata->entity_name;
+	vcap->vdev.entity.name = entity_name;
 	vcap->vdev.entity.function = MEDIA_ENT_F_IO_V4L;
 	ret = media_entity_pads_init(&vcap->vdev.entity,
 				     1, vcap->ved.pads);
@@ -1003,13 +1005,13 @@ static int dcmipp_bytecap_comp_bind(struct device *comp, struct device *master,
 	q->mem_ops = &vb2_dma_contig_memops;
 	q->timestamp_flags = V4L2_BUF_FLAG_TIMESTAMP_MONOTONIC;
 	q->min_buffers_needed = 1;
-	q->dev = comp;
+	q->dev = dev;
 
 	ret = vb2_queue_init(q);
 	if (ret) {
-		dev_err(comp, "%s: vb2 queue init failed (err=%d)\n",
-			pdata->entity_name, ret);
-		goto err_clean_m_ent;
+		dev_err(dev, "%s: vb2 queue init failed (err=%d)\n",
+			entity_name, ret);
+		goto err_mutex_destroy;
 	}
 
 	/* Initialize buffer list and its lock */
@@ -1019,94 +1021,48 @@ static int dcmipp_bytecap_comp_bind(struct device *comp, struct device *master,
 	/* Set default frame format */
 	vcap->format = fmt_default;
 	format = &vcap->format;
-	format->bytesperline = frame_stride(format->width, format->pixelformat);
-	format->sizeimage = frame_size(format->width,
-				       format->height,
-				       format->pixelformat);
+	v4l2_fill_pixfmt(format, format->pixelformat, format->width,
+			 format->height);
 
 	/* Fill the dcmipp_ent_device struct */
 	vcap->ved.ent = &vcap->vdev.entity;
 	vcap->ved.vdev_get_format = dcmipp_bytecap_get_format;
 	vcap->ved.handler = dcmipp_bytecap_irq_callback;
 	vcap->ved.thread_fn = dcmipp_bytecap_irq_thread;
-	dev_set_drvdata(comp, &vcap->ved);
-	vcap->dev = comp;
-	vcap->regs = bind_data->regs;
-	vcap->rstc = bind_data->rstc;
-	vcap->cdev = master;
+	vcap->dev = dev;
+	vcap->regs = regs;
 
 	/* Initialize the video_device struct */
 	vdev = &vcap->vdev;
 	vdev->device_caps = V4L2_CAP_VIDEO_CAPTURE | V4L2_CAP_STREAMING |
-			    V4L2_CAP_READWRITE;
+			    V4L2_CAP_IO_MC;
 	vdev->entity.ops = &dcmipp_bytecap_mops;
 	vdev->release = dcmipp_bytecap_release;
 	vdev->fops = &dcmipp_bytecap_fops;
 	vdev->ioctl_ops = &dcmipp_bytecap_ioctl_ops;
 	vdev->lock = &vcap->lock;
 	vdev->queue = q;
-	vdev->v4l2_dev = bind_data->v4l2_dev;
-	strscpy(vdev->name, pdata->entity_name, sizeof(vdev->name));
+	vdev->v4l2_dev = v4l2_dev;
+	strscpy(vdev->name, entity_name, sizeof(vdev->name));
 	video_set_drvdata(vdev, &vcap->ved);
 
 	/* Register the video_device with the v4l2 and the media framework */
 	ret = video_register_device(vdev, VFL_TYPE_VIDEO, -1);
 	if (ret) {
-		dev_err(comp, "%s: video register failed (err=%d)\n",
+		dev_err(dev, "%s: video register failed (err=%d)\n",
 			vcap->vdev.name, ret);
-		goto err_clean_m_ent;
+		goto err_mutex_destroy;
 	}
 
-	return 0;
+	return &vcap->ved;
 
-err_clean_m_ent:
+err_mutex_destroy:
+	mutex_destroy(&vcap->lock);
 	media_entity_cleanup(&vcap->vdev.entity);
 err_clean_pads:
 	dcmipp_pads_cleanup(vcap->ved.pads);
 err_free_vcap:
 	kfree(vcap);
 
-	return ret;
+	return ERR_PTR(ret);
 }
-
-static const struct component_ops dcmipp_bytecap_comp_ops = {
-	.bind = dcmipp_bytecap_comp_bind,
-	.unbind = dcmipp_bytecap_comp_unbind,
-};
-
-static int dcmipp_bytecap_probe(struct platform_device *pdev)
-{
-	return component_add(&pdev->dev, &dcmipp_bytecap_comp_ops);
-}
-
-static int dcmipp_bytecap_remove(struct platform_device *pdev)
-{
-	component_del(&pdev->dev, &dcmipp_bytecap_comp_ops);
-
-	return 0;
-}
-
-static const struct platform_device_id dcmipp_bytecap_driver_ids[] = {
-	{
-		.name	= DCMIPP_BYTECAP_DRV_NAME,
-	},
-	{ }
-};
-
-static struct platform_driver dcmipp_bytecap_pdrv = {
-	.probe		= dcmipp_bytecap_probe,
-	.remove		= dcmipp_bytecap_remove,
-	.id_table	= dcmipp_bytecap_driver_ids,
-	.driver		= {
-		.name	= DCMIPP_BYTECAP_DRV_NAME,
-	},
-};
-
-module_platform_driver(dcmipp_bytecap_pdrv);
-
-MODULE_DEVICE_TABLE(platform, dcmipp_bytecap_driver_ids);
-
-MODULE_AUTHOR("Hugues Fruchet <hugues.fruchet@foss.st.com>");
-MODULE_AUTHOR("Alain Volmat <alain.volmat@foss.st.com>");
-MODULE_DESCRIPTION("STMicroelectronics STM32 Digital Camera Memory Interface with Pixel Processor driver");
-MODULE_LICENSE("GPL");

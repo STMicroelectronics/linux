@@ -1,0 +1,183 @@
+// SPDX-License-Identifier: (GPL-2.0-or-later OR BSD-3-Clause)
+/*
+ * Copyright (C) STMicroelectronics 2023 - All Rights Reserved
+ * Author: Alexandre Torgue <alexandre.torgue@foss.st.com> for STMicroelectronics.
+ */
+#include "stm32mp251.dtsi"
+
+/ {
+	cpus {
+		cpu1: cpu@1 {
+			compatible = "arm,cortex-a35";
+			device_type = "cpu";
+			reg = <1>;
+			enable-method = "psci";
+			clocks = <&scmi_perf 0>;
+			clock-names = "cpu";
+			power-domains = <&CPU_PD1>;
+			power-domain-names = "psci";
+		};
+	};
+
+	arm-pmu {
+		interrupts = <GIC_SPI 368 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 369 IRQ_TYPE_LEVEL_HIGH>;
+		interrupt-affinity = <&cpu0>, <&cpu1>;
+	};
+
+	psci {
+		CPU_PD1: power-domain-cpu1 {
+			#power-domain-cells = <0>;
+			domain-idle-states =  <&CPU_PWRDN>;
+			power-domains = <&CLUSTER_PD>;
+		};
+	};
+
+	timer {
+		interrupts = <GIC_PPI 13 (GIC_CPU_MASK_SIMPLE(2) | IRQ_TYPE_LEVEL_LOW)>,
+			     <GIC_PPI 14 (GIC_CPU_MASK_SIMPLE(2) | IRQ_TYPE_LEVEL_LOW)>,
+			     <GIC_PPI 11 (GIC_CPU_MASK_SIMPLE(2) | IRQ_TYPE_LEVEL_LOW)>,
+			     <GIC_PPI 10 (GIC_CPU_MASK_SIMPLE(2) | IRQ_TYPE_LEVEL_LOW)>;
+	};
+
+	soc@0 {
+		rifsc: rifsc@42080000 {
+			m_can1: can@402d0000 {
+				compatible = "bosch,m_can";
+				reg = <0x402d0000 0x400>, <0x40310000 0x1400>;
+				reg-names = "m_can", "message_ram";
+				interrupts = <GIC_SPI 91 IRQ_TYPE_LEVEL_HIGH>,
+					     <GIC_SPI 94 IRQ_TYPE_LEVEL_HIGH>;
+				interrupt-names = "int0", "int1";
+				clocks = <&rcc CK_BUS_FDCAN>, <&rcc CK_KER_FDCAN>;
+				clock-names = "hclk", "cclk";
+				bosch,mram-cfg = <0x0 0 0 32 0 0 2 2>;
+				feature-domains = <&rifsc STM32MP25_RIFSC_FDCAN_ID>;
+				power-domains = <&CLUSTER_PD>;
+				status = "disabled";
+			};
+
+			m_can3: can@402f0000 {
+				compatible = "bosch,m_can";
+				reg = <0x402f0000 0x400>, <0x40310000 0x2800>;
+				reg-names = "m_can", "message_ram";
+				interrupts = <GIC_SPI 93 IRQ_TYPE_LEVEL_HIGH>,
+					     <GIC_SPI 96 IRQ_TYPE_LEVEL_HIGH>;
+				interrupt-names = "int0", "int1";
+				clocks = <&rcc CK_BUS_FDCAN>, <&rcc CK_KER_FDCAN>;
+				clock-names = "hclk", "cclk";
+				bosch,mram-cfg = <0x1400 0 0 32 0 0 2 2>;
+				feature-domains = <&rifsc STM32MP25_RIFSC_FDCAN_ID>;
+				power-domains = <&CLUSTER_PD>;
+				status = "disabled";
+			};
+
+			eth2: eth2@482d0000 {
+				compatible = "st,stm32mp25-dwmac", "snps,dwmac-5.10a";
+				reg = <0x482d0000 0x4000>;
+				reg-names = "stmmaceth";
+				interrupts-extended = <&intc GIC_SPI 133 IRQ_TYPE_LEVEL_HIGH>,
+						      <&exti1 70 IRQ_TYPE_LEVEL_HIGH>;
+				interrupt-names = "macirq",
+						  "eth_wake_irq";
+				clock-names = "stmmaceth",
+					      "mac-clk-tx",
+					      "mac-clk-rx",
+					      "ptp_ref",
+					      "ethstp",
+					      "eth-ck";
+				clocks = <&rcc CK_ETH2_MAC>,
+					 <&rcc CK_ETH2_TX>,
+					 <&rcc CK_ETH2_RX>,
+					 <&rcc CK_KER_ETH2PTP>,
+					 <&rcc CK_ETH2_STP>,
+					 <&rcc CK_KER_ETH2>;
+				st,syscon = <&syscfg 0x3400 0xffffffff>;
+				snps,mixed-burst;
+				snps,pbl = <2>;
+				snps,txqos = <7>;
+				snps,rxqos = <7>;
+				snps,axi-config = <&stmmac_axi_config_2>;
+				snps,tso;
+				feature-domains = <&rifsc STM32MP25_RIFSC_ETH2_ID>;
+				power-domains = <&CLUSTER_PD>;
+				wakeup-source;
+				status = "disabled";
+				snps,mtl-rx-config = <&mtl_rx_setup_2>;
+				snps,mtl-tx-config = <&mtl_tx_setup_2>;
+
+				stmmac_axi_config_2: stmmac-axi-config {
+					snps,wr_osr_lmt = <0x7>;
+					snps,rd_osr_lmt = <0x7>;
+					snps,blen = <0 0 0 0 16 8 4>;
+				};
+
+				mtl_rx_setup_2: rx-queues-config {
+					snps,rx-queues-to-use = <2>;
+					queue0 {};
+					queue1 {};
+				};
+
+				mtl_tx_setup_2: tx-queues-config {
+					snps,tx-queues-to-use = <4>;
+					queue0 {};
+					queue1 {};
+					queue2 {};
+					queue3 {};
+				};
+			};
+		};
+
+		cs_cpu_debug1: cpu-debug@4a310000 {
+			compatible = "arm,coresight-cpu-debug", "arm,primecell";
+			reg = <0x4a310000 0x1000>;
+			clocks = <&scmi_clk CK_SCMI_SYSDBG>;
+			clock-names = "apb_pclk";
+			cpu = <&cpu1>;
+			status = "disabled";
+		};
+
+		cs_cti_cpu1: cti@4a320000 {
+			compatible = "arm,coresight-cti-v8-arch", "arm,coresight-cti",
+				     "arm,primecell";
+			reg = <0x4a320000 0x1000>;
+			clocks = <&scmi_clk CK_SCMI_SYSDBG>;
+			clock-names = "apb_pclk";
+			cpu = <&cpu1>;
+			arm,cs-dev-assoc = <&cs_etm1>;
+			status = "disabled";
+		};
+
+		cs_etm1: etm@4a340000 {
+			compatible = "arm,coresight-etm4x", "arm,primecell";
+			reg = <0x4a340000 0x1000>;
+			clocks = <&scmi_clk CK_SCMI_SYSDBG>, <&scmi_clk CK_SCMI_SYSATB>;
+			clock-names = "apb_pclk", "atclk";
+			cpu = <&cpu1>;
+			status = "disabled";
+
+			out-ports {
+				port {
+					etm1_out_port: endpoint {
+						remote-endpoint = <&funnel_in_port1>;
+					};
+				};
+			};
+		};
+	};
+};
+
+&cs_funnel {
+	in-ports {
+		port@1 {
+			reg = <1>;
+			funnel_in_port1: endpoint {
+				remote-endpoint = <&etm1_out_port>;
+			};
+		};
+	};
+};
+
+&optee {
+	interrupts = <GIC_PPI 15 (GIC_CPU_MASK_SIMPLE(2) | IRQ_TYPE_LEVEL_LOW)>;
+};

@@ -22,6 +22,13 @@ config DW_I3C_MASTER
 	  This driver can also be built as a module.  If so, the module
 	  will be called dw-i3c-master.
 
+config STM32_I3C_MASTER
+	tristate "STM32 I3C driver"
+	depends on I3C
+	depends on HAS_IOMEM
+	help
+	  Support for STmicroelectronics STM32 I3C controller.
+
 config SVC_I3C_MASTER
 	tristate "Silvaco I3C Dual-Role Master driver"
 	depends on I3C

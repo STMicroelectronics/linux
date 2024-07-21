@@ -34,6 +34,10 @@ menuconfig COMMON_CLK
 
 if COMMON_CLK
 
+config COMMON_CLK_REGMAP
+	tristate
+	select REGMAP
+
 config COMMON_CLK_WM831X
 	tristate "Clock driver for WM831x/2x PMICs"
 	depends on MFD_WM831X
@@ -396,6 +400,12 @@ config COMMON_CLK_STM32MP157
 	help
 	  Support for stm32mp157 SoC family clocks
 
+config COMMON_CLK_STM32MP257
+	def_bool COMMON_CLK && MACH_STM32MP25
+	select COMMON_CLK_REGMAP
+	help
+	  Support for stm32mp25x SoC family clocks
+
 config COMMON_CLK_STM32F
 	def_bool COMMON_CLK && (MACH_STM32F429 || MACH_STM32F469 || MACH_STM32F746)
 	help
@@ -427,6 +437,7 @@ config COMMON_CLK_BD718XX
 config COMMON_CLK_FIXED_MMIO
 	bool "Clock driver for Memory Mapped Fixed values"
 	depends on COMMON_CLK && OF
+	depends on HAS_IOMEM
 	help
 	  Support for Memory Mapped IO Fixed clocks
 

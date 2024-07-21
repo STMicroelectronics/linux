@@ -1095,6 +1095,8 @@ patternProperties:
     description: Shenzhen Roofull Technology Co, Ltd
   "^roseapplepi,.*":
     description: RoseapplePi.org
+  "^rpmsg,.*":
+    description: remote processor messaging Device Specification
   "^samsung,.*":
     description: Samsung Semiconductor
   "^samtec,.*":
@@ -1332,6 +1334,8 @@ patternProperties:
     description: TPO
   "^tq,.*":
     description: TQ-Systems GmbH
+  "^ttt,.*":
+    description: TTTech
   "^traverse,.*":
     description: Traverse Technologies Australia Pty Ltd
   "^tronfy,.*":

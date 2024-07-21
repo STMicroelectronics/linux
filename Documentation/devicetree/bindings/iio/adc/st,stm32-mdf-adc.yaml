@@ -1,0 +1,354 @@
+# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/iio/adc/st,stm32-mdf-adc.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: STMicroelectronics STM32 Multi-function Digital Filter (MDF) ADC
+
+maintainers:
+  - Olivier Moysan <olivier.moysan@foss.st.com>
+
+description: |
+  STM32 MDF ADC is a sigma delta analog-to-digital converter dedicated to
+  interface external sigma delta modulators to STM32 micro controllers.
+
+properties:
+  compatible:
+    enum:
+      - st,stm32mp25-mdf
+
+  reg:
+    minItems: 1
+    maxItems: 2
+
+  clocks:
+    maxItems: 1
+
+  clock-names:
+    description: Internal clock used for MDF digital processing.
+    items:
+      - const: ker_ck
+
+  "#clock-cells":
+    enum: [0, 1]
+
+  clock-output-names:
+    description: |
+      CCK0 and CCK1 are optional output clocks, which share the same clock frequency,
+      but can be gated independently to save power.
+    minItems: 1
+    items:
+      - const: cck0
+      - const: cck1
+
+  clock-frequency:
+    description: |
+      Common clock frequency (Hz) for CCK0 and CCK1 output clocks.
+      The frequency must be a multiple of the "ker_ck" clock frequency.
+    maximum: 25000000
+
+  "#address-cells":
+    const: 1
+
+  "#size-cells":
+    const: 1
+
+  ranges: true
+
+  clock-ranges: true
+
+  resets:
+    maxItems: 1
+
+  reset-names:
+    items:
+      - const: mdf
+
+  feature-domains:
+    $ref: /schemas/types.yaml#/definitions/phandle-array
+    description: |
+      Phandle to the rifsc device to check access right.
+
+  power-domains:
+    maxItems: 1
+
+  st,interleave:
+    description: |
+      List of phandles of interleaved filters. The indexes of interleaved filters must be
+      consecutives starting from 0 (i.e in range [0..N]). The samples from interleaved filters
+      are muxed in a single channel and retrieved through the device associated to the filter 0.
+      The filters 1..N have to be enabled, but inherit their configuration from filter 0.
+    $ref: /schemas/types.yaml#/definitions/phandle-array
+
+required:
+  - compatible
+  - reg
+  - ranges
+  - clocks
+  - clock-names
+  - clock-ranges
+  - "#address-cells"
+  - "#size-cells"
+
+additionalProperties: false
+
+patternProperties:
+  "^sitf@[0-9]+$":
+    type: object
+    description: Serial interface child node
+
+    properties:
+      compatible:
+        enum:
+          - st,stm32mp25-sitf-mdf
+
+      reg:
+        description: Specify the SITF serial interface instance
+        maxItems: 1
+
+      clocks:
+        description: |
+          Serial interface clock (optional depending on interface mode)
+        maxItems: 1
+
+      st,sitf-mode:
+        description: |
+          Select serial interface protocol
+          - spi: SPI mode
+          - lf_spi: low frequency SPI mode for low power applications
+        $ref: "/schemas/types.yaml#/definitions/string"
+        enum:
+          - spi
+          - lf_spi
+
+        required:
+          - reg
+          - st,sitf-mode
+
+    additionalProperties: false
+
+  "^filter@[0-9]+$":
+    type: object
+    description: Digital filter path child node
+
+    properties:
+      compatible:
+        enum:
+          - st,stm32mp25-mdf-dmic
+          - st,stm32mp25-mdf-adc
+
+      reg:
+        description: Specify the MDF filter instance
+        maxItems: 1
+
+      interrupts:
+        maxItems: 1
+
+      clocks:
+        minItems: 1
+        description: Internal clock used for MDF digital processing and control blocks.
+
+      clock-names:
+        items:
+          - const: ker_ck
+
+      dmas:
+        maxItems: 1
+
+      dma-names:
+        items:
+          - const: rx
+
+      "#io-channel-cells":
+        const: 1
+
+      st,cic-mode:
+        description: |
+          Cascaded-integrator-comb (CIC) filter configuration
+          - 0: MCIC & ACIC filters in FastSinc mode
+          - [1-3]: MCIC & ACIC filters in Sinc mode order 1 to 3
+          - [4-5]: Single CIC filter in Sinc mode order 4 to 5
+          For audio purpose it is recommended to use CIC Sinc4 or Sinc5
+          This property is mandatory for filter 0 or filters not used in interleave mode.
+        $ref: /schemas/types.yaml#/definitions/uint32
+        minimum: 0
+        maximum: 5
+
+      st,rs-filter-bypass:
+        description: Bypass RSFLT reshaping filter.
+        $ref: /schemas/types.yaml#/definitions/flag
+
+      st,hpf-filter-cutoff-bp:
+        description: |
+          High Pass Filter (HPF) cut-off frequency expressed as a fraction of the PCM sampling rate.
+          Cut-off frequency = st,hpf-filter-cutoff-bp x Fpcm / 100.
+          If this property is not defined the HPF is disabled.
+        enum: [625, 1250, 2500, 9500]
+
+      st,sync:
+        description:
+          Synchronize to another filter.
+          Must contain the phandle of the filter providing the synchronization.
+        allOf:
+          - $ref: /schemas/types.yaml#/definitions/phandle-array
+          - maxItems: 1
+
+      st,sitf:
+        $ref: /schemas/types.yaml#/definitions/phandle-array
+        items:
+          - items:
+              - description: Phandle of the serial interface connected to the digital filter
+              - description: |
+                  The phandle's argument selects the bitstream on the falling or rising edge
+                  of the serial interface clock:
+                  - 0: rising edge
+                  - 1: falling edge
+                enum: [0, 1]
+                default: 0
+        description:
+          Should be phandle/bitstream pair.
+
+    required:
+      - compatible
+      - reg
+      - interrupts
+      - "#io-channel-cells"
+      - st,sitf
+
+    allOf:
+      - if:
+          properties:
+            compatible:
+              contains:
+                const: st,stm32mp25-mdf-adc
+
+        then:
+          properties:
+            '#address-cells':
+              const: 1
+
+            '#size-cells':
+              const: 0
+
+          required:
+            - '#address-cells'
+            - '#size-cells'
+
+          patternProperties:
+            "^channel@([0-9])$":
+              type: object
+              $ref: "adc.yaml"
+              description: Represents the external channel which is connected to the MDF.
+
+              properties:
+                reg:
+                  maxItems: 1
+                  items:
+                    minimum: 0
+                    maximum: 8
+
+              required:
+                - reg
+
+              additionalProperties: false
+
+      - if:
+          properties:
+            compatible:
+              contains:
+                const: st,stm32mp25-mdf-dmic
+
+        then:
+          patternProperties:
+            "^mdf-dai+$":
+              type: object
+              description: child node
+
+              properties:
+                compatible:
+                  enum:
+                    - st,stm32mp25-mdf-dai
+
+                "#sound-dai-cells":
+                  const: 0
+
+                io-channels:
+                  description:
+                    From common IIO binding. Used to pipe external sigma delta
+                    modulator or internal ADC output to MDF channel.
+
+                power-domains:
+                  maxItems: 1
+
+                port:
+                  $ref: /schemas/sound/audio-graph-port.yaml#
+                  unevaluatedProperties: false
+
+              required:
+                - compatible
+                - "#sound-dai-cells"
+                - io-channels
+
+              additionalProperties: false
+
+examples:
+  - |
+    #include <dt-bindings/clock/stm32mp25-clks.h>
+    #include <dt-bindings/interrupt-controller/arm-gic.h>
+    mdf1: mdf@504d0000 {
+      compatible = "st,stm32mp25-mdf";
+      ranges = <0 0x504d0000 0x1000>;
+      reg = <0x504d0000 0x8>, <0x504d0ff0 0x10>;
+      #address-cells = <1>;
+      #size-cells = <1>;
+      clocks = <&rcc CK_KER_MDF1>;
+      clock-names = "ker_ck";
+      clock-ranges;
+      #clock-cells = <1>;
+      clock-output-names = "cck0", "cck1";
+      clock-frequency = <2048000>;
+
+      sitf5: sitf@300 {
+        compatible = "st,stm32mp25-sitf-mdf";
+        reg = <0x300 0x4>;
+        st,sitf-mode = "spi";
+        clocks = <&mdf1 0>;
+      };
+
+      filter0: filter@84 {
+        compatible = "st,stm32mp25-mdf-dmic";
+        reg = <0x84 0x70>;
+        #io-channel-cells = <1>;
+        interrupts = <GIC_SPI 184 IRQ_TYPE_LEVEL_HIGH>;
+        dmas = <&hpdma 63 0x63 0x12 0>;
+        dma-names = "rx";
+        st,cic-mode	= <5>;
+        st,sitf = <&sitf5 0>;
+
+        asoc_pdm0: mdf-dai {
+          compatible = "st,stm32mp25-mdf-dai";
+          #sound-dai-cells = <0>;
+          io-channels = <&filter0 0>;
+        };
+      };
+
+      filter1: filter@104  {
+        compatible = "st,stm32mp25-mdf-adc";
+        reg = <0x104 0x70>;
+        #io-channel-cells = <1>;
+        interrupts = <GIC_SPI 185 IRQ_TYPE_LEVEL_HIGH>;
+        dmas = <&hpdma 64 0x63 0x12 0>;
+        dma-names = "rx";
+        st,cic-mode = <2>;
+        st,sitf = <&sitf5 1>;
+        #address-cells = <1>;
+        #size-cells = <0>;
+
+        channel@1 {
+          reg = <1>;
+        };
+      };
+    };
+
+...

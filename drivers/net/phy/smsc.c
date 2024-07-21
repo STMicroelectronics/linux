@@ -108,6 +108,9 @@ static int smsc_phy_config_wol(struct phy_device *phydev)
 	int i, wol_ctrl, wol_filter;
 	u16 pwd[3] = {0, 0, 0};
 
+	if (!phydev->attached_dev)
+		return -ENODEV;
+
 	/* Write @MAC in LAN8742_MMD3_MAC_ADDRA/B/C registers */
 	const u8 *mac_addr = phydev->attached_dev->dev_addr;
 	/* Store the device address for the magic packet */

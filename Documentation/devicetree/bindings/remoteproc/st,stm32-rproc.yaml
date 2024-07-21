@@ -18,8 +18,14 @@ properties:
   compatible:
     enum:
       - st,stm32mp1-m4
-      - st,stm32mp1-m4_optee
-
+      - st,stm32mp1-m4-tee
+      - st,stm32mp2-m33
+      - st,stm32mp2-m33-tee
+    description:
+      Use "st,stm32mp1-m4" for the stm32mp15 Cortex-M4 coprocessor management by Linux
+      Use "st,stm32mp1-m4-tee" for the stm32mp15 Cortex-M4 coprocessor management by OPTEE
+      Use "st,stm32mp2-m33" for the stm32mp2 Cortex-M33 coprocessor management by Linux
+      Use "st,stm32mp2-m33-tee" for the stm32mp2 Cortex-M33 coprocessor management by OPTEE
   reg:
     description:
       Address ranges of the RETRAM and MCU SRAM memories used by the remote
@@ -103,10 +109,18 @@ properties:
           - description: The offset of the power setting register
           - description: The field mask of the PDDS selection
 
-  st,syscfg-m4-state:
+  st,syscfg-nsvtor:
     $ref: "/schemas/types.yaml#/definitions/phandle-array"
     description: |
-      Reference to the tamp register which exposes the Cortex-M4 state.
+      Reference to the system configuration register which stores the remote processor
+      non-secure vector table pointer.
+      address, used to boot it.
+    maxItems: 1
+
+  st,syscfg-cm-state:
+    $ref: "/schemas/types.yaml#/definitions/phandle-array"
+    description: |
+      Reference to the register which exposes the Cortex-M state.
     items:
       - items:
           - description: Phandle of syscon block with the tamp register
@@ -124,6 +138,17 @@ properties:
           - description: The offset of the tamp register
           - description: The field mask of the Cortex-M4 resource table address
 
+  nvmem-cells:
+    maxItems: 2
+    description: |
+      Specify the resource table address and size for firmware started by
+      the boot loader.
+
+  nvmem-cell-names:
+    items:
+      - const: rsc-tbl-addr
+      - const: rsc-tbl-size
+
   st,auto-boot:
     $ref: /schemas/types.yaml#/definitions/flag
     description:
@@ -134,6 +159,28 @@ required:
   - compatible
   - reg
   - resets
+
+allOf:
+  - if:
+      properties:
+        reset-names:
+          not:
+            contains:
+              const: hold_boot
+    then:
+      required:
+        - st,syscfg-holdboot
+    else:
+      properties:
+        st,syscfg-holdboot: false
+      properties:
+        compatible:
+          enum:
+            - st,stm32mp1-m4-tee
+    then:
+      required:
+        - memory-region
+
 
 additionalProperties: false
 
@@ -148,10 +195,14 @@ examples:
       reg = <0x10000000 0x40000>,
             <0x30000000 0x40000>,
             <0x38000000 0x10000>;
-      resets = <&rcc MCU_R>;
+      memory-region = <&retram>, <&mcuram>, <&mcuram2>, <&vdev0vring0>,
+                      <&m_ipc_shm>, <&vdev0vring1>, <&vdev0buffer>;
+      resets = <&scmi_reset RST_SCMI_MCU>;
+      reset-names = "mcu_rst";
+      /* Hold boot managed using system config*/
       st,syscfg-holdboot = <&rcc 0x10C 0x1>;
       st,syscfg-rsc-tbl = <&tamp 0x144 0xFFFFFFFF>;
-      st,syscfg-m4-state = <&tamp 0x148 0xFFFFFFFF>;
+      st,syscfg-cm-state = <&tamp 0x148 0xFFFFFFFF>;
     };
 
 #--------------------
@@ -168,6 +219,6 @@ examples:
                <&scmi_reset RST_SCMI_MCU_HOLD_BOOT>;
       reset-names = "mcu_rst", "hold_boot";
       st,syscfg-rsc-tbl = <&tamp 0x144 0xFFFFFFFF>;
-      st,syscfg-m4-state = <&tamp 0x148 0xFFFFFFFF>;
+      st,syscfg-cm-state = <&tamp 0x148 0xFFFFFFFF>;
     };
 ...

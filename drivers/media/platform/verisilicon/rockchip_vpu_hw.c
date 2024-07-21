@@ -56,6 +56,19 @@ static const struct hantro_fmt rockchip_vpu_enc_fmts[] = {
 			.step_height = MB_DIM,
 		},
 	},
+	{
+		.fourcc = V4L2_PIX_FMT_VP8_FRAME,
+		.codec_mode = HANTRO_MODE_VP8_ENC,
+		.max_depth = 2,
+		.frmsize = {
+			.min_width = 96,
+			.max_width = 1920,
+			.step_width = MB_DIM,
+			.min_height = 96,
+			.max_height = 1088,
+			.step_height = MB_DIM,
+		},
+	},
 };
 
 static const struct hantro_fmt rockchip_vpu1_postproc_fmts[] = {
@@ -350,6 +363,7 @@ static int rockchip_vpu_hw_init(struct hantro_dev *vpu)
 {
 	/* Bump ACLK to max. possible freq. to improve performance. */
 	clk_set_rate(vpu->clocks[0].clk, RK3288_ACLK_MAX_FREQ);
+
 	return 0;
 }
 
@@ -487,6 +501,13 @@ static const struct hantro_codec_ops rk3399_vpu_codec_ops[] = {
 		.reset = rockchip_vpu2_dec_reset,
 		.init = hantro_vp8_dec_init,
 		.exit = hantro_vp8_dec_exit,
+	},
+	[HANTRO_MODE_VP8_ENC] = {
+		.run = rockchip_vpu2_vp8_enc_run,
+		.reset = rockchip_vpu2_enc_reset,
+		.init = hantro_vp8_enc_init,
+		.done = rockchip_vpu2_vp8_enc_done,
+		.exit = hantro_vp8_enc_exit,
 	},
 };
 
@@ -626,7 +647,7 @@ const struct hantro_variant rk3399_vpu_variant = {
 	.dec_fmts = rk3399_vpu_dec_fmts,
 	.num_dec_fmts = ARRAY_SIZE(rk3399_vpu_dec_fmts),
 	.codec = HANTRO_JPEG_ENCODER | HANTRO_MPEG2_DECODER |
-		 HANTRO_VP8_DECODER,
+		 HANTRO_VP8_DECODER | HANTRO_VP8_ENCODER,
 	.codec_ops = rk3399_vpu_codec_ops,
 	.irqs = rockchip_vpu2_irqs,
 	.num_irqs = ARRAY_SIZE(rockchip_vpu2_irqs),

@@ -15,6 +15,8 @@
 #include <media/v4l2-vp9.h>
 #include <media/videobuf2-core.h>
 
+#include "hantro_boolenc.h"
+
 #define DEC_8190_ALIGN_MASK	0x07U
 
 #define MB_DIM			16
@@ -271,6 +273,85 @@ struct hantro_postproc_ops {
 	int (*enum_framesizes)(struct hantro_ctx *ctx, struct v4l2_frmsizeenum *fsize);
 };
 
+struct hantro_vp8_entropy {
+	/* TODO: int32_t? */
+	int32_t coeff_prob[4][8][3][11];
+	int32_t coeff_prob_old[4][8][3][11];
+	int32_t mv_prob[2][19];
+	int32_t mv_prob_old[2][19];
+	int32_t y_mode_prob[4];
+	int32_t uv_mode_prob[3];
+};
+
+#define VP8_BIT_LAST	0
+#define VP8_BIT_GOLDEN	1
+#define VP8_BIT_ALT	2
+
+struct hantro_vp8_enc_hw_ctx {
+	struct hantro_aux_buf ref_frames[4];	/* recreated and reference images */
+	struct hantro_aux_buf priv_src;	/* cabac table, segment map */
+	struct hantro_aux_buf mv_buf;	/* motion vector */
+	struct hantro_aux_buf priv_dst;	/* prob count */
+	struct hantro_aux_buf ctrl_buf;	/* size table */
+	struct hantro_boolenc boolenc;
+	struct hantro_vp8_entropy entropy;
+	size_t header_size;
+	size_t estimated_hdr_size;
+	size_t frame_counter;
+	int last_ref;
+	int golden_ref;
+	int alt_ref;
+	int first_free;
+	int reconstructed;
+	char ref_bitmaps[4];
+
+	int32_t mode_delta[4];
+	int32_t old_mode_delta[4];
+	int32_t ref_delta[4];
+	int32_t old_ref_delta[4];
+
+	struct {
+		uint8_t tag[3];
+
+		/* the following three only used for inter frames */
+		uint8_t magic[3];	/* 0x9d012a */
+		uint8_t width[2];	/* (scale << 14) | width */
+		uint8_t height[2];	/* (scale << 14) | height */
+	} __packed *frame_tag;
+
+	u8 is_intra:1;
+	u8 last_intra:1;
+	u8 show_frame:1;
+	u8 refresh_golden_frame:1;
+	u8 refresh_alternate_frame:1;
+	u8 refresh_entropy_probs:1;
+
+	u8 prob_skip_false;
+	u8 prob_intra;
+	u8 prob_last;
+	u8 prob_gf;
+	u8 copy_buffer_to_golden;
+	u8 copy_buffer_to_alternate;
+};
+
+#define HANTRO_H264_NUM_INTERNAL_FRAMES 4
+#define HANTRO_H264_CABAC_IDC_NUM	3
+#define HANTRO_H264_CABAC_CV_NUM	460
+
+struct hantro_h264_enc_hw_ctx {
+	struct hantro_aux_buf luma_internal[HANTRO_H264_NUM_INTERNAL_FRAMES];
+	struct hantro_aux_buf chroma_internal[HANTRO_H264_NUM_INTERNAL_FRAMES];
+	u64 reference_ts[HANTRO_H264_NUM_INTERNAL_FRAMES];
+	int last_idx;
+	int last_prev_idx;
+	int reconstr_idx;
+	int ltr_idx;
+	struct hantro_aux_buf nal_table;
+	struct hantro_aux_buf cabac_ctx[HANTRO_H264_CABAC_IDC_NUM];
+	struct hantro_aux_buf mv_buf;
+	struct hantro_aux_buf segment_map;
+};
+
 /**
  * struct hantro_codec_ops - codec mode specific operations
  *
@@ -300,12 +381,16 @@ struct hantro_codec_ops {
  * @ROCKCHIP_VPU_ENC_FMT_YUV420SP: Y/CbCr 4:2:0 semi-planar format
  * @ROCKCHIP_VPU_ENC_FMT_YUYV422: YUV 4:2:2 packed format (YUYV)
  * @ROCKCHIP_VPU_ENC_FMT_UYVY422: YUV 4:2:2 packed format (UYVY)
+ * @ROCKCHIP_VPU_ENC_FMT_RGB565:  RGB565 16 bits format
+ * @ROCKCHIP_VPU_ENC_FMT_RGB888:  RGB888 32 bits format
  */
 enum hantro_enc_fmt {
 	ROCKCHIP_VPU_ENC_FMT_YUV420P = 0,
 	ROCKCHIP_VPU_ENC_FMT_YUV420SP = 1,
 	ROCKCHIP_VPU_ENC_FMT_YUYV422 = 2,
 	ROCKCHIP_VPU_ENC_FMT_UYVY422 = 3,
+	ROCKCHIP_VPU_ENC_FMT_RGB565 = 4,
+	ROCKCHIP_VPU_ENC_FMT_RGB888 = 7,
 };
 
 extern const struct hantro_variant imx8mm_vpu_g1_variant;
@@ -322,6 +407,8 @@ extern const struct hantro_variant rk3568_vepu_variant;
 extern const struct hantro_variant rk3568_vpu_variant;
 extern const struct hantro_variant sama5d4_vdec_variant;
 extern const struct hantro_variant sunxi_vpu_variant;
+extern const struct hantro_variant stm32mp25_vdec_variant;
+extern const struct hantro_variant stm32mp25_venc_variant;
 
 extern const struct hantro_postproc_ops hantro_g1_postproc_ops;
 extern const struct hantro_postproc_ops hantro_g2_postproc_ops;
@@ -335,6 +422,7 @@ void hantro_irq_done(struct hantro_dev *vpu,
 void hantro_start_prepare_run(struct hantro_ctx *ctx);
 void hantro_end_prepare_run(struct hantro_ctx *ctx);
 
+void hantro_g1_check_idle(struct hantro_dev *vpu);
 irqreturn_t hantro_g1_irq(int irq, void *dev_id);
 void hantro_g1_reset(struct hantro_ctx *ctx);
 
@@ -417,6 +505,28 @@ hantro_hevc_mv_size(unsigned int width, unsigned int height)
 	return width * height / 16;
 }
 
+static inline void hantro_vp8_set_bit(struct hantro_vp8_enc_hw_ctx *vp8_enc, char bit, int idx)
+{
+	if (idx < 0)
+		return;
+
+	if (bit != VP8_BIT_LAST && bit != VP8_BIT_GOLDEN && bit != VP8_BIT_ALT)
+		return;
+
+	vp8_enc->ref_bitmaps[idx] |= (1 << bit);
+}
+
+static inline void hantro_vp8_clr_bit(struct hantro_vp8_enc_hw_ctx *vp8_enc, char bit, int idx)
+{
+	if (idx < 0)
+		return;
+
+	if (bit != VP8_BIT_LAST && bit != VP8_BIT_GOLDEN && bit != VP8_BIT_ALT)
+		return;
+
+	vp8_enc->ref_bitmaps[idx] &= ~(1 << bit);
+}
+
 int hantro_g1_mpeg2_dec_run(struct hantro_ctx *ctx);
 int rockchip_vpu2_mpeg2_dec_run(struct hantro_ctx *ctx);
 void hantro_mpeg2_dec_copy_qtable(u8 *qtable,
@@ -437,5 +547,18 @@ int hantro_vp9_dec_init(struct hantro_ctx *ctx);
 void hantro_vp9_dec_exit(struct hantro_ctx *ctx);
 void hantro_g2_check_idle(struct hantro_dev *vpu);
 irqreturn_t hantro_g2_irq(int irq, void *dev_id);
+
+int rockchip_vpu2_vp8_enc_run(struct hantro_ctx *ctx);
+int hantro_vp8_enc_init(struct hantro_ctx *ctx);
+void rockchip_vpu2_vp8_enc_done(struct hantro_ctx *ctx);
+void hantro_vp8_enc_exit(struct hantro_ctx *ctx);
+
+int hantro_h1_vp8_enc_run(struct hantro_ctx *ctx);
+void hantro_h1_vp8_enc_done(struct hantro_ctx *ctx);
+
+int hantro_h1_h264_enc_run(struct hantro_ctx *ctx);
+int hantro_h264_enc_init(struct hantro_ctx *ctx);
+void hantro_h1_h264_enc_done(struct hantro_ctx *ctx);
+void hantro_h264_enc_exit(struct hantro_ctx *ctx);
 
 #endif /* HANTRO_HW_H_ */

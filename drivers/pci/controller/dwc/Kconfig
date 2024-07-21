@@ -385,4 +385,27 @@ config PCIE_FU740
 	  Say Y here if you want PCIe controller support for the SiFive
 	  FU740.
 
+config PCIE_STM32
+	tristate "STMicroelectronics PCIe Controller Host Mode for STM32 MP25"
+	depends on ARCH_STM32 || COMPILE_TEST
+	depends on PCI_MSI_IRQ_DOMAIN
+	select PCIE_DW_HOST
+	help
+	  Enables support for the DesignWare core based PCIe host controller
+	  found in STM32 MP25 Soc.
+
+	  This driver can also be built as a module. If so, the module
+	  will be called pcie-stm32.
+
+config PCIE_STM32_EP
+	tristate "ST-Microelectronics PCIe Controller Endpoint Mode for STM32 MP25"
+	depends on ARCH_STM32 || COMPILE_TEST
+	depends on PCI_ENDPOINT
+	select PCIE_DW_EP
+	help
+	  Enables support for DesignWare core based PCIe EP controller found
+	  in STM32 MP25 Soc.
+
+	  This driver can also be built as a module. If so, the module
+	  will be called pcie-stm32-ep.
 endmenu

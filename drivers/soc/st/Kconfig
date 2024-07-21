@@ -1,17 +1,19 @@
 if ARCH_STM32
 
-config STM32_HDP
-	bool "STMicroelectronics STM32MP157 Hardware Debug Port (HDP) pin control"
-	depends on MACH_STM32MP157 || MACH_STM32MP13
-	default n if MACH_STM32MP157 || MACH_STM32MP13
-	help
-	  The Hardware Debug Port allows the observation of internal signals. By using multiplexers,
-	  up to 16 signals for each of 8-bit output can be observed.
-
 config STM32_PM_DOMAINS
 	bool "STM32 PM domains"
 	depends on MACH_STM32MP157
 	select PM_GENERIC_DOMAINS
 	default y if MACH_STM32MP157
+
+config STM32_RISAF
+	tristate "STM32 RISAF"
+	depends on ARM64 && DEBUG_FS
+	default y
+	help
+	  Say y to enable RISAF dump debug helper driver. This creates an entry
+	  in the debugfs to dump RISAF memory regions configurations and
+	  topology. It implicitly requires that the RISAF is clocked by a
+	  capable software component.
 
 endif # ARCH_STM32

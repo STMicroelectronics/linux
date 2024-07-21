@@ -1457,4 +1457,13 @@ config I2C_VIRTIO
           This driver can also be built as a module. If so, the module
           will be called i2c-virtio.
 
+config I2C_RPMSG
+	tristate "RPMSG I2C driver"
+	depends on RPMSG
+	help
+	  Say y here to export RPMsg endpoints as I2C Bus.
+
+	  This makes it possible for I2C clients to send and receive
+	  RPMsg as a standard I2C protocol.
+
 endmenu

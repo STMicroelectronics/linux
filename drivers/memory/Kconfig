@@ -236,6 +236,14 @@ config STM32_FMC2_EBI
 	  devices (like SRAM, ethernet adapters, FPGAs, LCD displays, ...) on
 	  SOCs containing the FMC2 External Bus Interface.
 
+config STM32_OMI
+	tristate "Support for OSPI Memory Interface on STM32MP SoCs"
+	depends on ARCH_STM32 || COMPILE_TEST
+	help
+	  Select this option to enable the STM32 OSPI Memory Interface controller
+	  (OMI) which provides either SPI or HyperBus support. This allows to support
+	  sNOR, sNAND or HyperFlash devices.
+
 source "drivers/memory/samsung/Kconfig"
 source "drivers/memory/tegra/Kconfig"
 

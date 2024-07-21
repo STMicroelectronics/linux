@@ -25,6 +25,9 @@
 #define STM32MP_PKG_AB		BIT(1)
 #define STM32MP_PKG_AC		BIT(2)
 #define STM32MP_PKG_AD		BIT(3)
+#define STM32MP_PKG_AI		BIT(8)
+#define STM32MP_PKG_AK		BIT(10)
+#define STM32MP_PKG_AL		BIT(11)
 
 struct stm32_desc_function {
 	const char *name;
@@ -61,6 +64,9 @@ struct stm32_pinctrl_match_data {
 	const struct stm32_desc_pin *pins;
 	const unsigned int npins;
 	bool secure_control;
+	bool io_sync_control;
+	bool rif_control;
+	bool need_syscon;
 };
 
 struct stm32_gpio_bank;

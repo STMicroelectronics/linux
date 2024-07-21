@@ -4,7 +4,7 @@
 $id: http://devicetree.org/schemas/feature-controllers/feature-domain-controller.yaml#
 $schema: http://devicetree.org/meta-schemas/core.yaml#
 
-title: Generic Domain Controller bindings
+title: Generic Domain Controller
 
 maintainers:
   - Oleksii Moisieiev <oleksii_moisieiev@epam.com>
@@ -45,6 +45,7 @@ properties:
       of a particular provider.
 
   feature-domain-controller:
+    type: boolean
     description:
       Indicates that the node is feature-domain-controller provider.
 

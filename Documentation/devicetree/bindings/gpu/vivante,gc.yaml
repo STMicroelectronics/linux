@@ -49,6 +49,11 @@ properties:
   power-domains:
     maxItems: 1
 
+  feature-domains:
+    $ref: /schemas/types.yaml#/definitions/phandle-array
+    description: |
+      Phandle to the rifsc device to check access right.
+
 required:
   - compatible
   - reg

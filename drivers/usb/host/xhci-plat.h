@@ -14,9 +14,11 @@ struct xhci_plat_priv {
 	const char *firmware_name;
 	unsigned long long quirks;
 	void (*plat_start)(struct usb_hcd *);
+	void (*post_plat_start)(struct usb_hcd *);
 	int (*init_quirk)(struct usb_hcd *);
 	int (*suspend_quirk)(struct usb_hcd *);
 	int (*resume_quirk)(struct usb_hcd *);
+	void *data;
 };
 
 #define hcd_to_xhci_priv(h) ((struct xhci_plat_priv *)hcd_to_xhci(h)->priv)

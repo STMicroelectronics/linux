@@ -91,6 +91,8 @@ struct stmmac_dma_cfg {
 	int pbl;
 	int txpbl;
 	int rxpbl;
+	int txqos;
+	int rxqos;
 	bool pblx8;
 	int fixed_burst;
 	int mixed_burst;
@@ -172,6 +174,7 @@ struct stmmac_fpe_cfg {
 	bool hs_enable;				/* FPE handshake enable */
 	enum stmmac_fpe_state lp_fpe_state;	/* Link Partner FPE state */
 	enum stmmac_fpe_state lo_fpe_state;	/* Local station FPE state */
+	u32 fpe_csr;				/* MAC_FPE_CTRL_STS reg cache */
 };
 
 struct stmmac_safety_feature_cfg {
@@ -215,6 +218,7 @@ struct plat_stmmacenet_data {
 	int unicast_filter_entries;
 	int tx_fifo_size;
 	int rx_fifo_size;
+	int ext_systime;
 	u32 host_dma_width;
 	u32 rx_queues_to_use;
 	u32 tx_queues_to_use;

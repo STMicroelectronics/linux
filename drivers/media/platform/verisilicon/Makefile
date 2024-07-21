@@ -6,7 +6,11 @@ hantro-vpu-y += \
 		hantro_drv.o \
 		hantro_v4l2.o \
 		hantro_postproc.o \
+		hantro_boolenc.o \
+		hantro_h1.o \
 		hantro_h1_jpeg_enc.o \
+		hantro_h1_vp8_enc.o \
+		hantro_h1_h264_enc.o \
 		hantro_g1.o \
 		hantro_g1_h264_dec.o \
 		hantro_g1_mpeg2_dec.o \
@@ -18,6 +22,7 @@ hantro-vpu-y += \
 		rockchip_vpu2_hw_h264_dec.o \
 		rockchip_vpu2_hw_mpeg2_dec.o \
 		rockchip_vpu2_hw_vp8_dec.o \
+		rockchip_vpu2_hw_vp8_enc.o \
 		hantro_jpeg.o \
 		hantro_h264.o \
 		hantro_hevc.o \
@@ -36,3 +41,7 @@ hantro-vpu-$(CONFIG_VIDEO_HANTRO_ROCKCHIP) += \
 
 hantro-vpu-$(CONFIG_VIDEO_HANTRO_SUNXI) += \
 		sunxi_vpu_hw.o
+
+hantro-vpu-$(CONFIG_VIDEO_HANTRO_STM32MP25) += \
+		stm32mp25_vdec_hw.o \
+		stm32mp25_venc_hw.o

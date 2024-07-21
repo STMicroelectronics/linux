@@ -1662,6 +1662,7 @@ static const struct stm32_desc_pin stm32f746_pins[] = {
 static struct stm32_pinctrl_match_data stm32f746_match_data = {
 	.pins = stm32f746_pins,
 	.npins = ARRAY_SIZE(stm32f746_pins),
+	.need_syscon = true,
 };
 
 static const struct of_device_id stm32f746_pctrl_match[] = {

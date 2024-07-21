@@ -12,16 +12,21 @@ maintainers:
 
 properties:
   compatible:
+    description:
+      Legacy syscon is allowed for backward compatibility with old devicetree.
+      Don't use it on new devicetree.
     oneOf:
       - items:
           - enum:
               - st,stm32-exti
               - st,stm32h7-exti
+              - st,stm32mp1-exti
       - items:
           - enum:
               - st,stm32mp1-exti
               - st,stm32mp13-exti
           - const: syscon
+        deprecated: true
 
   "#interrupt-cells":
     const: 2
@@ -43,22 +48,6 @@ properties:
       Interrupts references to primary interrupt controller
 
   wakeup-parent: true
-
-patternProperties:
-  '^exti-interrupt-map$':
-    type: object
-    properties:
-      interrupt-map: true
-      interrupt-map-mask: true
-      "#interrupt-cells":
-        const: 2
-      "#address-cells":
-        const: 0
-
-    required:
-      - interrupt-map
-      - "#interrupt-cells"
-      - "#address-cells"
 
 required:
   - "#interrupt-cells"
@@ -101,30 +90,29 @@ examples:
   - |
     //Example 1
     exti1: interrupt-controller@5000d000 {
-        compatible = "st,stm32mp1-exti", "syscon";
+        compatible = "st,stm32mp1-exti";
         interrupt-controller;
         #interrupt-cells = <2>;
         reg = <0x5000d000 0x400>;
     };
 
+  - |
     //Example 2
+    #include <dt-bindings/interrupt-controller/arm-gic.h>
     exti2: interrupt-controller@5000d000 {
-        compatible = "st,stm32mp1-exti", "syscon";
+        compatible = "st,stm32mp1-exti";
         interrupt-controller;
         #interrupt-cells = <2>;
         reg = <0x5000d000 0x400>;
         wakeup-parent = <&pwr_irq>;
-        exti-interrupt-map {
-            #address-cells = <0>;
-            #interrupt-cells = <2>;
-            interrupt-map-mask = <0xffffffff 0>;
-            interrupt-map =
-                <0 0 &intc GIC_SPI 6 IRQ_TYPE_LEVEL_HIGH>,
-                <3 0 &intc GIC_SPI 9 IRQ_TYPE_LEVEL_HIGH>,
-                <55 0 &pwr_irq 0 IRQ_TYPE_EDGE_FALLING 0>;
-        };
+        interrupts-extended =
+            <&intc GIC_SPI 6 IRQ_TYPE_LEVEL_HIGH>,
+            <0>,
+            <&pwr_irq 0 IRQ_TYPE_EDGE_FALLING 0>,
+            <&intc GIC_SPI 9 IRQ_TYPE_LEVEL_HIGH>;
     };
 
+  - |
     //Example 3
     exti3: interrupt-controller@40013c00 {
         compatible = "st,stm32-exti";

@@ -39,10 +39,10 @@ static void release_pcie_device(struct device *dev)
 
 /*
  * Fill in *pme, *aer, *dpc with the relevant Interrupt Message Numbers if
- * services are enabled in "mask".  Return the number of MSI/MSI-X vectors
+ * services are enabled".  Return the number of MSI/MSI-X vectors
  * required to accommodate the largest Message Number.
  */
-static int pcie_message_numbers(struct pci_dev *dev, int mask,
+static int pcie_message_numbers(struct pci_dev *dev,
 				u32 *pme, u32 *aer, u32 *dpc)
 {
 	u32 nvec = 0, pos;
@@ -55,15 +55,14 @@ static int pcie_message_numbers(struct pci_dev *dev, int mask,
 	 * 7.8.2, 7.10.10, 7.31.2.
 	 */
 
-	if (mask & (PCIE_PORT_SERVICE_PME | PCIE_PORT_SERVICE_HP |
-		    PCIE_PORT_SERVICE_BWNOTIF)) {
+	if (pme) {
 		pcie_capability_read_word(dev, PCI_EXP_FLAGS, &reg16);
 		*pme = (reg16 & PCI_EXP_FLAGS_IRQ) >> 9;
 		nvec = *pme + 1;
 	}
 
 #ifdef CONFIG_PCIEAER
-	if (mask & PCIE_PORT_SERVICE_AER) {
+	if (aer) {
 		u32 reg32;
 
 		pos = dev->aer_cap;
@@ -76,7 +75,7 @@ static int pcie_message_numbers(struct pci_dev *dev, int mask,
 	}
 #endif
 
-	if (mask & PCIE_PORT_SERVICE_DPC) {
+	if (dpc) {
 		pos = pci_find_ext_capability(dev, PCI_EXT_CAP_ID_DPC);
 		if (pos) {
 			pci_read_config_word(dev, pos + PCI_EXP_DPC_CAP,
@@ -90,18 +89,15 @@ static int pcie_message_numbers(struct pci_dev *dev, int mask,
 }
 
 /**
- * pcie_port_enable_irq_vec - try to set up MSI-X or MSI as interrupt mode
+ * pcie_port_irqs - try to set up MSI-X or MSI as interrupt mode
  * for given port
- * @dev: PCI Express port to handle
- * @irqs: Array of interrupt vectors to populate
- * @mask: Bitmask of port capabilities returned by get_port_device_capability()
  *
+
  * Return value: 0 on success, error code on failure
  */
-static int pcie_port_enable_irq_vec(struct pci_dev *dev, int *irqs, int mask)
+static int pcie_port_irqs(struct pci_dev *dev, u32 *pme, u32 *aer, u32 *dpc)
 {
-	int nr_entries, nvec, pcie_irq;
-	u32 pme = 0, aer = 0, dpc = 0;
+	int nr_entries, nvec;
 
 	/* Allocate the maximum possible number of MSI/MSI-X vectors */
 	nr_entries = pci_alloc_irq_vectors(dev, 1, PCIE_PORT_MAX_MSI_ENTRIES,
@@ -110,7 +106,7 @@ static int pcie_port_enable_irq_vec(struct pci_dev *dev, int *irqs, int mask)
 		return nr_entries;
 
 	/* See how many and which Interrupt Message Numbers we actually use */
-	nvec = pcie_message_numbers(dev, mask, &pme, &aer, &dpc);
+	nvec = pcie_message_numbers(dev, pme, aer, dpc);
 	if (nvec > nr_entries) {
 		pci_free_irq_vectors(dev);
 		return -EIO;
@@ -136,20 +132,72 @@ static int pcie_port_enable_irq_vec(struct pci_dev *dev, int *irqs, int mask)
 			return nr_entries;
 	}
 
-	/* PME, hotplug and bandwidth notification share an MSI/MSI-X vector */
+	if (aer)
+		*aer = pci_irq_vector(dev, *aer);
+	if (pme)
+		*pme = pci_irq_vector(dev, *pme);
+	if (dpc)
+		*dpc = pci_irq_vector(dev, *dpc);
+
+	return 0;
+}
+
+/*
+ * If non-NULL, this gets called instead of pcie_port_irqs to use
+ * plaform irqs instead of MSI-X or MSI.
+ */
+int (*pcie_port_irqs_hook)(struct pci_dev *, u32 *, u32 *, u32 *);
+EXPORT_SYMBOL(pcie_port_irqs_hook);
+
+/**
+ * pcie_port_enable_irqs - Get interrupt service irqs for given port
+ * @dev: PCI Express port to handle
+ * @irqs: Array of interrupt vectors to populate
+ * @mask: Bitmask of port capabilities returned by get_port_device_capability()
+ *
+ * Return value: 0 on success, error code on failure
+ */
+static int pcie_port_enable_irqs(struct pci_dev *dev, int *irqs, int mask)
+{
+	u32 pme = 0, aer = 0, dpc = 0;
+	u32 *ppme = NULL, *paer = NULL, *pdpc = NULL;
+	int ret;
+
 	if (mask & (PCIE_PORT_SERVICE_PME | PCIE_PORT_SERVICE_HP |
 		    PCIE_PORT_SERVICE_BWNOTIF)) {
-		pcie_irq = pci_irq_vector(dev, pme);
-		irqs[PCIE_PORT_SERVICE_PME_SHIFT] = pcie_irq;
-		irqs[PCIE_PORT_SERVICE_HP_SHIFT] = pcie_irq;
-		irqs[PCIE_PORT_SERVICE_BWNOTIF_SHIFT] = pcie_irq;
+		ppme = &pme;
+	}
+#ifdef CONFIG_PCIEAER
+	if (mask & PCIE_PORT_SERVICE_AER)
+		paer = &aer;
+#endif
+	if (mask & PCIE_PORT_SERVICE_DPC)
+		pdpc = &dpc;
+
+	/*
+	 *  Try to use MSI-X or MSI if supported.
+	 *  if the platform doesn't have other interrupt mapping.ppp
+	 */
+	if (pcie_port_irqs_hook)
+		ret = pcie_port_irqs_hook(dev, ppme, paer, pdpc);
+	else
+		ret = pcie_port_irqs(dev, ppme, paer, pdpc);
+
+	if (ret)
+		return ret;
+
+	/* PME, hotplug and bandwidth notification share an MSI/MSI-X vector */
+	if (pme) {
+		irqs[PCIE_PORT_SERVICE_PME_SHIFT] = pme;
+		irqs[PCIE_PORT_SERVICE_HP_SHIFT] = pme;
+		irqs[PCIE_PORT_SERVICE_BWNOTIF_SHIFT] = pme;
 	}
 
-	if (mask & PCIE_PORT_SERVICE_AER)
-		irqs[PCIE_PORT_SERVICE_AER_SHIFT] = pci_irq_vector(dev, aer);
+	if (aer)
+		irqs[PCIE_PORT_SERVICE_AER_SHIFT] = aer;
 
-	if (mask & PCIE_PORT_SERVICE_DPC)
-		irqs[PCIE_PORT_SERVICE_DPC_SHIFT] = pci_irq_vector(dev, dpc);
+	if (dpc)
+		irqs[PCIE_PORT_SERVICE_DPC_SHIFT] = dpc;
 
 	return 0;
 }
@@ -178,7 +226,7 @@ static int pcie_init_service_irqs(struct pci_dev *dev, int *irqs, int mask)
 		goto legacy_irq;
 
 	/* Try to use MSI-X or MSI if supported */
-	if (pcie_port_enable_irq_vec(dev, irqs, mask) == 0)
+	if (pcie_port_enable_irqs(dev, irqs, mask) == 0)
 		return 0;
 
 legacy_irq:

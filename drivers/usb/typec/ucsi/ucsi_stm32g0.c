@@ -50,6 +50,9 @@
 #define STM32G0_FW_RSTGOBL	0x21	/* Reset and go to bootloader */
 #define STM32G0_FW_KEYWORD	0xa56959a6
 
+/* STM32MP25 specifics */
+#define STM32MP25_UCSI_USE_WQ	1
+
 /* ucsi_stm32g0_fw_info located at the end of the firmware */
 struct ucsi_stm32g0_fw_info {
 	u32 version;
@@ -68,6 +71,8 @@ struct ucsi_stm32g0 {
 	struct ucsi *ucsi;
 	bool suspended;
 	bool wakeup_event;
+	struct work_struct irq_work;
+	struct workqueue_struct *wq;
 };
 
 /*
@@ -395,9 +400,13 @@ static int ucsi_stm32g0_sync_write(struct ucsi *ucsi, unsigned int offset, const
 				   size_t len)
 {
 	struct ucsi_stm32g0 *g0 = ucsi_get_drvdata(ucsi);
+	bool ack = UCSI_COMMAND(*(u64 *)val) == UCSI_ACK_CC_CI;
 	int ret;
 
-	set_bit(COMMAND_PENDING, &g0->flags);
+	if (ack)
+		set_bit(ACK_PENDING, &g0->flags);
+	else
+		set_bit(COMMAND_PENDING, &g0->flags);
 
 	ret = ucsi_stm32g0_async_write(ucsi, offset, val, len);
 	if (ret)
@@ -405,32 +414,48 @@ static int ucsi_stm32g0_sync_write(struct ucsi *ucsi, unsigned int offset, const
 
 	if (!wait_for_completion_timeout(&g0->complete, msecs_to_jiffies(5000)))
 		ret = -ETIMEDOUT;
+	else
+		return 0;
 
 out_clear_bit:
-	clear_bit(COMMAND_PENDING, &g0->flags);
+	if (ack)
+		clear_bit(ACK_PENDING, &g0->flags);
+	else
+		clear_bit(COMMAND_PENDING, &g0->flags);
 
 	return ret;
+}
+
+static void ucsi_stm32g0_irq_work(struct work_struct *irq_work)
+{
+	struct ucsi_stm32g0 *g0 = container_of(irq_work, struct ucsi_stm32g0, irq_work);
+	u32 cci;
+	int ret;
+
+	ret = ucsi_stm32g0_read(g0->ucsi, UCSI_CCI, &cci, sizeof(cci));
+	if (ret)
+		return;
+
+	if (UCSI_CCI_CONNECTOR(cci))
+		ucsi_connector_change(g0->ucsi, UCSI_CCI_CONNECTOR(cci));
+
+	if (cci & UCSI_CCI_ACK_COMPLETE && test_and_clear_bit(ACK_PENDING, &g0->flags))
+		complete(&g0->complete);
+	if (cci & UCSI_CCI_COMMAND_COMPLETE && test_and_clear_bit(COMMAND_PENDING, &g0->flags))
+		complete(&g0->complete);
 }
 
 static irqreturn_t ucsi_stm32g0_irq_handler(int irq, void *data)
 {
 	struct ucsi_stm32g0 *g0 = data;
-	u32 cci;
-	int ret;
 
 	if (g0->suspended)
 		g0->wakeup_event = true;
 
-	ret = ucsi_stm32g0_read(g0->ucsi, UCSI_CCI, &cci, sizeof(cci));
-	if (ret)
-		return IRQ_NONE;
-
-	if (UCSI_CCI_CONNECTOR(cci))
-		ucsi_connector_change(g0->ucsi, UCSI_CCI_CONNECTOR(cci));
-
-	if (test_bit(COMMAND_PENDING, &g0->flags) &&
-	    cci & (UCSI_CCI_ACK_COMPLETE | UCSI_CCI_COMMAND_COMPLETE))
-		complete(&g0->complete);
+	if (g0->wq)
+		queue_work(g0->wq, &g0->irq_work);
+	else
+		ucsi_stm32g0_irq_work(&g0->irq_work);
 
 	return IRQ_HANDLED;
 }
@@ -630,6 +655,7 @@ static int ucsi_stm32g0_probe(struct i2c_client *client, const struct i2c_device
 {
 	struct device *dev = &client->dev;
 	struct ucsi_stm32g0 *g0;
+	u32 use_wq;
 	int ret;
 
 	g0 = devm_kzalloc(dev, sizeof(*g0), GFP_KERNEL);
@@ -641,9 +667,23 @@ static int ucsi_stm32g0_probe(struct i2c_client *client, const struct i2c_device
 	init_completion(&g0->complete);
 	i2c_set_clientdata(client, g0);
 
+	use_wq = (uintptr_t)device_get_match_data(dev);
+	if (use_wq) {
+		/*
+		 * When using remoteproc (on MP25), I2C access for IRQ thread lead to deadlock.
+		 * Rather rely on dedicated workqueue to notify UCSI upper layer.
+		 */
+		g0->wq = alloc_ordered_workqueue("stm32-ucsi", 0);
+		if(!g0->wq)
+			return -ENOMEM;
+		INIT_WORK(&g0->irq_work, ucsi_stm32g0_irq_work);
+	}
+
 	g0->ucsi = ucsi_create(dev, &ucsi_stm32g0_ops);
-	if (IS_ERR(g0->ucsi))
-		return PTR_ERR(g0->ucsi);
+	if (IS_ERR(g0->ucsi)) {
+		ret = PTR_ERR(g0->ucsi);
+		goto free_wq;
+	}
 
 	ucsi_set_drvdata(g0->ucsi, g0);
 
@@ -684,6 +724,9 @@ freei2c:
 		i2c_unregister_device(g0->i2c_bl);
 destroy:
 	ucsi_destroy(g0->ucsi);
+free_wq:
+	if (g0->wq)
+		destroy_workqueue(g0->wq);
 
 	return ret;
 }
@@ -697,6 +740,8 @@ static void ucsi_stm32g0_remove(struct i2c_client *client)
 	if (g0->fw_name)
 		i2c_unregister_device(g0->i2c_bl);
 	ucsi_destroy(g0->ucsi);
+	if (g0->wq)
+		destroy_workqueue(g0->wq);
 }
 
 static int ucsi_stm32g0_suspend(struct device *dev)
@@ -747,6 +792,7 @@ static DEFINE_SIMPLE_DEV_PM_OPS(ucsi_stm32g0_pm_ops, ucsi_stm32g0_suspend, ucsi_
 
 static const struct of_device_id __maybe_unused ucsi_stm32g0_typec_of_match[] = {
 	{ .compatible = "st,stm32g0-typec" },
+	{ .compatible = "st,stm32mp25-typec", .data = (void *)STM32MP25_UCSI_USE_WQ },
 	{},
 };
 MODULE_DEVICE_TABLE(of, ucsi_stm32g0_typec_of_match);

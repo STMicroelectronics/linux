@@ -404,6 +404,9 @@ void adv7533_dsi_power_on(struct adv7511 *adv);
 void adv7533_dsi_power_off(struct adv7511 *adv);
 enum drm_mode_status adv7533_mode_valid(struct adv7511 *adv,
 					const struct drm_display_mode *mode);
+bool adv7533_mode_fixup(struct adv7511 *adv,
+			const struct drm_display_mode *mode,
+			struct drm_display_mode *adjusted_mode);
 int adv7533_patch_registers(struct adv7511 *adv);
 int adv7533_patch_cec_registers(struct adv7511 *adv);
 int adv7533_attach_dsi(struct adv7511 *adv);

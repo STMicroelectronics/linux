@@ -59,6 +59,12 @@ properties:
           - const: st,stm32-sdmmc2
           - const: arm,pl18x
           - const: arm,primecell
+      - description: Entry for STMicroelectronics variant of PL18x for
+          STM32MP25. This dedicated compatible is used by bootloaders.
+        items:
+          - const: st,stm32mp25-sdmmc2
+          - const: arm,pl18x
+          - const: arm,primecell
 
   clocks:
     description: One or two clocks, the "apb_pclk" and the "MCLK"
@@ -77,6 +83,11 @@ properties:
       - items:
           - const: rx
           - const: tx
+
+  feature-domains:
+    $ref: /schemas/types.yaml#/definitions/phandle-array
+    description: |
+      Phandle to the rifsc device to check access right.
 
   power-domains: true
 

@@ -245,7 +245,7 @@ ld_flags       = $(KBUILD_LDFLAGS) $(ldflags-y) $(LDFLAGS_$(@F))
 DTC_INCLUDE    := $(srctree)/scripts/dtc/include-prefixes
 
 dtc_cpp_flags  = -Wp,-MMD,$(depfile).pre.tmp -nostdinc                    \
-		 $(addprefix -I,$(DTC_INCLUDE))                          \
+		 $(addprefix -I,$(DTC_INCLUDE) $(DTS_INCLUDE))            \
 		 -undef -D__DTS__
 
 ifdef CONFIG_OBJTOOL

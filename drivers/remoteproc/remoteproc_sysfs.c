@@ -174,6 +174,17 @@ static const char * const rproc_state_string[] = {
 	[RPROC_LAST]		= "invalid",
 };
 
+/*
+ * A firmware-format-to-string lookup table, for exposing a human readable
+ * supported firmware format via sysfs. Always keep in sync with enum
+ * rproc_fw_format.
+ */
+static const char * const rproc_format_string[] = {
+	[RPROC_FW_ELF]		= "ELF",
+	[RPROC_FW_TEE]		= "TEE",
+	[RPROC_FW_LAST]		= "invalid",
+};
+
 /* Expose the state of the remote processor via sysfs */
 static ssize_t state_show(struct device *dev, struct device_attribute *attr,
 			  char *buf)
@@ -235,12 +246,23 @@ static umode_t rproc_is_visible(struct kobject *kobj, struct attribute *attr,
 	return mode;
 }
 
+/* Expose the format of the remote processor binary firmware via sysfs */
+static ssize_t fw_format_show(struct device *dev, struct device_attribute *attr,
+			      char *buf)
+{
+	struct rproc *rproc = to_rproc(dev);
+	unsigned int fw_format;
+	fw_format = rproc->fw_format > RPROC_FW_LAST ? RPROC_FW_LAST : rproc->fw_format;
+	return sprintf(buf, "%s\n", rproc_format_string[fw_format]);
+}
+static DEVICE_ATTR_RO(fw_format);
 static struct attribute *rproc_attrs[] = {
 	&dev_attr_coredump.attr,
 	&dev_attr_recovery.attr,
 	&dev_attr_firmware.attr,
 	&dev_attr_state.attr,
 	&dev_attr_name.attr,
+	&dev_attr_fw_format.attr,
 	NULL
 };
 

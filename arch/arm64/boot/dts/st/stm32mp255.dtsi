@@ -1,0 +1,80 @@
+// SPDX-License-Identifier: (GPL-2.0-or-later OR BSD-3-Clause)
+/*
+ * Copyright (C) STMicroelectronics 2023 - All Rights Reserved
+ * Author: Alexandre Torgue <alexandre.torgue@foss.st.com> for STMicroelectronics.
+ */
+#include <dt-bindings/power/stm32mp25-power-domains.h>
+#include "stm32mp253.dtsi"
+
+/ {
+	soc@0 {
+		rifsc: rifsc@42080000 {
+			dsi: dsi@48000000 {
+				compatible = "st,stm32mp25-dsi";
+				reg = <0x48000000 0x800>;
+				#clock-cells = <0>;
+				clocks = <&rcc CK_BUS_DSI>, <&rcc CK_KER_DSIPHY>,
+					 <&rcc CK_KER_LTDC>;
+				clock-names = "pclk", "ref", "px_clk";
+				resets = <&rcc DSI_R>;
+				reset-names = "apb";
+				feature-domains = <&rifsc STM32MP25_RIFSC_DSI_CMN_ID>;
+				power-domains = <&CLUSTER_PD>;
+				status = "disabled";
+			};
+
+			lvds: lvds@48060000 {
+				#clock-cells = <0>;
+				compatible = "st,stm32mp25-lvds";
+				reg = <0x48060000 0x2000>;
+				clocks = <&rcc CK_BUS_LVDS>, <&rcc CK_KER_LVDSPHY>;
+				clock-names = "pclk", "ref";
+				resets = <&rcc LVDS_R>;
+				feature-domains = <&rifsc STM32MP25_RIFSC_LVDS_ID>;
+				power-domains = <&CLUSTER_PD>;
+				status = "disabled";
+			};
+
+			vdec: vdec@480d0000 {
+				compatible = "st,stm32mp25-vdec";
+				reg = <0x480d0000 0x3c8>;
+				resets = <&rcc VDEC_R>;
+				interrupt-names = "vdec";
+				interrupts = <GIC_SPI 117 IRQ_TYPE_LEVEL_HIGH>;
+				clock-names = "vdec-clk";
+				clocks = <&rcc CK_BUS_VDEC>;
+				feature-domains = <&rifsc STM32MP25_RIFSC_VDEC_ID>;
+				power-domains = <&CLUSTER_PD>;
+			};
+			venc: venc@480e0000 {
+				compatible = "st,stm32mp25-venc";
+				reg = <0x480e0000 0x800>;
+				reset-names = "venc-rst";
+				resets = <&rcc VENC_R>;
+				interrupt-names = "venc";
+				interrupts = <GIC_SPI 167 IRQ_TYPE_LEVEL_HIGH>;
+				clock-names = "venc-clk";
+				clocks = <&rcc CK_BUS_VENC>;
+				feature-domains = <&rifsc STM32MP25_RIFSC_VENC_ID>;
+				power-domains = <&CLUSTER_PD>;
+			};
+
+			gpu: gpu@48280000 {
+				compatible = "vivante,gc";
+				reg = <0x48280000 0x800>;
+				interrupts = <GIC_SPI 183 IRQ_TYPE_LEVEL_HIGH>;
+				resets = <&rcc GPU_R>;
+				clock-names = "axi", "core";
+				clocks = <&rcc CK_BUS_GPU>, <&rcc CK_KER_GPU>;
+				power-domains = <&scmi_devpd PD_SCMI_GPU>;
+				feature-domains = <&rifsc STM32MP25_RIFSC_GPU_ID>;
+				status = "disabled";
+			};
+		};
+	};
+};
+
+&ltdc {
+	clocks = <&rcc CK_BUS_LTDC>, <&rcc CK_KER_LTDC>, <&syscfg 0>, <&lvds 0>;
+	clock-names = "bus", "ref", "lcd", "lvds";
+};

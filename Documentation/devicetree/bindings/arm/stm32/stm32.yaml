@@ -157,6 +157,12 @@ properties:
           - const: seeed,stm32mp157c-odyssey-som
           - const: st,stm32mp157
 
+      - items:
+          - enum:
+              - st,stm32mp257f-dk
+              - st,stm32mp257f-ev1
+          - const: st,stm32mp257
+
 additionalProperties: true
 
 ...

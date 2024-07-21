@@ -1553,6 +1553,7 @@ static const struct stm32_desc_pin stm32f469_pins[] = {
 static struct stm32_pinctrl_match_data stm32f469_match_data = {
 	.pins = stm32f469_pins,
 	.npins = ARRAY_SIZE(stm32f469_pins),
+	.need_syscon = true,
 };
 
 static const struct of_device_id stm32f469_pctrl_match[] = {

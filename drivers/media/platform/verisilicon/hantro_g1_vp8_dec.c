@@ -439,6 +439,8 @@ int hantro_g1_vp8_dec_run(struct hantro_ctx *ctx)
 	u32 mb_width, mb_height;
 	u32 reg;
 
+	hantro_g1_check_idle(vpu);
+
 	hantro_start_prepare_run(ctx);
 
 	hdr = hantro_get_ctrl(ctx, V4L2_CID_STATELESS_VP8_FRAME);
@@ -452,15 +454,16 @@ int hantro_g1_vp8_dec_run(struct hantro_ctx *ctx)
 
 	hantro_vp8_prob_update(ctx, hdr);
 
-	reg = G1_REG_CONFIG_DEC_TIMEOUT_E |
-	      G1_REG_CONFIG_DEC_STRENDIAN_E |
+	reg = G1_REG_CONFIG_DEC_STRENDIAN_E |
 	      G1_REG_CONFIG_DEC_INSWAP32_E |
 	      G1_REG_CONFIG_DEC_STRSWAP32_E |
 	      G1_REG_CONFIG_DEC_OUTSWAP32_E |
-	      G1_REG_CONFIG_DEC_CLK_GATE_E |
 	      G1_REG_CONFIG_DEC_IN_ENDIAN |
 	      G1_REG_CONFIG_DEC_OUT_ENDIAN |
-	      G1_REG_CONFIG_DEC_MAX_BURST(16);
+	      G1_REG_CONFIG_DEC_2CHAN_DIS |
+	      G1_REG_CONFIG_DEC_SCMD_DIS |
+	      G1_REG_CONFIG_DEC_ADV_PRE_DIS |
+	      G1_REG_CONFIG_DEC_MAX_BURST(vpu->max_burst_length);
 	vdpu_write_relaxed(vpu, reg, G1_REG_CONFIG);
 
 	reg = G1_REG_DEC_CTRL0_DEC_MODE(10) |

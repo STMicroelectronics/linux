@@ -6,6 +6,7 @@
  * Author(s): Amelie Delaunay <amelie.delaunay@st.com>.
  */
 #include <linux/gpio/driver.h>
+#include <linux/i2c.h>
 #include <linux/interrupt.h>
 #include <linux/mfd/stmfx.h>
 #include <linux/module.h>
@@ -615,13 +616,31 @@ static int stmfx_pinctrl_gpio_function_enable(struct stmfx_pinctrl *pctl)
 	return stmfx_function_enable(pctl->stmfx, func);
 }
 
+static int stmfx_pinctrl_irq_set_affinity(struct irq_data *d, const struct cpumask *dest,
+					  bool force)
+{
+	struct gpio_chip *gpio_chip = irq_data_get_irq_chip_data(d);
+	struct stmfx_pinctrl *pctl = gpiochip_get_data(gpio_chip);
+	struct i2c_client *client = to_i2c_client(pctl->stmfx->dev);
+	static DEFINE_RATELIMIT_STATE(rs, DEFAULT_RATELIMIT_INTERVAL * 10, 1);
+
+	if (__ratelimit(&rs))
+		dev_notice(pctl->dev,
+			   "Can't set the affinity, set it for irq %d instead\n", client->irq);
+	if (force)
+		return -EINVAL;
+
+	return 0;
+}
+
 static int stmfx_pinctrl_probe(struct platform_device *pdev)
 {
 	struct stmfx *stmfx = dev_get_drvdata(pdev->dev.parent);
 	struct device_node *np = pdev->dev.of_node;
 	struct stmfx_pinctrl *pctl;
 	struct gpio_irq_chip *girq;
-	int irq, ret;
+	int irq, i, ret;
+	const char **names;
 
 	pctl = devm_kzalloc(stmfx->dev, sizeof(*pctl), GFP_KERNEL);
 	if (!pctl)
@@ -678,6 +697,14 @@ static int stmfx_pinctrl_probe(struct platform_device *pdev)
 	pctl->gpio_chip.ngpio = pctl->pctl_desc.npins;
 	pctl->gpio_chip.can_sleep = true;
 
+	names = devm_kcalloc(pctl->dev, ARRAY_SIZE(stmfx_pins), sizeof(char *), GFP_KERNEL);
+	if (names) {
+		for (i = 0; i < ARRAY_SIZE(stmfx_pins); i++)
+			names[i] = stmfx_pins[i].name;
+
+		pctl->gpio_chip.names = names;
+	}
+
 	pctl->irq_chip.name = dev_name(pctl->dev);
 	pctl->irq_chip.irq_mask = stmfx_pinctrl_irq_mask;
 	pctl->irq_chip.irq_unmask = stmfx_pinctrl_irq_unmask;
@@ -687,6 +714,8 @@ static int stmfx_pinctrl_probe(struct platform_device *pdev)
 	pctl->irq_chip.irq_request_resources = stmfx_gpio_irq_request_resources;
 	pctl->irq_chip.irq_release_resources = stmfx_gpio_irq_release_resources;
 	pctl->irq_chip.flags = IRQCHIP_IMMUTABLE;
+	pctl->irq_chip.irq_set_affinity = IS_ENABLED(CONFIG_SMP) ? stmfx_pinctrl_irq_set_affinity :
+								   NULL;
 
 	girq = &pctl->gpio_chip.irq;
 	gpio_irq_chip_set_chip(girq, &pctl->irq_chip);

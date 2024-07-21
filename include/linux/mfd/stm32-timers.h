@@ -33,6 +33,10 @@
 #define TIM_DMAR	0x4C	/* DMA register for transfer */
 #define TIM_TISEL	0x68	/* Input Selection         */
 
+#define TIM_HWCFGR2	0x3EC	/* hardware configuration 2 Reg (MP25)	*/
+#define TIM_HWCFGR1	0x3F0	/* hardware configuration 1 Reg (MP25)	*/
+#define TIM_IPIDR	0x3F8	/* IP identification Reg (MP25)		*/
+
 #define TIM_CR1_CEN	BIT(0)	/* Counter Enable	   */
 #define TIM_CR1_DIR	BIT(4)  /* Counter Direction	   */
 #define TIM_CR1_ARPE	BIT(7)	/* Auto-reload Preload Ena */
@@ -41,6 +45,11 @@
 #define TIM_SMCR_SMS	(BIT(0) | BIT(1) | BIT(2)) /* Slave mode selection */
 #define TIM_SMCR_TS	(BIT(4) | BIT(5) | BIT(6)) /* Trigger selection */
 #define TIM_DIER_UIE	BIT(0)	/* Update interrupt	   */
+#define TIM_DIER_CC1IE	BIT(1)  /* CC1 Interrupt Enable    */
+#define TIM_DIER_CC2IE	BIT(2)  /* CC2 Interrupt Enable    */
+#define TIM_DIER_CC3IE	BIT(3)  /* CC3 Interrupt Enable    */
+#define TIM_DIER_CC4IE	BIT(4)  /* CC4 Interrupt Enable    */
+#define TIM_DIER_CC_IE(x)	BIT((x) + 1) /* CC1, CC2, CC3, CC4 interrupt enable */
 #define TIM_DIER_UDE	BIT(8)  /* Update DMA request Enable */
 #define TIM_DIER_CC1DE	BIT(9)  /* CC1 DMA request Enable  */
 #define TIM_DIER_CC2DE	BIT(10) /* CC2 DMA request Enable  */
@@ -49,6 +58,7 @@
 #define TIM_DIER_COMDE	BIT(13) /* COM DMA request Enable  */
 #define TIM_DIER_TDE	BIT(14) /* Trigger DMA request Enable */
 #define TIM_SR_UIF	BIT(0)	/* Update interrupt flag   */
+#define TIM_SR_CC_IF(x)	BIT((x) + 1) /* CC1, CC2, CC3, CC4 interrupt flag */
 #define TIM_EGR_UG	BIT(0)	/* Update Generation       */
 #define TIM_CCMR_PE	BIT(3)	/* Channel Preload Enable  */
 #define TIM_CCMR_M1	(BIT(6) | BIT(5))  /* Channel PWM Mode 1 */
@@ -60,16 +70,23 @@
 #define TIM_CCMR_CC1S_TI2	BIT(1)	/* IC1/IC3 selects TI2/TI4 */
 #define TIM_CCMR_CC2S_TI2	BIT(8)	/* IC2/IC4 selects TI2/TI4 */
 #define TIM_CCMR_CC2S_TI1	BIT(9)	/* IC2/IC4 selects TI1/TI3 */
+#define TIM_CCMR_CC3S		(BIT(0) | BIT(1)) /* Capture/compare 3 sel */
+#define TIM_CCMR_CC4S		(BIT(8) | BIT(9)) /* Capture/compare 4 sel */
+#define TIM_CCMR_CC3S_TI3	BIT(0)	/* IC3 selects TI3 */
+#define TIM_CCMR_CC4S_TI4	BIT(8)	/* IC4 selects TI4 */
 #define TIM_CCER_CC1E	BIT(0)	/* Capt/Comp 1  out Ena    */
 #define TIM_CCER_CC1P	BIT(1)	/* Capt/Comp 1  Polarity   */
 #define TIM_CCER_CC1NE	BIT(2)	/* Capt/Comp 1N out Ena    */
 #define TIM_CCER_CC1NP	BIT(3)	/* Capt/Comp 1N Polarity   */
 #define TIM_CCER_CC2E	BIT(4)	/* Capt/Comp 2  out Ena    */
 #define TIM_CCER_CC2P	BIT(5)	/* Capt/Comp 2  Polarity   */
+#define TIM_CCER_CC2NP	BIT(7)	/* Capt/Comp 2N Polarity   */
 #define TIM_CCER_CC3E	BIT(8)	/* Capt/Comp 3  out Ena    */
 #define TIM_CCER_CC3P	BIT(9)	/* Capt/Comp 3  Polarity   */
+#define TIM_CCER_CC3NP	BIT(11)	/* Capt/Comp 3N Polarity   */
 #define TIM_CCER_CC4E	BIT(12)	/* Capt/Comp 4  out Ena    */
 #define TIM_CCER_CC4P	BIT(13)	/* Capt/Comp 4  Polarity   */
+#define TIM_CCER_CC4NP	BIT(15)	/* Capt/Comp 4N Polarity   */
 #define TIM_CCER_CCXE	(BIT(0) | BIT(4) | BIT(8) | BIT(12))
 #define TIM_BDTR_BKE(x)	BIT(12 + (x) * 12) /* Break input enable */
 #define TIM_BDTR_BKP(x)	BIT(13 + (x) * 12) /* Break input polarity */
@@ -78,6 +95,9 @@
 #define TIM_BDTR_BKF(x)	(0xf << (16 + (x) * 4))
 #define TIM_DCR_DBA	GENMASK(4, 0)	/* DMA base addr */
 #define TIM_DCR_DBL	GENMASK(12, 8)	/* DMA burst len */
+#define TIM_HWCFGR1_NB_OF_CC	GENMASK(3, 0)	/* Capture/compare channels */
+#define TIM_HWCFGR1_NB_OF_DT	GENMASK(7, 4)	/* Complementary outputs & dead-time generators */
+#define TIM_HWCFGR2_CNT_WIDTH	GENMASK(15, 8)	/* Counter width */
 
 #define MAX_TIM_PSC		0xFFFF
 #define MAX_TIM_ICPSC		0x3
@@ -91,6 +111,8 @@
 #define TIM_BDTR_BKF_MASK	0xF
 #define TIM_BDTR_BKF_SHIFT(x)	(16 + (x) * 4)
 
+#define STM32MP25_TIM_IPIDR	0x00120002
+
 enum stm32_timers_dmas {
 	STM32_TIMERS_DMA_CH1,
 	STM32_TIMERS_DMA_CH2,
@@ -100,6 +122,15 @@ enum stm32_timers_dmas {
 	STM32_TIMERS_DMA_TRIG,
 	STM32_TIMERS_DMA_COM,
 	STM32_TIMERS_MAX_DMAS,
+};
+
+/* STM32 Timer may have either a unique global interrupt or 4 interrupt lines */
+enum stm32_timers_irqs {
+	STM32_TIMERS_IRQ_GLOBAL_BRK, /* global or brk IRQ */
+	STM32_TIMERS_IRQ_UP,
+	STM32_TIMERS_IRQ_TRG_COM,
+	STM32_TIMERS_IRQ_CC,
+	STM32_TIMERS_MAX_IRQS,
 };
 
 /**
@@ -120,9 +151,12 @@ struct stm32_timers_dma {
 
 struct stm32_timers {
 	struct clk *clk;
+	u32 ipidr;
 	struct regmap *regmap;
 	u32 max_arr;
 	struct stm32_timers_dma dma; /* Only to be used by the parent */
+	unsigned int nr_irqs;
+	int irq[STM32_TIMERS_MAX_IRQS];
 };
 
 #if IS_REACHABLE(CONFIG_MFD_STM32_TIMERS)

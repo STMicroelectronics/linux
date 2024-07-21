@@ -1,0 +1,69 @@
+# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/nvmem/st,stm32-tamp-nvram.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: STMicroelectronics STM32 backup registers as NVMEM
+
+description: |
+  This represents STM32 backup registers area presented as nvmem cells.
+  This contains various information (e.g. boot mode passed to bootloaders).
+
+maintainers:
+  - Siméon Marijon <simeon.marijon@foss.st.com>
+
+allOf:
+  - $ref: "nvmem.yaml#"
+
+properties:
+  compatible:
+    enum:
+      - st,stm32mp15-tamp-nvram
+      - st,stm32mp25-tamp-nvram
+
+  reg:
+    description:
+      TAMP Registers bank location and size.
+    maxItems: 1
+
+  '#address-cells':
+    const: 1
+
+  '#size-cells':
+    const: 1
+
+patternProperties:
+  "^tamp-bkp@[0-9a-f]+$":
+    type: object
+    required:
+      - reg
+
+required:
+  - compatible
+  - reg
+  - "#address-cells"
+  - "#size-cells"
+
+additionalProperties: false
+
+examples:
+  - |
+          nvram: nvram@5c00a100 {
+              #address-cells = <1>;
+              #size-cells = <1>;
+              reg = <0x5c00a100 0x80>;
+              compatible = "st,stm32mp15-tamp-nvram";
+
+              /* Data cells */
+              saes_secret_key: tamp-bkp@0 {
+                  /*see saes secret key feature */
+                  reg = <0x0 0x20>;
+              };
+
+              boot_mode: tamp-bkp@78 {
+                  /*see boot mode selection feature*/
+                  reg = <0x78 0x4>;
+              };
+          };
+...

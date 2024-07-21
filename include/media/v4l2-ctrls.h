@@ -81,6 +81,7 @@ union v4l2_ctrl_ptr {
 	struct v4l2_ctrl_hdr10_cll_info *p_hdr10_cll;
 	struct v4l2_ctrl_hdr10_mastering_display *p_hdr10_mastering;
 	struct v4l2_area *p_area;
+	struct v4l2_ctrl_vp8_encode_params *p_vp8_encode_params;
 	void *p;
 	const void *p_const;
 };

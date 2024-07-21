@@ -120,6 +120,31 @@ enum drm_mode_status adv7533_mode_valid(struct adv7511 *adv,
 	return MODE_OK;
 }
 
+bool adv7533_mode_fixup(struct adv7511 *adv,
+			const struct drm_display_mode *mode,
+			struct drm_display_mode *adjusted_mode)
+{
+	struct mipi_dsi_device *dsi = adv->dsi;
+	int lanes, ret;
+
+	if (mode->clock > 80000)
+		lanes = 4;
+	else
+		lanes = 3;
+
+	if (lanes != dsi->lanes) {
+		mipi_dsi_detach(dsi);
+		dsi->lanes = lanes;
+		ret = mipi_dsi_attach(dsi);
+		if (ret) {
+			dev_err(&dsi->dev, "failed to change host lanes\n");
+			return false;
+		}
+	}
+
+	return true;
+}
+
 int adv7533_patch_registers(struct adv7511 *adv)
 {
 	return regmap_register_patch(adv->regmap,
@@ -147,7 +172,7 @@ int adv7533_attach_dsi(struct adv7511 *adv)
 
 	host = of_find_mipi_dsi_host_by_node(adv->host_node);
 	if (!host) {
-		dev_err(dev, "failed to find dsi host\n");
+		dev_dbg(dev, "failed to find dsi host\n");
 		return -EPROBE_DEFER;
 	}
 

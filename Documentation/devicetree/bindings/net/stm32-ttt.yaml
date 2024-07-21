@@ -1,0 +1,90 @@
+# SPDX-License-Identifier: (GPL-2.0 OR BSD-2-Clause)
+# Copyright 2019 BayLibre, SAS
+%YAML 1.2
+---
+$id: "http://devicetree.org/schemas/net/stm32-ttt.yaml#"
+$schema: "http://devicetree.org/meta-schemas/core.yaml#"
+
+title: STMicroelectronics STM32 TSN switch glue layer controller
+
+maintainers:
+  - Alexandre Torgue <alexandre.torgue@foss.st.com>
+
+description:
+  This file documents platform glue layer for the TSN switch.
+
+properties:
+  compatible:
+    contains:
+      enum:
+        - st,stm32-deip
+
+patternProperties:
+  "^deip-sw@[0-9a-f]+$":
+    type: object
+    properties:
+      compatible:
+        enum:
+          - ttt,deip-sw
+    required:
+      - compatible
+
+  "^acm@[0-9a-f]+$":
+    type: object
+    properties:
+      compatible:
+        enum:
+          - ttt,acm-4.0
+    required:
+      - compatible
+
+required:
+  - compatible
+
+additionalProperties: true
+
+examples:
+  - |
+    #include <dt-bindings/interrupt-controller/arm-gic.h>
+    #include <dt-bindings/clock/stm32mp25-clks.h>
+    switch0: ttt-sw@4c000000 {
+        #address-cells  = <1>;
+        #size-cells     = <1>;
+        compatible = "st,stm32-deip";
+        clock-names = "ethsw-bus-clk", "ethsw-clk",
+                      "ethswacmcfg-bus-clk", "ethswacmmsg-bus-clk";
+        clocks = <&rcc CK_BUS_ETHSW>,
+                 <&rcc CK_KER_ETHSW>,
+                 <&rcc CK_BUS_ETHSWACMCFG>,
+                 <&rcc CK_BUS_ETHSWACMMSG>;
+        st,syscon = <&syscfg 0x3800>;
+        ranges = <0x4b000000 0x4b000000 0xc0000>,
+                 <0x4c000000 0x4c000000 0x2000000>;
+        status = "disabled";
+
+        deip_sw0: deip-sw@4c000000 {
+                compatible =  "ttt,deip-sw";
+                reg = <0x4c000000 0x2000000>;
+                interrupts = <GIC_SPI 250 IRQ_TYPE_LEVEL_HIGH>;
+        };
+
+        acm@4b000000 {
+                compatible = "ttt,acm-4.0";
+                reg = <0x4b000000 0x00400>,
+                      <0x4b010000 0x10000>,
+                      <0x4b030000 0x10000>,
+                      <0x4b050000 0x10000>,
+                      <0x4b060000 0x20000>,
+                      <0x4b080000 0x40000>;
+                reg-names = "CommonRegister",
+                            "Bypass1",
+                            "Bypass0",
+                            "Redundancy",
+                            "Scheduler",
+                            "Messagebuffer";
+                buffers = <32>;
+                ptp_worker = <&deip_sw0>;
+        };
+    };
+
+...

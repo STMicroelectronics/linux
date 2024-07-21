@@ -17,6 +17,7 @@
 #include <linux/etherdevice.h>
 #include <linux/ethtool.h>
 #include <linux/if_vlan.h>
+#include <linux/string_helpers.h>
 
 #include "u_ether.h"
 
@@ -978,6 +979,8 @@ int gether_get_host_addr_cdc(struct net_device *net, char *host_addr, int len)
 	dev = netdev_priv(net);
 	snprintf(host_addr, len, "%pm", dev->host_mac);
 
+	string_upper(host_addr, host_addr);
+
 	return strlen(host_addr);
 }
 EXPORT_SYMBOL_GPL(gether_get_host_addr_cdc);
@@ -1051,6 +1054,22 @@ int gether_set_ifname(struct net_device *net, const char *name, int len)
 EXPORT_SYMBOL_GPL(gether_set_ifname);
 
 /*
+ * gether_unregister_netdev - unregister Ethernet-over-USB device
+ * Context: may sleep
+ *
+ * This is called to unregister all resources allocated by @gether_register_netdev().
+ */
+void gether_unregister_netdev(struct eth_dev *dev)
+{
+	if (!dev)
+		return;
+
+	unregister_netdev(dev->net);
+	flush_work(&dev->work);
+}
+EXPORT_SYMBOL_GPL(gether_unregister_netdev);
+
+/*
  * gether_cleanup - remove Ethernet-over-USB device
  * Context: may sleep
  *
@@ -1061,8 +1080,7 @@ void gether_cleanup(struct eth_dev *dev)
 	if (!dev)
 		return;
 
-	unregister_netdev(dev->net);
-	flush_work(&dev->work);
+	gether_unregister_netdev(dev);
 	free_netdev(dev->net);
 }
 EXPORT_SYMBOL_GPL(gether_cleanup);

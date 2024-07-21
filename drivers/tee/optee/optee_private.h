@@ -116,6 +116,7 @@ struct optee_pcpu {
  * @optee_pcpu		per_cpu optee instance for per cpu work or NULL
  * @notif_pcpu_wq	workqueue for per cpu aynchronous notification or NULL
  * @notif_pcpu_work	work for per cpu asynchronous notification
+ * @notif_cpuhp_state   CPU hotplug state assigned for pcpu interrupt management
  * @domain		interrupt domain registered by OP-TEE driver
  */
 struct optee_smc {
@@ -126,6 +127,7 @@ struct optee_smc {
 	struct optee_pcpu __percpu *optee_pcpu;
 	struct workqueue_struct *notif_pcpu_wq;
 	struct work_struct notif_pcpu_work;
+	unsigned int notif_cpuhp_state;
 	struct irq_domain *domain;
 };
 

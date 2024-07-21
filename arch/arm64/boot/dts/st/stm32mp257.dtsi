@@ -1,0 +1,54 @@
+// SPDX-License-Identifier: (GPL-2.0-or-later OR BSD-3-Clause)
+/*
+ * Copyright (C) STMicroelectronics 2023 - All Rights Reserved
+ * Author: Alexandre Torgue <alexandre.torgue@foss.st.com> for STMicroelectronics.
+ */
+#include "stm32mp255.dtsi"
+
+/ {
+	soc@0 {
+		rifsc: rifsc@42080000 {
+			switch0: ttt-sw@4c000000 {
+				#address-cells  = <1>;
+				#size-cells     = <1>;
+				compatible = "st,stm32-deip";
+				clock-names = "ethsw-bus-clk", "ethsw-clk",
+					      "ethswacmcfg-bus-clk", "ethswacmmsg-bus-clk";
+				clocks = <&rcc CK_BUS_ETHSW>,
+					 <&rcc CK_KER_ETHSW>,
+					 <&rcc CK_BUS_ETHSWACMCFG>,
+					 <&rcc CK_BUS_ETHSWACMMSG>;
+				st,syscon = <&syscfg 0x3800>;
+				ranges = <0x4c000000 0x4c000000 0x2000000>,
+					 <0x4b000000 0x4b000000 0xc0000>;
+				feature-domains = <&rifsc STM32MP25_RIFSC_ETHSW_DEIP_ID>;
+				power-domains = <&CLUSTER_PD>;
+				status = "disabled";
+
+				deip_sw0: deip-sw@4c000000 {
+					compatible =  "ttt,deip-sw";
+					reg = <0x4c000000 0x2000000>;
+					interrupts = <GIC_SPI 250 IRQ_TYPE_LEVEL_HIGH>;
+				};
+
+				acm@4b000000 {
+					compatible = "ttt,acm-4.0";
+					reg = <0x4b000000 0x00400>,
+					      <0x4b010000 0x10000>,
+					      <0x4b030000 0x10000>,
+					      <0x4b050000 0x10000>,
+					      <0x4b060000 0x20000>,
+					      <0x4b080000 0x40000>;
+					reg-names = "CommonRegister",
+						    "Bypass1",
+						    "Bypass0",
+						    "Redundancy",
+						    "Scheduler",
+						    "Messagebuffer";
+					buffers = <32>;
+					ptp_worker = <&deip_sw0>;
+				};
+			};
+		};
+	};
+};

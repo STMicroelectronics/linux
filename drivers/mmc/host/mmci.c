@@ -270,7 +270,8 @@ static struct variant_data variant_stm32_sdmmc = {
 	.datactrl_any_blocksz	= true,
 	.datactrl_mask_sdio	= MCI_DPSM_ST_SDIOEN,
 	.stm32_idmabsize_mask	= GENMASK(12, 5),
-	.use_sdio_irq		= true,
+	.stm32_idmabsize_align	= BIT(5),
+	.supports_sdio_irq	= true,
 	.busy_timeout		= true,
 	.busy_detect		= true,
 	.busy_detect_flag	= MCI_STM32_BUSYD0,
@@ -297,7 +298,37 @@ static struct variant_data variant_stm32_sdmmcv2 = {
 	.datactrl_any_blocksz	= true,
 	.datactrl_mask_sdio	= MCI_DPSM_ST_SDIOEN,
 	.stm32_idmabsize_mask	= GENMASK(16, 5),
-	.use_sdio_irq		= true,
+	.stm32_idmabsize_align	= BIT(5),
+	.supports_sdio_irq	= true,
+	.dma_lli		= true,
+	.busy_timeout		= true,
+	.busy_detect		= true,
+	.busy_detect_flag	= MCI_STM32_BUSYD0,
+	.busy_detect_mask	= MCI_STM32_BUSYD0ENDMASK,
+	.init			= sdmmc_variant_init,
+};
+
+static struct variant_data variant_stm32_sdmmcv3 = {
+	.fifosize		= 256 * 4,
+	.fifohalfsize		= 128 * 4,
+	.f_max			= 267000000,
+	.stm32_clkdiv		= true,
+	.cmdreg_cpsm_enable	= MCI_CPSM_STM32_ENABLE,
+	.cmdreg_lrsp_crc	= MCI_CPSM_STM32_LRSP_CRC,
+	.cmdreg_srsp_crc	= MCI_CPSM_STM32_SRSP_CRC,
+	.cmdreg_srsp		= MCI_CPSM_STM32_SRSP,
+	.cmdreg_stop		= MCI_CPSM_STM32_CMDSTOP,
+	.data_cmd_enable	= MCI_CPSM_STM32_CMDTRANS,
+	.irq_pio_mask		= MCI_IRQ_PIO_STM32_MASK,
+	.datactrl_first		= true,
+	.datacnt_useless	= true,
+	.datalength_bits	= 25,
+	.datactrl_blocksz	= 14,
+	.datactrl_any_blocksz	= true,
+	.datactrl_mask_sdio	= MCI_DPSM_ST_SDIOEN,
+	.stm32_idmabsize_mask	= GENMASK(16, 6),
+	.stm32_idmabsize_align	= BIT(6),
+	.supports_sdio_irq	= true,
 	.dma_lli		= true,
 	.busy_timeout		= true,
 	.busy_detect		= true,
@@ -391,12 +422,9 @@ void mmci_write_pwrreg(struct mmci_host *host, u32 pwr)
  */
 static void mmci_write_datactrlreg(struct mmci_host *host, u32 datactrl)
 {
-	/* Keep busy mode in DPSM if enabled */
-	datactrl |= host->datactrl_reg & host->variant->busy_dpsm_flag;
-
-	/* Keep SD I/O interrupt mode enabled */
-	if (host->variant->use_sdio_irq && host->mmc->caps & MMC_CAP_SDIO_IRQ)
-		datactrl |= host->variant->datactrl_mask_sdio;
+	/* Keep busy mode in DPSM and SDIO mask if enabled */
+	datactrl |= host->datactrl_reg & (host->variant->busy_dpsm_flag |
+					  host->variant->datactrl_mask_sdio);
 
 	if (host->datactrl_reg != datactrl) {
 		host->datactrl_reg = datactrl;
@@ -1612,6 +1640,25 @@ static irqreturn_t mmci_pio_irq(int irq, void *dev_id)
 	return IRQ_HANDLED;
 }
 
+static void mmci_write_sdio_irq_bit(struct mmci_host *host, int enable)
+{
+	void __iomem *base = host->base;
+	u32 mask = readl_relaxed(base + MMCIMASK0);
+
+	if (enable)
+		writel_relaxed(mask | MCI_ST_SDIOITMASK, base + MMCIMASK0);
+	else
+		writel_relaxed(mask & ~MCI_ST_SDIOITMASK, base + MMCIMASK0);
+}
+
+static void mmci_signal_sdio_irq(struct mmci_host *host, u32 status)
+{
+	if (status & MCI_ST_SDIOIT) {
+		mmci_write_sdio_irq_bit(host, 0);
+		sdio_signal_irq(host->mmc);
+	}
+}
+
 /*
  * Handle completion of command and data transfers.
  */
@@ -1656,10 +1703,8 @@ static irqreturn_t mmci_irq(int irq, void *dev_id)
 			mmci_data_irq(host, host->data, status);
 		}
 
-		if (host->variant->use_sdio_irq &&
-		    host->mmc->caps & MMC_CAP_SDIO_IRQ &&
-		    host->ops && host->ops->sdio_irq)
-			host->ops->sdio_irq(host, status);
+		if (host->variant->supports_sdio_irq)
+			mmci_signal_sdio_irq(host, status);
 
 		/*
 		 * Busy detection has been handled by mmci_cmd_irq() above.
@@ -1902,22 +1947,17 @@ static void mmci_enable_sdio_irq(struct mmc_host *mmc, int enable)
 	struct mmci_host *host = mmc_priv(mmc);
 	unsigned long flags;
 
-	if (!host->variant->use_sdio_irq)
-		return;
+	if (enable)
+		/* Keep the SDIO mode bit if SDIO irqs are enabled */
+		pm_runtime_get_sync(mmc_dev(mmc));
 
-	if (host->ops && host->ops->enable_sdio_irq) {
-		if (enable)
-			/* Keep device active while SDIO IRQ is enabled */
-			pm_runtime_get_sync(mmc_dev(mmc));
+	spin_lock_irqsave(&host->lock, flags);
+	mmci_write_sdio_irq_bit(host, enable);
+	spin_unlock_irqrestore(&host->lock, flags);
 
-		spin_lock_irqsave(&host->lock, flags);
-		host->ops->enable_sdio_irq(host, enable);
-		spin_unlock_irqrestore(&host->lock, flags);
-
-		if (!enable) {
-			pm_runtime_mark_last_busy(mmc_dev(mmc));
-			pm_runtime_put_autosuspend(mmc_dev(mmc));
-		}
+	if (!enable) {
+		pm_runtime_mark_last_busy(mmc_dev(mmc));
+		pm_runtime_put_autosuspend(mmc_dev(mmc));
 	}
 }
 
@@ -1926,14 +1966,9 @@ static void mmci_ack_sdio_irq(struct mmc_host *mmc)
 	struct mmci_host *host = mmc_priv(mmc);
 	unsigned long flags;
 
-	if (!host->variant->use_sdio_irq)
-		return;
-
-	if (host->ops && host->ops->enable_sdio_irq) {
-		spin_lock_irqsave(&host->lock, flags);
-		host->ops->enable_sdio_irq(host, 1);
-		spin_unlock_irqrestore(&host->lock, flags);
-	}
+	spin_lock_irqsave(&host->lock, flags);
+	mmci_write_sdio_irq_bit(host, 1);
+	spin_unlock_irqrestore(&host->lock, flags);
 }
 
 static struct mmc_host_ops mmci_ops = {
@@ -1944,8 +1979,6 @@ static struct mmc_host_ops mmci_ops = {
 	.get_ro		= mmc_gpio_get_ro,
 	.get_cd		= mmci_get_cd,
 	.start_signal_voltage_switch = mmci_sig_volt_switch,
-	.enable_sdio_irq = mmci_enable_sdio_irq,
-	.ack_sdio_irq	= mmci_ack_sdio_irq,
 };
 
 static void mmci_probe_level_translator(struct mmc_host *mmc)
@@ -2213,12 +2246,14 @@ static int mmci_probe(struct amba_device *dev,
 		mmc->caps |= MMC_CAP_WAIT_WHILE_BUSY;
 	}
 
-	if (variant->use_sdio_irq && host->mmc->caps & MMC_CAP_SDIO_IRQ) {
+	if (variant->supports_sdio_irq && host->mmc->caps & MMC_CAP_SDIO_IRQ) {
 		mmc->caps2 |= MMC_CAP2_SDIO_IRQ_NOTHREAD;
 
-		if (variant->datactrl_mask_sdio)
-			mmci_write_datactrlreg(host,
-					       host->variant->datactrl_mask_sdio);
+		mmci_ops.enable_sdio_irq = mmci_enable_sdio_irq;
+		mmci_ops.ack_sdio_irq	= mmci_ack_sdio_irq;
+
+		mmci_write_datactrlreg(host,
+				       host->variant->datactrl_mask_sdio);
 	}
 
 	/* Variants with mandatory busy timeout in HW needs R1B responses. */
@@ -2501,6 +2536,11 @@ static const struct amba_id mmci_ids[] = {
 		.mask	= 0xf0ffffff,
 		.data	= &variant_stm32_sdmmcv2,
 	},
+	{
+		.id     = 0x00353180,
+		.mask	= 0xf0ffffff,
+		.data	= &variant_stm32_sdmmcv3,
+	},
 	/* Qualcomm variants */
 	{
 		.id     = 0x00051180,
@@ -2516,6 +2556,7 @@ static struct amba_driver mmci_driver = {
 	.drv		= {
 		.name	= DRIVER_NAME,
 		.pm	= &mmci_dev_pm_ops,
+		.probe_type = PROBE_PREFER_ASYNCHRONOUS,
 	},
 	.probe		= mmci_probe,
 	.remove		= mmci_remove,

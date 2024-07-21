@@ -4,6 +4,14 @@
  * Author: Ludovic Barre <ludovic.barre@st.com> for STMicroelectronics.
  */
 #include <dt-bindings/pinctrl/stm32-pinfunc.h>
+#include <dt-bindings/pinctrl/stm32mp15-hdp.h>
+
+&hdp {
+	hdp2_gpo: hdp2-pins {
+		pins = "hdp2";
+		function = HDP2_GPOVAL_2;
+	};
+};
 
 &pinctrl {
 	adc1_in6_pins_a: adc1-in6-0 {
@@ -583,48 +591,18 @@
 		};
 	};
 
-	hdp0_pins_a: hdp0-0 {
+	hdp2_pins_a: hdp2-0 {
 		pins {
-			pinmux = <STM32_PINMUX('I', 12, AF2)>; /* HDP0 */
+			pinmux = <STM32_PINMUX('E', 13, AF0)>; /* HDP2 */
 			bias-disable;
 			drive-push-pull;
 			slew-rate = <2>;
 		};
 	};
 
-	hdp0_sleep_pins_a: hdp0-sleep-0 {
+	hdp2_sleep_pins_a: hdp2-sleep-0 {
 		pins {
-			pinmux = <STM32_PINMUX('I', 12, ANALOG)>; /* HDP0 */
-		};
-	};
-
-	hdp6_pins_a: hdp6-0 {
-		pins {
-			pinmux = <STM32_PINMUX('K', 5, AF2)>; /* HDP6 */
-			bias-disable;
-			drive-push-pull;
-			slew-rate = <2>;
-		};
-	};
-
-	hdp6_sleep_pins_a: hdp6-sleep-0 {
-		pins {
-			pinmux = <STM32_PINMUX('K', 5, ANALOG)>; /* HDP6 */
-		};
-	};
-
-	hdp7_pins_a: hdp7-0 {
-		pins {
-			pinmux = <STM32_PINMUX('K', 6, AF2)>; /* HDP7 */
-			bias-disable;
-			drive-push-pull;
-			slew-rate = <2>;
-		};
-	};
-
-	hdp7_sleep_pins_a: hdp7-sleep-0 {
-		pins {
-			pinmux = <STM32_PINMUX('K', 6, ANALOG)>; /* HDP7 */
+			pinmux = <STM32_PINMUX('E', 13, ANALOG)>; /* HDP2 */
 		};
 	};
 

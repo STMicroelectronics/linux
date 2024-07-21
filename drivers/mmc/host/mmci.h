@@ -218,6 +218,11 @@
 #define MCI_STM32_BUSYD0ENDMASK	BIT(21)
 
 #define MMCIMASK1		0x040
+
+/* STM32 sdmmc data FIFO threshold register */
+#define MMCI_STM32_FIFOTHRR	0x044
+#define MMCI_STM32_THR_MASK	GENMASK(3, 0)
+
 #define MMCIFIFOCNT		0x048
 #define MMCIFIFO		0x080 /* to 0x0bc */
 
@@ -227,8 +232,6 @@
 #define MMCI_STM32_IDMALLIEN	BIT(1)
 
 #define MMCI_STM32_IDMABSIZER		0x054
-#define MMCI_STM32_IDMABNDT_SHIFT	5
-#define MMCI_STM32_IDMABNDT_MASK	GENMASK(12, 5)
 
 #define MMCI_STM32_IDMABASE0R	0x058
 
@@ -315,8 +318,8 @@ struct mmci_host;
  *	       register.
  * @opendrain: bitmask identifying the OPENDRAIN bit inside MMCIPOWER register
  * @dma_lli: true if variant has dma link list feature.
+ * @supports_sdio_irq: allow SD I/O card to interrupt the host
  * @stm32_idmabsize_mask: stm32 sdmmc idma buffer size.
- * @use_sdio_irq: allow SD I/O card to interrupt the host
  */
 struct variant_data {
 	unsigned int		clkreg;
@@ -361,8 +364,9 @@ struct variant_data {
 	u32			start_err;
 	u32			opendrain;
 	u8			dma_lli:1;
-	u8			use_sdio_irq:1;
+	bool			supports_sdio_irq;
 	u32			stm32_idmabsize_mask;
+	u32			stm32_idmabsize_align;
 	void (*init)(struct mmci_host *host);
 };
 
@@ -385,8 +389,6 @@ struct mmci_host_ops {
 	bool (*busy_complete)(struct mmci_host *host, u32 status, u32 err_msk);
 	void (*pre_sig_volt_switch)(struct mmci_host *host);
 	int (*post_sig_volt_switch)(struct mmci_host *host, struct mmc_ios *ios);
-	void (*enable_sdio_irq)(struct mmci_host *host, int enable);
-	void (*sdio_irq)(struct mmci_host *host, u32 status);
 };
 
 struct mmci_host {

@@ -11,6 +11,7 @@
 #include <linux/mod_devicetable.h>
 #include <linux/module.h>
 #include <linux/pm_runtime.h>
+#include <linux/of.h>
 #include <linux/regulator/consumer.h>
 
 #include <video/mipi_display.h>
@@ -95,6 +96,21 @@ static const struct drm_display_mode default_mode = {
 	.flags = DRM_MODE_FLAG_NHSYNC | DRM_MODE_FLAG_NVSYNC,
 	.width_mm = 68,
 	.height_mm = 122,
+};
+
+static const struct drm_display_mode rotate_mode = {
+	.clock = 54000,
+	.hdisplay = 1280,
+	.hsync_start = 1280 + 12,
+	.hsync_end = 1280 + 12 + 5,
+	.htotal = 1280 + 12 + 5 + 12,
+	.vdisplay = 720,
+	.vsync_start = 720 + 48,
+	.vsync_end = 720 + 48 + 9,
+	.vtotal = 720 + 48 + 9 + 48,
+	.flags = DRM_MODE_FLAG_NHSYNC | DRM_MODE_FLAG_NVSYNC,
+	.width_mm = 122,
+	.height_mm = 68,
 };
 
 static inline struct rm68200 *panel_to_rm68200(struct drm_panel *panel)
@@ -261,6 +277,7 @@ static int rm68200_unprepare(struct drm_panel *panel)
 	if (ret)
 		dev_warn(panel->dev, "failed to enter sleep mode: %d\n", ret);
 
+	pm_runtime_set_autosuspend_delay(ctx->dev, 1000);
 	pm_runtime_mark_last_busy(panel->dev);
 	ret = pm_runtime_put_autosuspend(panel->dev);
 	if (ret < 0)
@@ -321,13 +338,33 @@ static int rm68200_get_modes(struct drm_panel *panel,
 			     struct drm_connector *connector)
 {
 	struct drm_display_mode *mode;
+	struct rm68200 *ctx = panel_to_rm68200(panel);
+	struct device *dev = ctx->dev;
+	int rotation, ret;
 
-	mode = drm_mode_duplicate(connector->dev, &default_mode);
-	if (!mode) {
-		dev_err(panel->dev, "failed to add mode %ux%u@%u\n",
-			default_mode.hdisplay, default_mode.vdisplay,
-			drm_mode_vrefresh(&default_mode));
-		return -ENOMEM;
+
+	ret = of_property_read_u32(dev->of_node, "rotation", &rotation);
+	if (ret == -EINVAL)
+		rotation = 0;
+
+	if (rotation == 90 || rotation == 270) {
+		mode = drm_mode_duplicate(connector->dev, &rotate_mode);
+
+		if (!mode) {
+			dev_err(panel->dev, "failed to add mode %ux%u@%u\n",
+				rotate_mode.hdisplay, rotate_mode.vdisplay,
+				drm_mode_vrefresh(&rotate_mode));
+			return -ENOMEM;
+		}
+	} else {
+		mode = drm_mode_duplicate(connector->dev, &default_mode);
+
+		if (!mode) {
+			dev_err(panel->dev, "failed to add mode %ux%u@%u\n",
+				default_mode.hdisplay, default_mode.vdisplay,
+				drm_mode_vrefresh(&default_mode));
+			return -ENOMEM;
+		}
 	}
 
 	drm_mode_set_name(mode);
@@ -386,8 +423,17 @@ static int rm68200_probe(struct mipi_dsi_device *dsi)
 	dsi->mode_flags = MIPI_DSI_MODE_VIDEO | MIPI_DSI_MODE_VIDEO_BURST |
 			  MIPI_DSI_MODE_LPM | MIPI_DSI_CLOCK_NON_CONTINUOUS;
 
+	pm_runtime_enable(ctx->dev);
+	/* set delay to 60s to keep alive the panel to wait the splash screen */
+	pm_runtime_set_autosuspend_delay(ctx->dev, 60000);
+	pm_runtime_use_autosuspend(ctx->dev);
+
 	drm_panel_init(&ctx->panel, dev, &rm68200_drm_funcs,
 		       DRM_MODE_CONNECTOR_DSI);
+
+	pm_runtime_get_sync(ctx->dev);
+	pm_runtime_mark_last_busy(ctx->dev);
+	pm_runtime_put_autosuspend(ctx->dev);
 
 	ret = drm_panel_of_backlight(&ctx->panel);
 	if (ret)
@@ -401,10 +447,6 @@ static int rm68200_probe(struct mipi_dsi_device *dsi)
 		drm_panel_remove(&ctx->panel);
 		return ret;
 	}
-
-	pm_runtime_enable(ctx->dev);
-	pm_runtime_set_autosuspend_delay(ctx->dev, 1000);
-	pm_runtime_use_autosuspend(ctx->dev);
 
 	return 0;
 }
@@ -443,8 +485,6 @@ static __maybe_unused int raydium_rm68200_resume(struct device *dev)
 		return ret;
 	}
 
-	gpiod_set_value_cansleep(ctx->reset_gpio, 1);
-	msleep(20);
 	gpiod_set_value_cansleep(ctx->reset_gpio, 0);
 	msleep(100);
 

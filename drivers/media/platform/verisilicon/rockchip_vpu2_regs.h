@@ -258,6 +258,7 @@
 #define     VEPU_REG_FRAME_TYPE_INTER			(0x0 << 6)
 #define     VEPU_REG_FRAME_TYPE_INTRA			(0x1 << 6)
 #define     VEPU_REG_FRAME_TYPE_MVCINTER		(0x2 << 6)
+#define     VEPU_REG_ENCODE_FORMAT_VP8			(0x1 << 4)	/* undocumented */
 #define     VEPU_REG_ENCODE_FORMAT_JPEG			(0x2 << 4)
 #define     VEPU_REG_ENCODE_FORMAT_H264			(0x3 << 4)
 #define     VEPU_REG_ENCODE_ENABLE			BIT(0)

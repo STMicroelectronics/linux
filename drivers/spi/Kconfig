@@ -920,6 +920,17 @@ config SPI_STM32
 	  is not available, the driver automatically falls back to
 	  PIO mode.
 
+config SPI_STM32_OSPI
+	tristate "STMicroelectronics STM32 OCTO SPI controller"
+	depends on ARCH_STM32 || COMPILE_TEST
+	depends on OF
+	depends on SPI_MEM
+	depends on STM32_OMI
+	help
+	  This enables support for the Octo SPI controller in master mode.
+	  This driver does not support generic SPI. The implementation only
+	  supports spi-mem interface.
+
 config SPI_STM32_QSPI
 	tristate "STMicroelectronics STM32 QUAD SPI controller"
 	depends on ARCH_STM32 || COMPILE_TEST
@@ -1094,6 +1105,7 @@ config SPI_XTENSA_XTFPGA
 config SPI_ZYNQ_QSPI
 	tristate "Xilinx Zynq QSPI controller"
 	depends on ARCH_ZYNQ || COMPILE_TEST
+	depends on SPI_MEM
 	help
 	  This enables support for the Zynq Quad SPI controller
 	  in master mode.
@@ -1101,9 +1113,10 @@ config SPI_ZYNQ_QSPI
 
 config SPI_ZYNQMP_GQSPI
 	tristate "Xilinx ZynqMP GQSPI controller"
-	depends on (SPI_MASTER && HAS_DMA) || COMPILE_TEST
+	depends on (SPI_MEM && HAS_DMA) || COMPILE_TEST
 	help
 	  Enables Xilinx GQSPI controller driver for Zynq UltraScale+ MPSoC.
+	  This controller only supports SPI memory interface.
 
 config SPI_AMD
 	tristate "AMD SPI controller"

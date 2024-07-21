@@ -235,9 +235,9 @@ int kvm_vgic_vcpu_init(struct kvm_vcpu *vcpu)
 	 * KVM io device for the redistributor that belongs to this VCPU.
 	 */
 	if (dist->vgic_model == KVM_DEV_TYPE_ARM_VGIC_V3) {
-		mutex_lock(&vcpu->kvm->arch.config_lock);
+		mutex_lock(&vcpu->kvm->slots_lock);
 		ret = vgic_register_redist_iodev(vcpu);
-		mutex_unlock(&vcpu->kvm->arch.config_lock);
+		mutex_unlock(&vcpu->kvm->slots_lock);
 	}
 	return ret;
 }
@@ -368,7 +368,7 @@ static void kvm_vgic_dist_destroy(struct kvm *kvm)
 		vgic_v4_teardown(kvm);
 }
 
-void kvm_vgic_vcpu_destroy(struct kvm_vcpu *vcpu)
+static void __kvm_vgic_vcpu_destroy(struct kvm_vcpu *vcpu)
 {
 	struct vgic_cpu *vgic_cpu = &vcpu->arch.vgic_cpu;
 
@@ -379,29 +379,39 @@ void kvm_vgic_vcpu_destroy(struct kvm_vcpu *vcpu)
 	vgic_flush_pending_lpis(vcpu);
 
 	INIT_LIST_HEAD(&vgic_cpu->ap_list_head);
-	vgic_cpu->rd_iodev.base_addr = VGIC_ADDR_UNDEF;
+	if (vcpu->kvm->arch.vgic.vgic_model == KVM_DEV_TYPE_ARM_VGIC_V3) {
+		vgic_unregister_redist_iodev(vcpu);
+		vgic_cpu->rd_iodev.base_addr = VGIC_ADDR_UNDEF;
+	}
 }
 
-static void __kvm_vgic_destroy(struct kvm *kvm)
+void kvm_vgic_vcpu_destroy(struct kvm_vcpu *vcpu)
 {
-	struct kvm_vcpu *vcpu;
-	unsigned long i;
+	struct kvm *kvm = vcpu->kvm;
 
-	lockdep_assert_held(&kvm->arch.config_lock);
-
-	vgic_debug_destroy(kvm);
-
-	kvm_for_each_vcpu(i, vcpu, kvm)
-		kvm_vgic_vcpu_destroy(vcpu);
-
-	kvm_vgic_dist_destroy(kvm);
+	mutex_lock(&kvm->slots_lock);
+	__kvm_vgic_vcpu_destroy(vcpu);
+	mutex_unlock(&kvm->slots_lock);
 }
 
 void kvm_vgic_destroy(struct kvm *kvm)
 {
+	struct kvm_vcpu *vcpu;
+	unsigned long i;
+
+	mutex_lock(&kvm->slots_lock);
+
+	vgic_debug_destroy(kvm);
+
+	kvm_for_each_vcpu(i, vcpu, kvm)
+		__kvm_vgic_vcpu_destroy(vcpu);
+
 	mutex_lock(&kvm->arch.config_lock);
-	__kvm_vgic_destroy(kvm);
+
+	kvm_vgic_dist_destroy(kvm);
+
 	mutex_unlock(&kvm->arch.config_lock);
+	mutex_unlock(&kvm->slots_lock);
 }
 
 /**
@@ -446,11 +456,14 @@ int vgic_lazy_init(struct kvm *kvm)
 int kvm_vgic_map_resources(struct kvm *kvm)
 {
 	struct vgic_dist *dist = &kvm->arch.vgic;
+	enum vgic_type type;
+	gpa_t dist_base;
 	int ret = 0;
 
 	if (likely(vgic_ready(kvm)))
 		return 0;
 
+	mutex_lock(&kvm->slots_lock);
 	mutex_lock(&kvm->arch.config_lock);
 	if (vgic_ready(kvm))
 		goto out;
@@ -458,18 +471,34 @@ int kvm_vgic_map_resources(struct kvm *kvm)
 	if (!irqchip_in_kernel(kvm))
 		goto out;
 
-	if (dist->vgic_model == KVM_DEV_TYPE_ARM_VGIC_V2)
+	if (dist->vgic_model == KVM_DEV_TYPE_ARM_VGIC_V2) {
 		ret = vgic_v2_map_resources(kvm);
-	else
+		type = VGIC_V2;
+	} else {
 		ret = vgic_v3_map_resources(kvm);
+		type = VGIC_V3;
+	}
 
 	if (ret)
-		__kvm_vgic_destroy(kvm);
-	else
-		dist->ready = true;
+		goto out;
 
+	dist->ready = true;
+	dist_base = dist->vgic_dist_base;
+	mutex_unlock(&kvm->arch.config_lock);
+
+	ret = vgic_register_dist_iodev(kvm, dist_base, type);
+	if (ret)
+		kvm_err("Unable to register VGIC dist MMIO regions\n");
+
+	goto out_slots;
 out:
 	mutex_unlock(&kvm->arch.config_lock);
+out_slots:
+	mutex_unlock(&kvm->slots_lock);
+
+	if (ret)
+		kvm_vgic_destroy(kvm);
+
 	return ret;
 }
 

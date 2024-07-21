@@ -48,7 +48,7 @@ required:
   - compatible
   - '#address-cells'
   - '#size-cells'
-  - dma-ranges
+
 
 unevaluatedProperties: false
 

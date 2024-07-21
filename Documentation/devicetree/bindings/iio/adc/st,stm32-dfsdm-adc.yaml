@@ -59,6 +59,11 @@ properties:
       If not, SPI CLKOUT frequency will not be accurate.
     maximum: 20000000
 
+  feature-domains:
+    $ref: /schemas/types.yaml#/definitions/phandle-array
+    description: |
+      Phandle to the rifsc device to check access right.
+
 required:
   - compatible
   - reg
@@ -138,11 +143,12 @@ patternProperties:
 
       st,adc-alt-channel:
         description:
-          Must be defined if two sigma delta modulators are
-          connected on same SPI input.
-          If not set, channel n is connected to SPI input n.
-          If set, channel n is connected to SPI input n + 1.
-        type: boolean
+          Must be defined if two sigma delta modulators are connected on same SPI input.
+          - If set to 0 channel n is connected to SPI input n.
+          - If set to 1 channel n is connected to SPI input n + 1.
+        items:
+          enum: [ 0, 1 ]
+        $ref: /schemas/types.yaml#/definitions/uint32-array
 
       st,filter0-sync:
         description:
@@ -241,6 +247,10 @@ patternProperties:
                   description:
                     From common IIO binding. Used to pipe external sigma delta
                     modulator or internal ADC output to DFSDM channel.
+
+                port:
+                  $ref: audio-graph-port.yaml#
+                  unevaluatedProperties: false
 
               required:
                 - compatible

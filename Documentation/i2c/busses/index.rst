@@ -29,4 +29,5 @@ I2C Bus Drivers
    i2c-taos-evm
    i2c-viapro
    i2c-via
+   rpmsg-i2c
    scx200_acb

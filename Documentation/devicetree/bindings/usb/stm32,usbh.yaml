@@ -1,0 +1,113 @@
+# SPDX-License-Identifier: (GPL-2.0 OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/usb/stm32,usbh.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: STMicroelectronics STM32 MPU USB2 Host SoC controller
+
+maintainers:
+  - Pankaj Dev <pankaj.dev@st.com>
+
+properties:
+  compatible:
+    const: st,stm32mp25-usbh
+
+  "#address-cells":
+    const: 1
+
+  "#size-cells":
+    const: 1
+
+  ranges: true
+
+  st,syscfg:
+    $ref: /schemas/types.yaml#/definitions/phandle-array #(arm/stm32/st,stm32-syscon.yaml#)
+    description: Phandle to the STM32-MPU System Controller DT node
+                 <syscon-handle usbhcr-offset>
+
+  st,vbusen-active-low:
+    type: boolean
+    description: VBUS-ENABLE signal polarity is active-low
+
+  st,ovrcur-active-low:
+    type: boolean
+    description: Over-Current signal polarity is active-low
+
+  wakeup-source: true
+
+  interrupts:
+    maxItems: 1
+    description: interrupt used for wakeup
+
+  feature-domains:
+    $ref: /schemas/types.yaml#/definitions/phandle-array
+    description: |
+      Phandle to the rifsc device to check access right.
+
+# Required child node:
+
+patternProperties:
+  "^usb@[0-9a-f]+$":
+    oneOf:
+      - $ref: generic-ohci.yaml#
+      - $ref: generic-ehci.yaml#
+
+required:
+  - compatible
+  - "#address-cells"
+  - "#size-cells"
+  - ranges
+  - st,syscfg
+
+allOf:
+  - if:
+      required:
+        - wakeup-source
+    then:
+      anyOf:
+        - required: [interrupts]
+        - required: [interrupts-extended]
+
+additionalProperties: false
+
+examples:
+  - |
+
+    #include <dt-bindings/clock/stm32mp25-clks.h>
+    #include <dt-bindings/interrupt-controller/arm-gic.h>
+    #include <dt-bindings/reset/stm32mp25-resets.h>
+
+
+    usbh: usb@482e0000 {
+        compatible      = "st,stm32mp25-usbh";
+        st,syscfg       = <&syscfg 0x2420>;
+        #address-cells  = <1>;
+        #size-cells     = <1>;
+        ranges = <0x482e0000 0x482e0000 0x2000>;
+        st,ovrcur-active-low;
+        st,vbusen-active-low;
+        wakeup-source;
+        interrupts-extended = <&exti1 43 IRQ_TYPE_EDGE_RISING>;
+
+        usbh_ohci: usb@482e0000 {
+            compatible = "generic-ohci";
+            reg = <0x482e0000 0x1000>;
+            clocks = <&rcc CK_BUS_USB2OHCI>;
+            resets = <&rcc USB2_R>;
+            interrupts = <GIC_SPI 140 IRQ_TYPE_LEVEL_HIGH>;
+            phys = <&usb2_phy1>;
+            phy-names = "usb";
+        };
+
+        usbh_ehci: usb@482f0000 {
+            compatible = "generic-ehci";
+            reg = <0x482f0000 0x1000>;
+            clocks = <&rcc CK_BUS_USB2EHCI>;
+            resets = <&rcc USB2_R>;
+            interrupts = <GIC_SPI 139 IRQ_TYPE_LEVEL_HIGH>;
+            companion = <&usbh_ohci>;
+            phys = <&usb2_phy1>;
+            phy-names = "usb";
+        };
+    };

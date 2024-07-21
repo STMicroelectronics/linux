@@ -502,6 +502,7 @@ static SIMPLE_DEV_PM_OPS(stm32_lptim_cnt_pm_ops, stm32_lptim_cnt_suspend,
 
 static const struct of_device_id stm32_lptim_cnt_of_match[] = {
 	{ .compatible = "st,stm32-lptimer-counter", },
+	{ .compatible = "st,stm32mp25-lptimer-counter", },
 	{},
 };
 MODULE_DEVICE_TABLE(of, stm32_lptim_cnt_of_match);

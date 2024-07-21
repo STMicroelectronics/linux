@@ -191,6 +191,9 @@ struct ptp_clock_info {
 	int (*verify)(struct ptp_clock_info *ptp, unsigned int pin,
 		      enum ptp_pin_function func, unsigned int chan);
 	long (*do_aux_work)(struct ptp_clock_info *ptp);
+	int (*getphcxtstamp)(struct ptp_clock_info *ptp,
+						 struct ptp_clock_info *ptp_peer,
+						 struct device_device_crosststamp *cts);
 };
 
 struct ptp_clock;
@@ -262,6 +265,8 @@ static inline long scaled_ppm_to_ppb(long ppm)
 
 extern struct ptp_clock *ptp_clock_register(struct ptp_clock_info *info,
 					    struct device *parent);
+
+extern int ptp_clock_set_peer(struct ptp_clock *ptp, struct ptp_clock *peer);
 
 /**
  * ptp_clock_unregister() - unregister a PTP hardware clock driver

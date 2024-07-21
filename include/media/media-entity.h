@@ -345,6 +345,12 @@ struct media_entity {
 
 	int use_count;
 
+	/* Temporarily put back to allow handling the multi-pipe on DCMIPP MP25
+	 * This is being incremented when performing start_streaming in order to
+	 * know if an entity needs to be s_streamed (on or off) or not
+	 */
+	u32 stream_count;
+
 	union {
 		struct {
 			u32 major;

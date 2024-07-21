@@ -257,6 +257,7 @@ int gether_get_ifname(struct net_device *net, char *name, int len);
 int gether_set_ifname(struct net_device *net, const char *name, int len);
 
 void gether_cleanup(struct eth_dev *dev);
+void gether_unregister_netdev(struct eth_dev *dev);
 
 /* connect/disconnect is handled by individual functions */
 struct net_device *gether_connect(struct gether *);

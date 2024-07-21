@@ -1,0 +1,36 @@
+// SPDX-License-Identifier: (GPL-2.0-or-later OR BSD-3-Clause)
+/*
+ * Copyright (C) STMicroelectronics 2023 - All Rights Reserved
+ * Author: Alexandre Torgue <alexandre.torgue@foss.st.com> for STMicroelectronics.
+ */
+#include <dt-bindings/bus/stm32mp25_sys_bus.h>
+
+&rifsc {
+	cryp1: crypto@42030000 {
+		compatible = "st,stm32mp1-cryp";
+		reg = <0x42030000 0x1000>;
+		interrupts = <GIC_SPI 144 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&rcc CK_BUS_CRYP1>;
+		resets = <&rcc CRYP1_R>;
+		dmas = <&hpdma 4 0x40 0x3021>,
+		       <&hpdma 5 0x43 0x3012>;
+		dma-names = "in", "out";
+		feature-domains = <&rifsc STM32MP25_RIFSC_CRYP1_ID>;
+		power-domains = <&CLUSTER_PD>;
+		status = "disabled";
+	};
+
+	cryp2: crypto@42040000 {
+		compatible = "st,stm32mp1-cryp";
+		reg = <0x42040000 0x1000>;
+		interrupts = <GIC_SPI 180 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&rcc CK_BUS_CRYP2>;
+		resets = <&rcc CRYP2_R>;
+		dmas = <&hpdma 140 0x40 0x3021>,
+		       <&hpdma 141 0x43 0x3012>;
+		dma-names = "in", "out";
+		feature-domains = <&rifsc STM32MP25_RIFSC_CRYP2_ID>;
+		power-domains = <&CLUSTER_PD>;
+		status = "disabled";
+	};
+};

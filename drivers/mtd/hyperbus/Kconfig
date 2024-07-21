@@ -29,4 +29,10 @@ config RPCIF_HYPERBUS
 	help
 	  This option includes Renesas RPC-IF HyperBus support.
 
+config STM32_HYPERBUS
+	tristate "STM32 HyperBus driver"
+	depends on STM32_OMI || COMPILE_TEST
+	help
+	 This is the driver for HyperBus controller on STM32 MP2 SoC family.
+
 endif # MTD_HYPERBUS

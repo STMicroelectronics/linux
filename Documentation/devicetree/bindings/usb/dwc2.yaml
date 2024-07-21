@@ -172,6 +172,11 @@ properties:
     $ref: /schemas/types.yaml#/definitions/flag
     description: If present indicates this device has wakeup capabilities
 
+  feature-domains:
+    $ref: /schemas/types.yaml#/definitions/phandle-array
+    description: |
+      Phandle to the rifsc device to check access right.
+
 dependencies:
   port: [ usb-role-switch ]
   role-switch-default-mode: [ usb-role-switch ]

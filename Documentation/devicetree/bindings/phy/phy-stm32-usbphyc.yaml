@@ -55,6 +55,11 @@ properties:
     description: number of clock cells for ck_usbo_48m consumer
     const: 0
 
+  feature-domains:
+    $ref: /schemas/types.yaml#/definitions/phandle-array
+    description: |
+      Phandle to the rifsc device to check access right.
+
 #Required child nodes:
 
 patternProperties:

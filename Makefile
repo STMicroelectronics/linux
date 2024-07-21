@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-2.0
 VERSION = 6
 PATCHLEVEL = 1
-SUBLEVEL = 28
+SUBLEVEL = 82
 EXTRAVERSION =
 NAME = Curry Ramen
 
@@ -459,8 +459,7 @@ HOSTRUSTC = rustc
 HOSTPKG_CONFIG	= pkg-config
 
 KBUILD_USERHOSTCFLAGS := -Wall -Wmissing-prototypes -Wstrict-prototypes \
-			 -O2 -fomit-frame-pointer -std=gnu11 \
-			 -Wdeclaration-after-statement
+			 -O2 -fomit-frame-pointer -std=gnu11
 KBUILD_USERCFLAGS  := $(KBUILD_USERHOSTCFLAGS) $(USERCFLAGS)
 KBUILD_USERLDFLAGS := $(USERLDFLAGS)
 
@@ -1018,9 +1017,6 @@ endif
 # arch Makefile may override CC so keep this after arch Makefile is included
 NOSTDINC_FLAGS += -nostdinc
 
-# warn about C99 declaration after statement
-KBUILD_CFLAGS += -Wdeclaration-after-statement
-
 # Variable Length Arrays (VLAs) should not be used anywhere in the kernel
 KBUILD_CFLAGS += -Wvla
 
@@ -1291,7 +1287,7 @@ prepare0: archprepare
 # All the preparing..
 prepare: prepare0
 ifdef CONFIG_RUST
-	$(Q)$(CONFIG_SHELL) $(srctree)/scripts/rust_is_available.sh -v
+	$(Q)$(CONFIG_SHELL) $(srctree)/scripts/rust_is_available.sh
 	$(Q)$(MAKE) $(build)=rust
 endif
 
@@ -1465,17 +1461,42 @@ ifneq ($(wildcard $(srctree)/arch/$(SRCARCH)/boot/dts/),)
 dtstree := arch/$(SRCARCH)/boot/dts
 endif
 
-ifneq ($(dtstree),)
+ifdef CONFIG_ARCH_STM32
+ifeq ("$(SRCARCH)", "arm")
+export TARGET_ARM32=y
+stdtstree := $(dtstree)
+else ifeq ("$(SRCARCH)", "arm64")
+export TARGET_ARM64=y
+stdtstree := $(dtstree)/st
+endif
+
+# Default path for external device trees
+KBUILD_EXTDTS ?= $(realpath $(srctree))/$(stdtstree)/external-dt/linux
+ifneq ($(wildcard $(KBUILD_EXTDTS)),)
+export DTS_INCLUDE := $(srctree)/$(stdtstree)
+endif
+endif #ARCH_STM32
+
+ifneq ($(stdtstree),)
+
+KBUILD_EXTDTB := $(or $(and $(wildcard $(KBUILD_EXTDTS)), 1), 0)
 
 %.dtb: dtbs_prepare
-	$(Q)$(MAKE) $(build)=$(dtstree) $(dtstree)/$@
+	$(Q)$(MAKE) $(build)=$(stdtstree) $(dtstree)/$@ || ( \
+	test ! -e $(dtstree)/$@ -a $(KBUILD_EXTDTB) -eq 1  && ( \
+		echo "Looking for $(patsubst st/%.dtb,%.dtb,$@) into $(KBUILD_EXTDTS)"; \
+		$(MAKE) $(build)=$(stdtstree) src=$(KBUILD_EXTDTS) $(dtstree)/$@ || \
+		/bin/false) || /bin/false)
 
 %.dtbo: dtbs_prepare
 	$(Q)$(MAKE) $(build)=$(dtstree) $(dtstree)/$@
 
 PHONY += dtbs dtbs_prepare dtbs_install dtbs_check
 dtbs: dtbs_prepare
-	$(Q)$(MAKE) $(build)=$(dtstree)
+	$(Q)$(MAKE) $(build)=$(stdtstree)
+	$(Q)test $(KBUILD_EXTDTB) -eq 0 || ( \
+		echo "Looking for device trees into $(KBUILD_EXTDTS)"; \
+		$(MAKE) $(build)=$(stdtstree) src=$(KBUILD_EXTDTS) || /bin/false)
 
 # include/config/kernel.release is actually needed when installing DTBs because
 # INSTALL_DTBS_PATH contains $(KERNELRELEASE). However, we do not want to make
@@ -1817,7 +1838,7 @@ $(DOC_TARGETS):
 # "Is Rust available?" target
 PHONY += rustavailable
 rustavailable:
-	$(Q)$(CONFIG_SHELL) $(srctree)/scripts/rust_is_available.sh -v && echo "Rust is available!"
+	$(Q)$(CONFIG_SHELL) $(srctree)/scripts/rust_is_available.sh && echo "Rust is available!"
 
 # Documentation target
 #
@@ -1939,7 +1960,9 @@ quiet_cmd_depmod = DEPMOD  $(MODLIB)
 
 modules_install:
 	$(Q)$(MAKE) -f $(srctree)/scripts/Makefile.modinst
+ifndef modules_sign_only
 	$(call cmd,depmod)
+endif
 
 else # CONFIG_MODULES
 

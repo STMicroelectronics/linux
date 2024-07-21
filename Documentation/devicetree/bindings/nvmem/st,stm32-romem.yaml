@@ -24,6 +24,7 @@ properties:
       - st,stm32f4-otp
       - st,stm32mp13-bsec
       - st,stm32mp15-bsec
+      - st,stm32mp25-bsec
 
   reg:
     maxItems: 1
@@ -38,6 +39,14 @@ patternProperties:
           This property explicits a factory programmed area that both secure
           and non-secure worlds can access. It is needed when, by default, the
           related area can only be reached by the secure world.
+        type: boolean
+
+      st,secure-otp:
+        description: |
+          This property explicits a factory programmed area that only the secure
+          world of the main processor can access.
+          It is needed when the related area must be only not reached by the
+          secure world of the coprocessor, it is not shadowed.
         type: boolean
 
 required:

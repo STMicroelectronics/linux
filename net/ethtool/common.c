@@ -547,6 +547,10 @@ int __ethtool_get_ts_info(struct net_device *dev, struct ethtool_ts_info *info)
 
 	memset(info, 0, sizeof(*info));
 	info->cmd = ETHTOOL_GET_TS_INFO;
+	info->phc_index       = -1;
+	info->phc_index_2nd   = -1;
+	info->phc_worker      = -1;
+	info->phc_timestamper = -1;
 
 	if (phy_has_tsinfo(phydev))
 		return phy_ts_info(phydev, info);

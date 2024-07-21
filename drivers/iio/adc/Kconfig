@@ -1046,6 +1046,31 @@ config STM32_DFSDM_ADC
 	  This driver can also be built as a module.  If so, the module
 	  will be called stm32-dfsdm-adc.
 
+config STM32_MDF_CORE
+	tristate "STMicroelectronics STM32 MDF core"
+	depends on (ARCH_STM32 && OF) || COMPILE_TEST
+	select REGMAP
+	select REGMAP_MMIO
+	help
+	  Select this option to enable the driver for STMicroelectronics
+	  STM32 Multi-function Digital Filter for sigma delta converter.
+
+	  This driver can also be built as a module. If so, the module
+	  will be called stm32-mdf-core.
+
+config STM32_MDF_ADC
+	tristate "STMicroelectronics STM32 MDF adc"
+	depends on (ARCH_STM32 && OF) || COMPILE_TEST
+	select STM32_MDF_CORE
+	select IIO_BUFFER
+	select IIO_BUFFER_HW_CONSUMER
+	help
+	  Select this option to support ADCSigma delta modulator for
+	  STMicroelectronics STM32 Multi-function digital filter.
+
+	  This driver can also be built as a module. If so, the module
+	  will be called stm32-mdf-adc.
+
 config STMPE_ADC
 	tristate "STMicroelectronics STMPE ADC driver"
 	depends on OF && MFD_STMPE

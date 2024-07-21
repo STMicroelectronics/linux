@@ -72,6 +72,9 @@ properties:
         - eth-ck
         - ptp_ref
 
+  power-domains:
+    maxItems: 1
+
   st,syscon:
     $ref: "/schemas/types.yaml#/definitions/phandle-array"
     items:
@@ -92,6 +95,17 @@ properties:
       set this property in RMII mode when you have PHY without crystal 50MHz and want to
       select RCC clock instead of ETH_REF_CLK.
     type: boolean
+
+  st,eth-ptp-from-rcc:
+    description:
+      set this property when PTP (IEEE1588) clock selection is from RCC,
+      by default ETHSW ptp ref clock is used
+    type: boolean
+
+  feature-domains:
+    $ref: /schemas/types.yaml#/definitions/phandle-array
+    description: |
+      Phandle to the rifsc device to check access right.
 
 required:
   - compatible

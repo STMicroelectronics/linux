@@ -30,6 +30,11 @@ properties:
   vdda-supply:
     description: phandle to the vdda input analog voltage.
 
+  feature-domains:
+    $ref: /schemas/types.yaml#/definitions/phandle-array
+    description: |
+      Phandle to the rifsc device to check access right.
+
 required:
   - compatible
   - reg

@@ -32,14 +32,12 @@ struct media_pad *dcmipp_pads_init(u16 num_pads, const unsigned long *pads_flag)
 
 	return pads;
 }
-EXPORT_SYMBOL_GPL(dcmipp_pads_init);
 
 int dcmipp_link_validate(struct media_link *link)
 {
 	/* TODO */
 	return 0;
 }
-EXPORT_SYMBOL_GPL(dcmipp_link_validate);
 
 static const struct media_entity_operations dcmipp_ent_sd_mops = {
 	.link_validate = dcmipp_link_validate,
@@ -106,11 +104,10 @@ err_clean_pads:
 	dcmipp_pads_cleanup(ved->pads);
 	return ret;
 }
-EXPORT_SYMBOL_GPL(dcmipp_ent_sd_register);
 
 void dcmipp_ent_sd_unregister(struct dcmipp_ent_device *ved, struct v4l2_subdev *sd)
 {
 	media_entity_cleanup(ved->ent);
 	v4l2_device_unregister_subdev(sd);
+	dcmipp_pads_cleanup(ved->pads);
 }
-EXPORT_SYMBOL_GPL(dcmipp_ent_sd_unregister);

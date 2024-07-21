@@ -16,3 +16,6 @@ obj-$(CONFIG_SND_SOC_STM32_SPDIFRX) += snd-soc-stm32-spdifrx.o
 
 #DFSDM
 obj-$(CONFIG_SND_SOC_STM32_DFSDM) += stm32_adfsdm.o
+
+#MDF
+obj-$(CONFIG_SND_SOC_STM32_MDF) += stm32_amdf.o

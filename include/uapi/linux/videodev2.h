@@ -809,6 +809,10 @@ struct v4l2_pix_format {
 #define V4L2_META_FMT_RK_ISP1_PARAMS	v4l2_fourcc('R', 'K', '1', 'P') /* Rockchip ISP1 3A Parameters */
 #define V4L2_META_FMT_RK_ISP1_STAT_3A	v4l2_fourcc('R', 'K', '1', 'S') /* Rockchip ISP1 3A Statistics */
 
+/* Vendor specific - used for STM32_DCMIPP camera sub-system */
+#define V4L2_META_FMT_ST_DCMIPP_ISP_PARAMS	v4l2_fourcc('S', 'T', 'I', 'P') /* STM32 DCMIPP ISP Parameters */
+#define V4L2_META_FMT_ST_DCMIPP_ISP_STAT	v4l2_fourcc('S', 'T', 'I', 'S') /* STM32 DCMIPP ISP Statistics */
+
 /* priv field value to indicates that subsequent fields are valid. */
 #define V4L2_PIX_FMT_PRIV_MAGIC		0xfeedcafe
 
@@ -1693,7 +1697,7 @@ struct v4l2_input {
 	__u8	     name[32];		/*  Label */
 	__u32	     type;		/*  Type of input */
 	__u32	     audioset;		/*  Associated audios (bitfield) */
-	__u32        tuner;             /*  enum v4l2_tuner_type */
+	__u32        tuner;             /*  Tuner index */
 	v4l2_std_id  std;
 	__u32	     status;
 	__u32	     capabilities;
@@ -1799,6 +1803,7 @@ struct v4l2_ext_control {
 		struct v4l2_ctrl_hevc_slice_params __user *p_hevc_slice_params;
 		struct v4l2_ctrl_hevc_scaling_matrix __user *p_hevc_scaling_matrix;
 		struct v4l2_ctrl_hevc_decode_params __user *p_hevc_decode_params;
+		struct v4l2_ctrl_vp8_encode_params __user *p_vp8_encode_params;
 		void __user *ptr;
 	};
 } __attribute__ ((packed));
@@ -1855,9 +1860,10 @@ enum v4l2_ctrl_type {
 	V4L2_CTRL_TYPE_H264_SLICE_PARAMS    = 0x0203,
 	V4L2_CTRL_TYPE_H264_DECODE_PARAMS   = 0x0204,
 	V4L2_CTRL_TYPE_H264_PRED_WEIGHTS    = 0x0205,
+	V4L2_CTRL_TYPE_H264_ENCODE_PARAMS   = 0x0210,
+	V4L2_CTRL_TYPE_H264_ENCODE_RC       = 0x0211,
 
 	V4L2_CTRL_TYPE_FWHT_PARAMS	    = 0x0220,
-
 	V4L2_CTRL_TYPE_VP8_FRAME            = 0x0240,
 
 	V4L2_CTRL_TYPE_MPEG2_QUANTISATION   = 0x0250,
@@ -1872,6 +1878,10 @@ enum v4l2_ctrl_type {
 	V4L2_CTRL_TYPE_HEVC_SLICE_PARAMS	= 0x0272,
 	V4L2_CTRL_TYPE_HEVC_SCALING_MATRIX	= 0x0273,
 	V4L2_CTRL_TYPE_HEVC_DECODE_PARAMS	= 0x0274,
+
+	V4L2_CTRL_TYPE_VP8_ENCODE_PARAMS	= 0x0280,
+
+	V4L2_CTRL_TYPE_ISP_STAT_REGION     = 0x0310,
 };
 
 /*  Used in the VIDIOC_QUERYCTRL ioctl for querying controls */

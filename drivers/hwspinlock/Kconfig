@@ -38,7 +38,7 @@ config HWSPINLOCK_SPRD
 
 config HWSPINLOCK_STM32
 	tristate "STM32 Hardware Spinlock device"
-	depends on MACH_STM32MP157 || COMPILE_TEST
+	depends on ARCH_STM32 || COMPILE_TEST
 	help
 	  Say y here to support the STM32 Hardware Spinlock device.
 

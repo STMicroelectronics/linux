@@ -69,16 +69,9 @@ static const struct drm_driver drv_driver = {
 static int drv_load(struct drm_device *ddev)
 {
 	struct platform_device *pdev = to_platform_device(ddev->dev);
-	struct ltdc_device *ldev;
 	int ret;
 
 	DRM_DEBUG("%s\n", __func__);
-
-	ldev = devm_kzalloc(ddev->dev, sizeof(*ldev), GFP_KERNEL);
-	if (!ldev)
-		return -ENOMEM;
-
-	ddev->dev_private = (void *)ldev;
 
 	ret = drmm_mode_config_init(ddev);
 	if (ret)
@@ -156,9 +149,10 @@ static __maybe_unused int drv_resume(struct device *dev)
 static __maybe_unused int drv_runtime_suspend(struct device *dev)
 {
 	struct drm_device *ddev = dev_get_drvdata(dev);
+	struct ltdc_device *ldev = ddev->dev_private;
 
 	DRM_DEBUG_DRIVER("\n");
-	ltdc_suspend(ddev);
+	ltdc_suspend(ldev);
 
 	return 0;
 }
@@ -166,9 +160,10 @@ static __maybe_unused int drv_runtime_suspend(struct device *dev)
 static __maybe_unused int drv_runtime_resume(struct device *dev)
 {
 	struct drm_device *ddev = dev_get_drvdata(dev);
+	struct ltdc_device *ldev = ddev->dev_private;
 
 	DRM_DEBUG_DRIVER("\n");
-	return ltdc_resume(ddev);
+	return ltdc_resume(ldev);
 }
 
 static const struct dev_pm_ops drv_pm_ops = {
@@ -181,19 +176,73 @@ static int stm_drm_platform_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 	struct drm_device *ddev;
-	int ret;
+	struct ltdc_device *ldev;
+	struct device *sfdev;
+	struct device_node *node;
+	int ret = 0;
 
-	DRM_DEBUG("%s\n", __func__);
+	DRM_DEBUG_DRIVER("\n");
 
-	ret = drm_aperture_remove_framebuffers(false, &drv_driver);
+	/*
+	 * To avoid conflicts between the simple-framebuffer and the display-controller,
+	 * a check was added concerning the state of the simple-framebuffer (must be probed).
+	 */
+	node = of_find_compatible_node(NULL, NULL, "simple-framebuffer");
+	if (!IS_ERR(node)) {
+		if (of_device_is_available(node)) {
+			sfdev = bus_find_device_by_of_node(&platform_bus_type, node);
+			if (sfdev) {
+				if (!device_is_bound(sfdev))
+					ret = -EPROBE_DEFER;
+				put_device(sfdev);
+			}
+		}
+		of_node_put(node);
+		if (ret)
+			return ret;
+	}
+
+	ldev = devm_kzalloc(dev, sizeof(*ldev), GFP_KERNEL);
+	if (!ldev)
+		return -ENOMEM;
+
+	ret = ltdc_parse_device_tree(dev);
 	if (ret)
 		return ret;
 
-	dma_set_coherent_mask(dev, DMA_BIT_MASK(32));
+	ret = ltdc_get_clk(dev, ldev);
+	if (ret)
+		return ret;
+
+	/* Resume device to enable the clocks */
+	ret = ltdc_resume(ldev);
+	if (ret)
+		return ret;
+
+	ret = drm_aperture_remove_framebuffers(&drv_driver);
+	if (ret)
+		goto err_suspend;
+
+	/* Configure the DMA segment size to make sure we get contiguous & coherent memory */
+	ret = dma_set_coherent_mask(dev, DMA_BIT_MASK(32));
+	if (ret) {
+		dev_err(dev, "Failed to set DMA segment mask\n");
+		goto err_suspend;
+	}
+
+	ret = dma_set_max_seg_size(dev, DMA_BIT_MASK(32));
+	if (ret) {
+		dev_err(dev, "Failed to set DMA segment size\n");
+		goto err_suspend;
+	}
 
 	ddev = drm_dev_alloc(&drv_driver, dev);
-	if (IS_ERR(ddev))
-		return PTR_ERR(ddev);
+	if (IS_ERR(ddev)) {
+		ret =  PTR_ERR(ddev);
+		goto err_suspend;
+	}
+
+	ddev->dev_private = (void *)ldev;
 
 	ret = drv_load(ddev);
 	if (ret)
@@ -209,6 +258,8 @@ static int stm_drm_platform_probe(struct platform_device *pdev)
 
 err_put:
 	drm_dev_put(ddev);
+err_suspend:
+	ltdc_suspend(ldev);
 
 	return ret;
 }
@@ -226,8 +277,17 @@ static int stm_drm_platform_remove(struct platform_device *pdev)
 	return 0;
 }
 
+static struct ltdc_plat_data stm_drm_plat_data = {
+	.pad_max_freq_hz = 90000000,
+};
+
+static struct ltdc_plat_data stm_drm_plat_data_mp25 = {
+	.pad_max_freq_hz = 150000000,
+};
+
 static const struct of_device_id drv_dt_ids[] = {
-	{ .compatible = "st,stm32-ltdc"},
+	{ .compatible = "st,stm32-ltdc", .data = &stm_drm_plat_data, },
+	{ .compatible = "st,stm32mp25-ltdc", .data = &stm_drm_plat_data_mp25, },
 	{ /* end node */ },
 };
 MODULE_DEVICE_TABLE(of, drv_dt_ids);

@@ -27,6 +27,8 @@ properties:
       - st,stm32mp135-pinctrl
       - st,stm32mp157-pinctrl
       - st,stm32mp157-z-pinctrl
+      - st,stm32mp257-pinctrl
+      - st,stm32mp257-z-pinctrl
 
   '#address-cells':
     const: 1
@@ -54,7 +56,7 @@ properties:
       Indicates the SOC package used.
       More details in include/dt-bindings/pinctrl/stm32-pinfunc.h
     $ref: /schemas/types.yaml#/definitions/uint32
-    enum: [1, 2, 4, 8]
+    enum: [0x1, 0x2, 0x4, 0x8, 0x100, 0x400, 0x800]
 
 patternProperties:
   '^gpio@[0-9a-f]*$':
@@ -202,6 +204,54 @@ patternProperties:
               3: High speed
             $ref: /schemas/types.yaml#/definitions/uint32
             enum: [0, 1, 2, 3]
+          st,io-delay-path:
+            description: |
+              IO synchronization delay path location
+              0: Delay switched into the output path
+              1: Delay switched into the input path
+            $ref: /schemas/types.yaml#/definitions/uint32
+            enum: [0, 1]
+          st,io-clk-edge:
+            description: |
+              IO synchronization clock edge
+              0: Data single-edge (changing on rising or falling clock edge)
+              1: Data double-edge (changing on both clock edges)
+            $ref: /schemas/types.yaml#/definitions/uint32
+            enum: [0, 1]
+          st,io-clk-type:
+            description: |
+              IO synchronization clock inversion
+              0: IO clocks not inverted. Data retimed to rising clock edge
+              1: IO clocks inverted. Data retimed to falling clock edge
+            $ref: /schemas/types.yaml#/definitions/uint32
+            enum: [0, 1]
+          st,io-retime:
+            description: |
+              IO synchronization data retime
+              0: Data not synchronized or retimed on clock edges
+              1: Data retimed to either rising or falling clock edge
+            $ref: /schemas/types.yaml#/definitions/uint32
+            enum: [0, 1]
+          st,io-delay:
+            description: |
+              IO synchronization delay applied to the input or output path
+              0: No delay
+              1: Delay 0.30 ns
+              2: Delay 0.50 ns
+              3: Delay 0.75 ns
+              4: Delay 1.00 ns
+              5: Delay 1.25 ns
+              6: Delay 1.50 ns
+              7: Delay 1.75 ns
+              8: Delay 2.00 ns
+              9: Delay 2.25 ns
+              10: Delay 2.50 ns
+              11: Delay 2.75 ns
+              12: Delay 3.00 ns
+              13: Delay 3.25 ns
+            $ref: /schemas/types.yaml#/definitions/uint32
+            minimum: 0
+            maximum: 13
 
         required:
           - pinmux

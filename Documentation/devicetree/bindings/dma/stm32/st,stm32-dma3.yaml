@@ -1,0 +1,160 @@
+# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/dma/stm32/st,stm32-dma3.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: STMicroelectronics STM32 DMA3 Controller
+
+description: |
+  The STM32 DMA3 is a direct memory access controller with different features
+  depending on its hardware configuration.
+  It is either called LPDMA (Low Power), GPDMA (General Purpose) or
+  HPDMA (High Performance).
+  Its hardware configuration registers allow to dynamically expose its features.
+
+  GPDMA and HPDMA support 16 independent DMA channels, while only 4 for LPDMA.
+  GPDMA and HPDMA support 256 DMA requests from peripherals, 8 for LPDMA.
+
+  Bindings are generic for these 3 STM32 DMA3 configurations.
+
+  DMA clients connected to the STM32 DMA3 controller must use the format described
+  in the ../dma.txt file, using a four-cell specifier for each channel.
+  A phandle to the DMA controller plus the following three integer cells:
+    1. The request line number
+    2. A 32-bit mask specifying the DMA channel requirements
+      -bit 0-1: The priority level
+        0x0: low priority, low weight
+        0x1: low priority, mid weight
+        0x2: low priority, high weight
+        0x3: high priority
+      -bit 4-7: The FIFO requirement for queuing source and destination transfers
+        0x0: no FIFO requirement/any channel can fit
+        0x2: FIFO of 8 bytes (2^2+1)
+        0x4: FIFO of 32 bytes (2^4+1)
+        0x6: FIFO of 128 bytes (2^6+1)
+        0x7: FIFO of 256 bytes (2^7+1)
+    3. A 32-bit mask specifying the DMA transfer requirements
+      -bit 0: The source incrementing burst
+        0x0: fixed burst
+        0x1: contiguously incremented burst
+      -bit 1: The source allocated port
+        0x0: port 0 is allocated to the source transfer
+        0x1: port 1 is allocated to the source transfer
+      -bit 4: The destination incrementing burst
+        0x0: fixed burst
+        0x1: contiguously incremented burst
+      -bit 5: The destination allocated port
+        0x0: port 0 is allocated to the destination transfer
+        0x1: port 1 is allocated to the destination transfer
+      -bit 8: The type of hardware request
+        0x0: burst
+        0x1: block
+      -bit 9: The control mode
+        0x0: DMA controller control mode
+        0x1: peripheral control mode
+      -bit 12-13: The transfer complete event mode
+        0x0: at block level, transfer complete event is generated at the end of a block
+        0x2: at LLI level, the transfer complete event is generated at the end of the LLI transfer,
+             including the update of the LLI if any
+        0x3: at channel level, the transfer complete event is generated at the end of the last LLI
+      -bit 16: Prevent packing/unpacking mode
+        0x0: pack/unpack enabled when source data width/burst != destination data width/burst
+        0x1: memory data width/burst forced to peripheral data width/burst to prevent pack/unpack
+      -bit 17: Prevent linked-list refactoring
+        0x0: don't prevent driver to refactor the linked-list for optimal performance
+        0x1: prevent driver to refactor the linked-list, despite not optimal performance
+
+maintainers:
+  - Amelie Delaunay <amelie.delaunay@foss.st.com>
+
+allOf:
+  - $ref: /schemas/dma/dma-controller.yaml#
+
+properties:
+  "#dma-cells":
+    const: 3
+
+  compatible:
+    const: st,stm32-dma3
+
+  reg:
+    maxItems: 1
+
+  clocks:
+    maxItems: 1
+
+  resets:
+    maxItems: 1
+
+  interrupts:
+    minItems: 4
+    maxItems: 16
+
+  lli-bus-interface:
+    description: |
+      To select port 1 for fetching linked-list items (LLIs).
+      If not defined, port 0 is used by default.
+    $ref: /schemas/types.yaml#/definitions/uint32
+    enum: [0, 1]
+    default: 0
+
+  memory-region:
+    description: |
+      Phandle to a /reserved-memory child node assigned to STM32 DMA3 for linked-list items
+      allocation. When not defined, linked-list items are allocated in DDR.
+      During transfer, STM32 DMA3 updates its registers reading the linked-list items in memory.
+      There reads are 32-bit single read. Allocating the linked-list items in internal RAM improves
+      the STM32 DMA3 performance.
+    maxItems: 1
+
+  power-domains:
+    maxItems: 1
+
+  st,axi-max-burst-len:
+    description: |
+      Restrict AXI burst length in unit of beat by value specified in this property.
+      The value specified in this property is clamped to the maximum burst length supported by DMA3.
+      If this property is missing, the maximum burst length supported by DMA3 is used.
+    $ref: /schemas/types.yaml#/definitions/uint32
+    minimum: 1
+    maximum: 256
+    default: 64
+
+required:
+  - compatible
+  - reg
+  - clocks
+  - interrupts
+
+unevaluatedProperties: false
+
+examples:
+  - |
+    #include <dt-bindings/interrupt-controller/arm-gic.h>
+    #include <dt-bindings/clock/stm32mp25-clks.h>
+    dma-controller@40400000 {
+      compatible = "st,stm32-dma3";
+      reg = <0x40400000 0x1000>;
+      interrupts = <GIC_SPI 33 IRQ_TYPE_LEVEL_HIGH>,
+                   <GIC_SPI 34 IRQ_TYPE_LEVEL_HIGH>,
+                   <GIC_SPI 35 IRQ_TYPE_LEVEL_HIGH>,
+                   <GIC_SPI 36 IRQ_TYPE_LEVEL_HIGH>,
+                   <GIC_SPI 37 IRQ_TYPE_LEVEL_HIGH>,
+                   <GIC_SPI 38 IRQ_TYPE_LEVEL_HIGH>,
+                   <GIC_SPI 39 IRQ_TYPE_LEVEL_HIGH>,
+                   <GIC_SPI 40 IRQ_TYPE_LEVEL_HIGH>,
+                   <GIC_SPI 41 IRQ_TYPE_LEVEL_HIGH>,
+                   <GIC_SPI 42 IRQ_TYPE_LEVEL_HIGH>,
+                   <GIC_SPI 43 IRQ_TYPE_LEVEL_HIGH>,
+                   <GIC_SPI 44 IRQ_TYPE_LEVEL_HIGH>,
+                   <GIC_SPI 45 IRQ_TYPE_LEVEL_HIGH>,
+                   <GIC_SPI 46 IRQ_TYPE_LEVEL_HIGH>,
+                   <GIC_SPI 47 IRQ_TYPE_LEVEL_HIGH>,
+                   <GIC_SPI 48 IRQ_TYPE_LEVEL_HIGH>;
+      clocks = <&rcc CK_BUS_HPDMA1>;
+      #dma-cells = <3>;
+      st,axi-max-burst-len = <16>;
+    };
+...
+

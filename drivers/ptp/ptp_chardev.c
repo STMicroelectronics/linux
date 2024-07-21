@@ -111,6 +111,8 @@ long ptp_ioctl(struct posix_clock *pc, unsigned int cmd, unsigned long arg)
 	struct ptp_clock *ptp = container_of(pc, struct ptp_clock, clock);
 	struct ptp_sys_offset_extended *extoff = NULL;
 	struct ptp_sys_offset_precise precise_offset;
+	struct ptp_ptp_offset_precise ptp_precise_offset;
+	struct device_device_crosststamp devxtstamp;
 	struct system_device_crosststamp xtstamp;
 	struct ptp_clock_info *ops = ptp->info;
 	struct ptp_sys_offset *sysoff = NULL;
@@ -137,6 +139,7 @@ long ptp_ioctl(struct posix_clock *pc, unsigned int cmd, unsigned long arg)
 		caps.n_pins = ptp->info->n_pins;
 		caps.cross_timestamping = ptp->info->getcrosststamp != NULL;
 		caps.adjust_phase = ptp->info->adjphase != NULL;
+		caps.peer_cross_timestamping = (ptp->info->getphcxtstamp != NULL) && (ptp->peer);
 		if (copy_to_user((void __user *)arg, &caps, sizeof(caps)))
 			err = -EFAULT;
 		break;
@@ -321,6 +324,26 @@ long ptp_ioctl(struct posix_clock *pc, unsigned int cmd, unsigned long arg)
 			err = -EFAULT;
 		break;
 
+	case PTP_PTP_OFFSET_PRECISE:
+		if ((!ptp->info->getphcxtstamp) || (!ptp->peer)) {
+			err = -EOPNOTSUPP;
+			break;
+		}
+		err = ptp->info->getphcxtstamp(ptp->info, ptp->peer->info,
+									   &devxtstamp);
+		if (err)
+			break;
+		ts = ktime_to_timespec64(devxtstamp.device);
+		ptp_precise_offset.device.sec = ts.tv_sec;
+		ptp_precise_offset.device.nsec = ts.tv_nsec;
+		ts = ktime_to_timespec64(devxtstamp.peer_device);
+		ptp_precise_offset.peer.sec = ts.tv_sec;
+		ptp_precise_offset.peer.nsec = ts.tv_nsec;
+		if (copy_to_user((void __user *)arg, &ptp_precise_offset,
+			sizeof(ptp_precise_offset)))
+			err = -EFAULT;
+		break;
+
 	case PTP_SYS_OFFSET:
 	case PTP_SYS_OFFSET2:
 		sysoff = memdup_user((void __user *)arg, sizeof(*sysoff));
@@ -487,7 +510,8 @@ ssize_t ptp_read(struct posix_clock *pc,
 
 	for (i = 0; i < cnt; i++) {
 		event[i] = queue->buf[queue->head];
-		queue->head = (queue->head + 1) % PTP_MAX_TIMESTAMPS;
+		/* Paired with READ_ONCE() in queue_cnt() */
+		WRITE_ONCE(queue->head, (queue->head + 1) % PTP_MAX_TIMESTAMPS);
 	}
 
 	spin_unlock_irqrestore(&queue->lock, flags);

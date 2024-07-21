@@ -411,6 +411,16 @@ static int rtl8211f_config_init(struct phy_device *phydev)
 			val_rxdly ? "enabled" : "disabled");
 	}
 
+	if (of_property_read_bool(dev->of_node, "realtek,eee-disable")) {
+		rtl821x_write_page(phydev, 0xa4b);
+		phy_write(phydev, 0x11, 0x1110);
+		rtl821x_write_page(phydev, 0);
+		phy_write(phydev, 0xd,7);
+		phy_write(phydev, 0xe,0x3c);
+		phy_write(phydev, 0xd,0x4007);
+		phy_write(phydev, 0xe,0x0);
+	}
+
 	if (priv->has_phycr2) {
 		ret = phy_modify_paged(phydev, 0xa43, RTL8211F_PHYCR2,
 				       RTL8211F_CLKOUT_EN, priv->phycr2);
@@ -419,9 +429,11 @@ static int rtl8211f_config_init(struct phy_device *phydev)
 				ERR_PTR(ret));
 			return ret;
 		}
+
+		return genphy_soft_reset(phydev);
 	}
 
-	return genphy_soft_reset(phydev);
+	return 0;
 }
 
 static int rtl821x_resume(struct phy_device *phydev)

@@ -31,7 +31,7 @@
 
 		framebuffer {
 			compatible = "simple-framebuffer";
-			clocks = <&rcc LTDC_PX>;
+			clocks = <&rcc LTDC_PX>, <&rcc DSI>, <&rcc DSI_PX>;
 			status = "disabled";
 		};
 	};
@@ -102,6 +102,7 @@
 };
 
 &ltdc {
+	default-on;
 	status = "okay";
 
 	port {
@@ -128,6 +129,7 @@
 	pinctrl-1 = <&sdmmc2_b4_od_pins_a>;
 	pinctrl-2 = <&sdmmc2_b4_sleep_pins_a>;
 	non-removable;
+	cap-sdio-irq;
 	st,neg-edge;
 	bus-width = <4>;
 	vmmc-supply = <&v3v3>;
@@ -139,9 +141,6 @@
 	brcmf: bcrmf@1 {
 		reg = <1>;
 		compatible = "brcm,bcm4329-fmac";
-		interrupt-parent = <&gpiod>;
-		interrupts = <0 IRQ_TYPE_LEVEL_HIGH>; /* WL_HOST_WAKE */
-		interrupt-names = "host-wake";
 	};
 };
 

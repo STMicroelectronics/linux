@@ -127,6 +127,17 @@ config USB_DWC3_ST
 	  inside (i.e. STiH407).
 	  Say 'Y' or 'M' if you have one such device.
 
+config USB_DWC3_STM32
+        tristate "STM32 DWC3 support"
+        depends on (ARCH_STM32 || COMPILE_TEST) && OF
+        default USB_DWC3
+        help
+          Support for DesignWare Core USB3 controller on STM32 SOCs.
+
+          This selects STM32 SoC glue layer support for the DWC3
+          device driver. This driver is used on for the STM32 series
+          SOCs DWC3 USB controller.
+
 config USB_DWC3_QCOM
 	tristate "Qualcomm Platform"
 	depends on ARCH_QCOM || COMPILE_TEST

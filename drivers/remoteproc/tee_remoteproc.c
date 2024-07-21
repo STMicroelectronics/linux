@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 /*
- * Copyright (C) STMicroelectronics 2020 - All Rights Reserved
+ * Copyright (C) STMicroelectronics 2023 - All Rights Reserved
  * Authors: Arnaud Pouliquen <arnaud.pouliquen@st.com>
  */
 
@@ -75,14 +75,13 @@ struct tee_rproc_mem {
 
 struct tee_rproc_context {
 	struct list_head sessions;
-	struct tee_context *ctx;
+	struct tee_context *tee_ctx;
 	struct device *dev;
 };
 
-struct tee_rproc_context pvt_data;
+struct tee_rproc_context *tee_rproc_ctx;
 
-static void prepare_args(struct tee_rproc *trproc, int cmd,
-			 struct tee_ioctl_invoke_arg *arg,
+static void prepare_args(struct tee_rproc *trproc, int cmd, struct tee_ioctl_invoke_arg *arg,
 			 struct tee_param *param, unsigned int num_params)
 {
 	memset(arg, 0, sizeof(*arg));
@@ -94,7 +93,7 @@ static void prepare_args(struct tee_rproc *trproc, int cmd,
 
 	param[0] = (struct tee_param) {
 		.attr = TEE_IOCTL_PARAM_ATTR_TYPE_VALUE_INPUT,
-		.u.value.a = trproc->fw_id,
+		.u.value.a = trproc->rproc_id,
 	};
 }
 
@@ -105,7 +104,12 @@ int tee_rproc_load_fw(struct tee_rproc *trproc, const struct firmware *fw)
 	struct tee_shm *fw_shm;
 	int ret;
 
-	fw_shm = tee_shm_register_kernel_buf(pvt_data.ctx, (void *)fw->data, fw->size);
+	fw_shm = tee_shm_register_kernel_buf(tee_rproc_ctx->tee_ctx, (void *)fw->data, fw->size);
+	if (IS_ERR(fw_shm)) {
+		dev_err(tee_rproc_ctx->dev, "Failed to register kernel buffer in tee: %ld\n",
+			PTR_ERR(fw_shm));
+		return PTR_ERR(fw_shm);
+	}
 
 	prepare_args(trproc, TA_RPROC_FW_CMD_LOAD_FW, &arg, param, 1);
 
@@ -119,9 +123,9 @@ int tee_rproc_load_fw(struct tee_rproc *trproc, const struct firmware *fw)
 		},
 	};
 
-	ret = tee_client_invoke_func(pvt_data.ctx, &arg, param);
+	ret = tee_client_invoke_func(tee_rproc_ctx->tee_ctx, &arg, param);
 	if (ret < 0 || arg.ret != 0) {
-		dev_err(pvt_data.dev,
+		dev_err(tee_rproc_ctx->dev,
 			"TA_RPROC_FW_CMD_LOAD_FW invoke failed TEE err: %x, ret:%x\n",
 			arg.ret, ret);
 		if (!ret)
@@ -132,7 +136,7 @@ int tee_rproc_load_fw(struct tee_rproc *trproc, const struct firmware *fw)
 
 	return ret;
 }
-EXPORT_SYMBOL(tee_rproc_load_fw);
+EXPORT_SYMBOL_GPL(tee_rproc_load_fw);
 
 int rproc_tee_get_rsc_table(struct tee_rproc *trproc)
 {
@@ -147,9 +151,9 @@ int rproc_tee_get_rsc_table(struct tee_rproc *trproc)
 	param[1].attr = TEE_IOCTL_PARAM_ATTR_TYPE_VALUE_OUTPUT;
 	param[2].attr = TEE_IOCTL_PARAM_ATTR_TYPE_VALUE_OUTPUT;
 
-	ret = tee_client_invoke_func(pvt_data.ctx, &arg, param);
+	ret = tee_client_invoke_func(tee_rproc_ctx->tee_ctx, &arg, param);
 	if (ret < 0 || arg.ret != 0) {
-		dev_err(pvt_data.dev,
+		dev_err(tee_rproc_ctx->dev,
 			"TA_RPROC_FW_CMD_GET_RSC_TABLE invoke failed TEE err: %x, ret:%x\n",
 			arg.ret, ret);
 		return -EIO;
@@ -157,13 +161,17 @@ int rproc_tee_get_rsc_table(struct tee_rproc *trproc)
 
 	rsc_size = param[2].u.value.a;
 
+	/* If the size is null no resource table defined in the image */
+	if (!rsc_size)
+		return 0;
+
 	/*
 	 * Store the resource table address that would be updated by the remote
 	 * core and the virtio.
 	 */
 	trproc->rsc_va = ioremap_wc(param[1].u.value.a, rsc_size);
 	if (IS_ERR_OR_NULL(trproc->rsc_va)) {
-		dev_err(pvt_data.dev, "Unable to map memory region: %lld+%zx\n",
+		dev_err(tee_rproc_ctx->dev, "Unable to map memory region: %lld+%zx\n",
 			param[1].u.value.a, rsc_size);
 		trproc->rsc_va = NULL;
 		return -ENOMEM;
@@ -182,13 +190,13 @@ int rproc_tee_get_rsc_table(struct tee_rproc *trproc)
 
 	return 0;
 }
-EXPORT_SYMBOL(rproc_tee_get_rsc_table);
+EXPORT_SYMBOL_GPL(rproc_tee_get_rsc_table);
 
 struct resource_table *tee_rproc_get_loaded_rsc_table(struct tee_rproc *trproc)
 {
 	return (struct resource_table *)trproc->rsc_va;
 }
-EXPORT_SYMBOL(tee_rproc_get_loaded_rsc_table);
+EXPORT_SYMBOL_GPL(tee_rproc_get_loaded_rsc_table);
 
 int tee_rproc_start(struct tee_rproc *trproc)
 {
@@ -198,9 +206,9 @@ int tee_rproc_start(struct tee_rproc *trproc)
 
 	prepare_args(trproc, TA_RPROC_FW_CMD_START_FW, &arg, param, 0);
 
-	ret = tee_client_invoke_func(pvt_data.ctx, &arg, param);
+	ret = tee_client_invoke_func(tee_rproc_ctx->tee_ctx, &arg, param);
 	if (ret < 0 || arg.ret != 0) {
-		dev_err(pvt_data.dev,
+		dev_err(tee_rproc_ctx->dev,
 			"TA_RPROC_FW_CMD_START_FW invoke failed TEE err: %x, ret:%x\n",
 			arg.ret, ret);
 		if (!ret)
@@ -209,7 +217,7 @@ int tee_rproc_start(struct tee_rproc *trproc)
 
 	return ret;
 }
-EXPORT_SYMBOL(tee_rproc_start);
+EXPORT_SYMBOL_GPL(tee_rproc_start);
 
 int tee_rproc_stop(struct tee_rproc *trproc)
 {
@@ -219,9 +227,9 @@ int tee_rproc_stop(struct tee_rproc *trproc)
 
 	prepare_args(trproc, TA_RPROC_FW_CMD_STOP_FW, &arg, param, 0);
 
-	ret = tee_client_invoke_func(pvt_data.ctx, &arg, param);
+	ret = tee_client_invoke_func(tee_rproc_ctx->tee_ctx, &arg, param);
 	if (ret < 0 || arg.ret != 0) {
-		dev_err(pvt_data.dev,
+		dev_err(tee_rproc_ctx->dev,
 			"TA_RPROC_FW_CMD_STOP_FW invoke failed TEE err: %x, ret:%x\n",
 			arg.ret, ret);
 		if (!ret)
@@ -233,29 +241,35 @@ int tee_rproc_stop(struct tee_rproc *trproc)
 
 	return ret;
 }
-EXPORT_SYMBOL(tee_rproc_stop);
+EXPORT_SYMBOL_GPL(tee_rproc_stop);
 
-static const struct tee_client_device_id stm32_tee_fw_id_table[] = {
+static const struct tee_client_device_id stm32_tee_rproc_id_table[] = {
 	{UUID_INIT(0x80a4c275, 0x0a47, 0x4905,
 		   0x82, 0x85, 0x14, 0x86, 0xa9, 0x77, 0x1a, 0x08)},
 	{}
 };
 
-struct tee_rproc *tee_rproc_register(struct device *dev, unsigned int fw_id)
+struct tee_rproc *tee_rproc_register(struct device *dev, unsigned int rproc_id)
 {
 	struct tee_client_device *rproc_tee_device;
 	struct tee_ioctl_open_session_arg sess_arg;
+	struct tee_param param[MAX_TEE_PARAM_ARRY_MEMBER];
 	struct tee_rproc *trproc;
 	int ret;
 
-	if (!pvt_data.ctx)
-		return ERR_PTR(-ENODEV);
+	/*
+	 * The device is not probed by the TEE bus. We ignore the reason (bus could be not yet
+	 * probed or service not available in the secure firmware)
+	 * Assumption here is that the TEE bus is not probed.
+	 */
+	if (!tee_rproc_ctx)
+		return ERR_PTR(-EPROBE_DEFER);
 
 	trproc =  devm_kzalloc(dev, sizeof(*trproc), GFP_KERNEL);
 	if (!trproc)
 		return ERR_PTR(-ENOMEM);
 
-	rproc_tee_device = to_tee_client_device(pvt_data.dev);
+	rproc_tee_device = to_tee_client_device(tee_rproc_ctx->dev);
 	memset(&sess_arg, 0, sizeof(sess_arg));
 
 	/* Open session with rproc_tee load Trusted App */
@@ -265,44 +279,46 @@ struct tee_rproc *tee_rproc_register(struct device *dev, unsigned int fw_id)
 	 * TODO: should we replace TEE_IOCTL_LOGIN_PUBLIC by
 	 * TEE_IOCTL_LOGIN_REE_KERNEL?
 	 */
-	sess_arg.clnt_login = TEE_IOCTL_LOGIN_PUBLIC;
-	sess_arg.num_params = 0;
+	sess_arg.clnt_login = TEE_IOCTL_LOGIN_REE_KERNEL;
+	sess_arg.num_params = 1;
 
-	ret = tee_client_open_session(pvt_data.ctx, &sess_arg, NULL);
+	param[0] = (struct tee_param) {
+		.attr = TEE_IOCTL_PARAM_ATTR_TYPE_VALUE_INPUT,
+		.u.value.a = rproc_id,
+	};
+
+	ret = tee_client_open_session(tee_rproc_ctx->tee_ctx, &sess_arg, param);
 	if (ret < 0 || sess_arg.ret != 0) {
-		dev_err(dev, "tee_client_open_session failed, err: %x\n",
-			sess_arg.ret);
+		dev_err(dev, "tee_client_open_session failed, err: %x\n", sess_arg.ret);
 		return ERR_PTR(-EINVAL);
 	}
 
 	trproc->parent =  dev;
-	trproc->fw_id = fw_id;
+	trproc->rproc_id = rproc_id;
 	trproc->session_id = sess_arg.session;
 
-	list_add_tail(&trproc->node, &pvt_data.sessions);
+	list_add_tail(&trproc->node, &tee_rproc_ctx->sessions);
 
 	return trproc;
 }
-EXPORT_SYMBOL(tee_rproc_register);
+EXPORT_SYMBOL_GPL(tee_rproc_register);
 
 int tee_rproc_unregister(struct tee_rproc *trproc)
 {
 	int ret;
 
-	if (!pvt_data.ctx)
+	if (!tee_rproc_ctx)
 		return -ENODEV;
 
-	ret = tee_client_close_session(pvt_data.ctx, trproc->session_id);
-	if (ret < 0) {
-		dev_err(trproc->parent,
-			"tee_client_close_session failed, err: %x\n", ret);
-	}
+	ret = tee_client_close_session(tee_rproc_ctx->tee_ctx, trproc->session_id);
+	if (ret < 0)
+		dev_err(trproc->parent,	"tee_client_close_session failed, err: %x\n", ret);
 
 	list_del(&trproc->node);
 
 	return ret;
 }
-EXPORT_SYMBOL(tee_rproc_unregister);
+EXPORT_SYMBOL_GPL(tee_rproc_unregister);
 
 static int tee_ctx_match(struct tee_ioctl_version_data *ver, const void *data)
 {
@@ -312,36 +328,56 @@ static int tee_ctx_match(struct tee_ioctl_version_data *ver, const void *data)
 
 static int tee_rproc_probe(struct device *dev)
 {
-	/* Open context with TEE driver */
-	pvt_data.ctx = tee_client_open_context(NULL, tee_ctx_match, NULL,
-					       NULL);
-	if (IS_ERR(pvt_data.ctx))
-		return PTR_ERR(pvt_data.ctx);
+	struct tee_context *tee_ctx;
+	int ret;
 
-	pvt_data.dev = dev;
-	INIT_LIST_HEAD(&pvt_data.sessions);
+	/* Only one RPROC OP-TEE device allowed */
+	if (tee_rproc_ctx) {
+		dev_err(dev, "An RPROC OP-TEE device was already initialized: only one allowed\n");
+		return -EBUSY;
+	}
+
+	/* Open context with TEE driver */
+	tee_ctx = tee_client_open_context(NULL, tee_ctx_match, NULL, NULL);
+	if (IS_ERR(tee_ctx))
+		return PTR_ERR(tee_ctx);
+
+	tee_rproc_ctx = devm_kzalloc(dev, sizeof(*tee_rproc_ctx), GFP_KERNEL);
+	if (!tee_rproc_ctx) {
+		ret = -ENOMEM;
+		goto err;
+	}
+
+	tee_rproc_ctx->dev = dev;
+	tee_rproc_ctx->tee_ctx = tee_ctx;
+	INIT_LIST_HEAD(&tee_rproc_ctx->sessions);
 
 	return 0;
+err:
+	tee_client_close_context(tee_ctx);
+
+	return ret;
 }
 
 static int tee_rproc_remove(struct device *dev)
 {
 	struct tee_rproc *entry, *tmp;
 
-	list_for_each_entry_safe(entry, tmp, &pvt_data.sessions, node) {
-		tee_client_close_session(pvt_data.ctx, entry->session_id);
+	list_for_each_entry_safe(entry, tmp, &tee_rproc_ctx->sessions, node) {
+		tee_client_close_session(tee_rproc_ctx->tee_ctx, entry->session_id);
 		list_del(&entry->node);
 		kfree(entry);
 	}
 
-	tee_client_close_context(pvt_data.ctx);
+	tee_client_close_context(tee_rproc_ctx->tee_ctx);
+
 	return 0;
 }
 
-MODULE_DEVICE_TABLE(tee, stm32_tee_fw_id_table);
+MODULE_DEVICE_TABLE(tee, stm32_tee_rproc_id_table);
 
 static struct tee_client_driver tee_rproc_fw_driver = {
-	.id_table	= stm32_tee_fw_id_table,
+	.id_table	= stm32_tee_rproc_id_table,
 	.driver		= {
 		.name		= KBUILD_MODNAME,
 		.bus		= &tee_bus_type,
@@ -364,5 +400,4 @@ module_init(tee_rproc_fw_mod_init);
 module_exit(tee_rproc_fw_mod_exit);
 
 MODULE_DESCRIPTION("secure remote processor control driver");
-MODULE_AUTHOR("Arnaud Pouliquen <arnaud.pouliquen@st.com>");
 MODULE_LICENSE("GPL");

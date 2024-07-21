@@ -56,10 +56,11 @@ static void enqueue_external_timestamp(struct timestamp_event_queue *queue,
 	dst->t.sec = seconds;
 	dst->t.nsec = remainder;
 
+	/* Both WRITE_ONCE() are paired with READ_ONCE() in queue_cnt() */
 	if (!queue_free(queue))
-		queue->head = (queue->head + 1) % PTP_MAX_TIMESTAMPS;
+		WRITE_ONCE(queue->head, (queue->head + 1) % PTP_MAX_TIMESTAMPS);
 
-	queue->tail = (queue->tail + 1) % PTP_MAX_TIMESTAMPS;
+	WRITE_ONCE(queue->tail, (queue->tail + 1) % PTP_MAX_TIMESTAMPS);
 
 	spin_unlock_irqrestore(&queue->lock, flags);
 }
@@ -225,6 +226,7 @@ struct ptp_clock *ptp_clock_register(struct ptp_clock_info *info,
 
 	ptp->clock.ops = ptp_clock_ops;
 	ptp->info = info;
+	ptp->peer = NULL;
 	ptp->devid = MKDEV(major, index);
 	ptp->index = index;
 	spin_lock_init(&ptp->tsevq.lock);
@@ -347,6 +349,25 @@ static int unregister_vclock(struct device *dev, void *data)
 	ptp_vclock_unregister(info_to_vclock(ptp->info));
 	return 0;
 }
+
+int ptp_clock_set_peer(struct ptp_clock *ptp, struct ptp_clock *peer)
+{
+	/* remove existing peer assignments */
+	if (ptp && ptp->peer)
+		ptp->peer->peer = NULL;
+	if (peer && peer->peer)
+		peer->peer->peer = NULL;
+
+	/* pair up the two clocks */
+	if (ptp)
+		ptp->peer = peer;
+	if (peer)
+		peer->peer = ptp;
+
+	return 0;
+}
+
+EXPORT_SYMBOL(ptp_clock_set_peer);
 
 int ptp_clock_unregister(struct ptp_clock *ptp)
 {

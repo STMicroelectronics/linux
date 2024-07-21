@@ -1,0 +1,107 @@
+# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/clock/st,stm32mp25-rcc.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: STM32MP25 Reset Clock Controller
+
+maintainers:
+  - Gabriel Fernandez <gabriel.fernandez@foss.st.com>
+
+description: |
+  The RCC hardware block is both a reset and a clock controller.
+  RCC makes also power management (resume/supend).
+
+  Specifying clocks
+  =================
+
+  All available clocks are defined as preprocessor macros in
+  dt-bindings/clock/stm32mp25-clks.h header and can be used in device
+  tree sources.
+  This file implements defines like:
+      #define CK_BUS_SDMMC1 245
+      #define CK_KER_SDMMC1 313
+
+  Specifying softreset control of devices
+  =======================================
+
+  Device nodes should specify the reset channel required in their "resets"
+  property, containing a phandle to the reset device node and an index
+  specifying which channel to use.
+  The index is the bit number within the RCC registers bank, starting from RCC
+  base address.
+  It is calculated as: index = register_offset / 4 * 32 + bit_offset.
+  Where bit_offset is the bit offset within the register.
+
+  For example on STM32MP25, for LTDC reset:
+     ltdc = RCC_LTDCCFGR offset / 4 * 32 + LTDC_bit_offset
+          = 0x840 / 4 * 32 + 0 = 16896
+
+  See also::
+    include/dt-bindings/clock/stm32mp25-clks.h
+    include/dt-bindings/reset/stm32mp25-resets.h
+
+properties:
+  compatible:
+    enum:
+      - st,stm32mp25-rcc
+
+  reg:
+    maxItems: 1
+
+  '#clock-cells':
+    const: 1
+
+  '#reset-cells':
+    const: 1
+
+  clocks:
+    items:
+      - description: CK_SCMI_HSE High Speed External oscillator (8 to 48 MHz)
+      - description: CK_SCMI_HSI High Speed Internal oscillator (~ 64 MHz)
+      - description: CK_SCMI_MSI Low Power Internal oscillator (~ 4 MHz or ~ 16 MHz)
+      - description: CK_SCMI_LSE Low Speed External oscillator (32 KHz)
+      - description: CK_SCMI_LSI Low Speed Internal oscillator (~ 32 KHz)
+
+  clock-names:
+    items:
+      - const: hse
+      - const: hsi
+      - const: msi
+      - const: lse
+      - const: lsi
+
+  feature-domains:
+    $ref: /schemas/types.yaml#/definitions/phandle-array
+    description: |
+      Phandle to the rifsc device to check access right.
+
+required:
+  - compatible
+  - reg
+  - '#clock-cells'
+  - '#reset-cells'
+  - clocks
+  - clock-names
+
+additionalProperties: false
+
+examples:
+  - |
+    #include <dt-bindings/clock/stm32mp25-clks.h>
+
+    rcc: clock-controller@44200000 {
+        compatible = "st,stm32mp25-rcc";
+        reg = <0x44200000 0x10000>;
+        #clock-cells = <1>;
+        #reset-cells = <1>;
+        clock-names = "hse", "hsi", "msi", "lse", "lsi";
+        clocks = <&scmi_clk CK_SCMI_HSE>,
+                 <&scmi_clk CK_SCMI_HSI>,
+                 <&scmi_clk CK_SCMI_MSI>,
+                 <&scmi_clk CK_SCMI_LSE>,
+                 <&scmi_clk CK_SCMI_LSI>;
+        feature-domains = <&rifsc 156>;
+    };
+...

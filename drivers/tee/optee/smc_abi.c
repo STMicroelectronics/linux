@@ -52,6 +52,23 @@
  */
 #define OPTEE_MIN_STATIC_POOL_ALIGN    9 /* 512 bytes aligned */
 
+/* SMC ABI considers at most a single TEE firmware */
+static unsigned int pcpu_irq_num;
+
+static int optee_cpuhp_enable_pcpu_irq(unsigned int cpu)
+{
+	enable_percpu_irq(pcpu_irq_num, IRQ_TYPE_NONE);
+
+	return 0;
+}
+
+static int optee_cpuhp_disable_pcpu_irq(unsigned int cpu)
+{
+	disable_percpu_irq(pcpu_irq_num);
+
+	return 0;
+}
+
 /*
  * 1. Convert between struct tee_param and struct optee_msg_param
  *
@@ -924,7 +941,7 @@ static void call_out_of_thread(struct tee_context *ctx, bool system_call)
 		 */
 		thd->thread_cnt--;
 		thd->thread_free_cnt--;
-		pr_warn("optee: decrement max thread to %u\n", thd->thread_cnt);
+		pr_warn("optee: decrement max thread to %zu\n", thd->thread_cnt);
 
 		/*
 		 * If no enough thread to satisfy already provisioned system
@@ -1248,28 +1265,21 @@ static u32 get_async_notif_value(optee_invoke_fn *invoke_fn, bool *value_valid,
 
 	invoke_fn(OPTEE_SMC_GET_ASYNC_NOTIF_VALUE, 0, 0, 0, 0, 0, 0, 0, &res);
 
-	if (res.a0)
+	if (res.a0) {
+		*value_valid = false;
 		return 0;
+	}
 	*value_valid = (res.a2 & OPTEE_SMC_ASYNC_NOTIF_VALUE_VALID);
 	*value_pending = (res.a2 & OPTEE_SMC_ASYNC_NOTIF_VALUE_PENDING);
 	return res.a1;
 }
 
-static irqreturn_t notif_irq_handler(int irq, void *dev_id)
+static irqreturn_t irq_handler(struct optee *optee)
 {
-	struct optee *optee;
 	bool do_bottom_half = false;
 	bool value_valid;
 	bool value_pending;
 	u32 value;
-
-	if (irq_is_percpu_devid(irq)) {
-		struct optee_pcpu *pcpu = (struct optee_pcpu *)dev_id;
-
-		optee = pcpu->optee;
-	} else {
-		optee = dev_id;
-	}
 
 	do {
 		value = get_async_notif_value(optee->smc.invoke_fn, &value_valid, &value_pending);
@@ -1284,14 +1294,16 @@ static irqreturn_t notif_irq_handler(int irq, void *dev_id)
 			optee_notif_send(optee, value);
 	} while (value_pending);
 
-	if (do_bottom_half) {
-		if (irq_is_percpu_devid(irq))
-			queue_work(optee->smc.notif_pcpu_wq, &optee->smc.notif_pcpu_work);
-		else
-			return IRQ_WAKE_THREAD;
-	}
-
+	if (do_bottom_half)
+		return IRQ_WAKE_THREAD;
 	return IRQ_HANDLED;
+}
+
+static irqreturn_t notif_irq_handler(int irq, void *dev_id)
+{
+	struct optee *optee = dev_id;
+
+	return irq_handler(optee);
 }
 
 static irqreturn_t notif_irq_thread_fn(int irq, void *dev_id)
@@ -1307,7 +1319,8 @@ static int init_irq(struct optee *optee, u_int irq)
 {
 	int rc;
 
-	rc = request_threaded_irq(irq, notif_irq_handler, notif_irq_thread_fn,
+	rc = request_threaded_irq(irq, notif_irq_handler,
+				  notif_irq_thread_fn,
 				  0, "optee_notification", optee);
 	if (rc)
 		return rc;
@@ -1317,9 +1330,22 @@ static int init_irq(struct optee *optee, u_int irq)
 	return 0;
 }
 
+static irqreturn_t notif_pcpu_irq_handler(int irq, void *dev_id)
+{
+	struct optee_pcpu *pcpu = dev_id;
+	struct optee *optee = pcpu->optee;
+
+	if (irq_handler(optee) == IRQ_WAKE_THREAD)
+		queue_work(optee->smc.notif_pcpu_wq,
+			   &optee->smc.notif_pcpu_work);
+
+	return IRQ_HANDLED;
+}
+
 static void notif_pcpu_irq_work_fn(struct work_struct *work)
 {
-	struct optee_smc *optee_smc = container_of(work, struct optee_smc, notif_pcpu_work);
+	struct optee_smc *optee_smc = container_of(work, struct optee_smc,
+						   notif_pcpu_work);
 	struct optee *optee = container_of(optee_smc, struct optee, smc);
 
 	optee_smc_do_bottom_half(optee->ctx);
@@ -1327,31 +1353,20 @@ static void notif_pcpu_irq_work_fn(struct work_struct *work)
 
 static int init_pcpu_irq(struct optee *optee, u_int irq)
 {
-	struct optee_pcpu *optee_pcpu;
-	spinlock_t lock;
-	int cpu;
-	int rc;
+	struct optee_pcpu __percpu *optee_pcpu;
+	int cpu, rc;
 
 	optee_pcpu = alloc_percpu(struct optee_pcpu);
 	if (!optee_pcpu)
 		return -ENOMEM;
 
-	for_each_present_cpu(cpu) {
-		struct optee_pcpu *p = per_cpu_ptr(optee_pcpu, cpu);
+	for_each_present_cpu(cpu)
+		per_cpu_ptr(optee_pcpu, cpu)->optee = optee;
 
-		p->optee = optee;
-	}
-
-	rc = request_percpu_irq(irq, notif_irq_handler,
+	rc = request_percpu_irq(irq, notif_pcpu_irq_handler,
 				"optee_pcpu_notification", optee_pcpu);
 	if (rc)
 		goto err_free_pcpu;
-
-	spin_lock_init(&lock);
-
-	spin_lock(&lock);
-	enable_percpu_irq(irq, 0);
-	spin_unlock(&lock);
 
 	INIT_WORK(&optee->smc.notif_pcpu_work, notif_pcpu_irq_work_fn);
 	optee->smc.notif_pcpu_wq = create_workqueue("optee_pcpu_notification");
@@ -1363,12 +1378,20 @@ static int init_pcpu_irq(struct optee *optee, u_int irq)
 	optee->smc.optee_pcpu = optee_pcpu;
 	optee->smc.notif_irq = irq;
 
+	pcpu_irq_num = irq;
+	rc = cpuhp_setup_state(CPUHP_AP_ONLINE_DYN, "optee/pcpu-notif:starting",
+			       optee_cpuhp_enable_pcpu_irq,
+			       optee_cpuhp_disable_pcpu_irq);
+	if (!rc)
+		rc = -EINVAL;
+	if (rc < 0)
+		goto err_free_pcpu_irq;
+
+	optee->smc.notif_cpuhp_state = rc;
+
 	return 0;
 
 err_free_pcpu_irq:
-	spin_lock(&lock);
-	disable_percpu_irq(irq);
-	spin_unlock(&lock);
 	free_percpu_irq(irq, optee_pcpu);
 err_free_pcpu:
 	free_percpu(optee_pcpu);
@@ -1386,12 +1409,9 @@ static int optee_smc_notif_init_irq(struct optee *optee, u_int irq)
 
 static void uninit_pcpu_irq(struct optee *optee)
 {
-	spinlock_t lock;
+	cpuhp_remove_state(optee->smc.notif_cpuhp_state);
 
-	spin_lock_init(&lock);
-	spin_lock(&lock);
-	disable_percpu_irq(optee->smc.notif_irq);
-	spin_unlock(&lock);
+	destroy_workqueue(optee->smc.notif_pcpu_wq);
 
 	free_percpu_irq(optee->smc.notif_irq, optee->smc.optee_pcpu);
 	free_percpu(optee->smc.optee_pcpu);

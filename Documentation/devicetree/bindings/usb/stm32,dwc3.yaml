@@ -1,0 +1,108 @@
+# SPDX-License-Identifier: (GPL-2.0 OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/usb/stm32,dwc3.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: STMicroelectronics STM32 MPU DWC3 USB SoC controller
+
+description:
+  The STM32 MPU DWC3 USB SoC controller block supports both Host(SS/HS/FS/LS)
+  or Device(SS/HS/FS) mode operation
+
+maintainers:
+  - Fabrice Gasnier <fabrice.gasnier@foss.st.com>
+
+properties:
+  compatible:
+    const: st,stm32mp25-dwc3
+
+  "#address-cells":
+    const: 1
+
+  "#size-cells":
+    const: 1
+
+  ranges: true
+
+  st,syscfg:
+    $ref: /schemas/types.yaml#/definitions/phandle-array #(arm/stm32/st,stm32-syscon.yaml#)
+    description: <Phandle to the STM32-MPU System Controller DT node> <offset-for-usr3drcr-reg>
+
+  st,vbusen-active-low:
+    type: boolean
+    description: VBUS-ENABLE signal polarity is active-low
+
+  st,ovrcur-active-low:
+    type: boolean
+    description: Over-Current signal polarity is active-low
+
+  st,enable-port-power-control:
+    type: boolean
+    description: Enable Host-Mode Port Power Control (bit-3 of capability param HCCPARAMS)
+
+  wakeup-source: true
+
+  interrupts:
+    maxItems: 1
+    description: interrupt used for wakeup
+
+  feature-domains:
+    $ref: /schemas/types.yaml#/definitions/phandle-array
+    description: |
+      Phandle to the rifsc device to check access right.
+
+# Required child node:
+
+patternProperties:
+  "^usb@[0-9a-f]+$":
+    $ref: snps,dwc3.yaml#
+
+required:
+  - compatible
+  - "#address-cells"
+  - "#size-cells"
+  - ranges
+  - st,syscfg
+
+allOf:
+  - if:
+      required:
+        - wakeup-source
+    then:
+      anyOf:
+        - required: [interrupts]
+        - required: [interrupts-extended]
+
+additionalProperties: false
+
+examples:
+  - |
+    #include <dt-bindings/clock/stm32mp25-clks.h>
+    #include <dt-bindings/interrupt-controller/arm-gic.h>
+    #include <dt-bindings/reset/stm32mp25-resets.h>
+
+    usb3dr: usb@48300000 {
+        compatible      = "st,stm32mp25-dwc3";
+        st,syscfg       = <&syscfg 0x4800>;
+        #address-cells  = <1>;
+        #size-cells     = <1>;
+        ranges = <0x48300000 0x48300000 0x100000>;
+        st,ovrcur-active-low;
+        st,vbusen-active-low;
+        wakeup-source;
+        interrupts-extended = <&exti1 44 IRQ_TYPE_EDGE_RISING>;
+
+        dwc3: usb@48300000 {
+            compatible      = "snps,dwc3";
+            reg             = <0x48300000 0x100000>;
+            interrupts      = <GIC_SPI 228 IRQ_TYPE_LEVEL_HIGH>;
+            clock-names     = "ref", "bus_early", "suspend";
+            clocks          = <&rcc CK_KER_USB2PHY2>, <&rcc CK_BUS_USB3DR>,
+                              <&rcc CK_KER_USB2PHY2>;
+            resets          = <&rcc USB3DR_R>;
+            phys            = <&usb2_phy>, <&usb3_phy>;
+            phy-names       = "usb2-phy", "usb3-phy";
+            wakeup-source;
+        };
+    };

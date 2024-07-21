@@ -13,12 +13,11 @@ maintainers:
 description:
   The STMicroelectronics STM32 DSI controller uses the Synopsys DesignWare MIPI-DSI host controller.
 
-allOf:
-  - $ref: dsi-controller.yaml#
-
 properties:
   compatible:
-    const: st,stm32-dsi
+    enum:
+      - st,stm32-dsi
+      - st,stm32mp25-dsi
 
   reg:
     maxItems: 1
@@ -44,9 +43,13 @@ properties:
     items:
       - const: apb
 
-  phy-dsi-supply:
-    description:
-      Phandle of the regulator that provides the supply voltage.
+  power-domains:
+    maxItems: 1
+
+  feature-domains:
+    $ref: /schemas/types.yaml#/definitions/phandle-array
+    description: |
+      Phandle to the rifsc device to check access right.
 
   ports:
     $ref: /schemas/graph.yaml#/properties/ports
@@ -72,6 +75,37 @@ properties:
                 items:
                   - const: 1
                   - const: 2
+
+allOf:
+  - $ref: dsi-controller.yaml#
+
+  - if:
+      properties:
+        compatible:
+          contains:
+            enum:
+              - st,stm32-dsi
+    then:
+      properties:
+        phy-dsi-supply:
+          description:
+            Phandle of the regulator that provides the supply voltage.
+
+  - if:
+      properties:
+        compatible:
+          contains:
+            enum:
+              - st,stm32mp25-dsi
+    then:
+      properties:
+        vdd-supply:
+          description:
+            Phandle of the regulator that provides the supply voltage vdd.
+
+        vdda18-supply:
+          description:
+            Phandle of the regulator that provides the supply voltage vdda18.
 
 required:
   - "#address-cells"

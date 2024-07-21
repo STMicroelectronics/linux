@@ -7,9 +7,7 @@
  *          Alain Volmat <alain.volmat@foss.st.com>
  *          for STMicroelectronics.
  */
-
 #include <linux/clk.h>
-#include <linux/component.h>
 #include <linux/delay.h>
 #include <linux/init.h>
 #include <linux/module.h>
@@ -23,6 +21,7 @@
 #include <media/media-device.h>
 #include <media/v4l2-device.h>
 #include <media/v4l2-fwnode.h>
+#include <media/v4l2-mc.h>
 
 #include "dcmipp-common.h"
 
@@ -37,6 +36,7 @@
 }
 
 #define DCMIPP_CMHWCFGR (0x200)
+#define DCMIPP_CMSR2 (0x3F8)
 #define DCMIPP_P0HWCFGR (0x400)
 #define DCMIPP_VERR (0xFF4)
 
@@ -48,6 +48,7 @@ struct dcmipp_device {
 	/* Hardware resources */
 	struct reset_control		*rstc;
 	void __iomem			*regs;
+	struct clk			*mclk;
 	struct clk			*kclk;
 
 	/* The pipeline configuration */
@@ -59,8 +60,8 @@ struct dcmipp_device {
 	/* Internal v4l2 parent device*/
 	struct v4l2_device		v4l2_dev;
 
-	/* Subdevices */
-	struct platform_device		**subdevs;
+	/* Entities */
+	struct dcmipp_ent_device	**entity;
 
 	struct v4l2_async_notifier	notifier;
 };
@@ -73,7 +74,10 @@ static inline struct dcmipp_device *notifier_to_dcmipp(struct v4l2_async_notifie
 /* Structure which describes individual configuration for each entity */
 struct dcmipp_ent_config {
 	const char *name;
-	const char *drv;
+	struct dcmipp_ent_device *(*init)
+		(struct device *dev, const char *entity_name,
+		 struct v4l2_device *v4l2_dev, void __iomem *regs);
+	void (*release)(struct dcmipp_ent_device *ved);
 };
 
 /* Structure which describes links between entities */
@@ -91,6 +95,7 @@ struct dcmipp_pipeline_config {
 	size_t num_ents;
 	const struct dcmipp_ent_link *links;
 	size_t num_links;
+	u32 hw_revision;
 };
 
 /* --------------------------------------------------------------------------
@@ -99,35 +104,130 @@ struct dcmipp_pipeline_config {
 
 static const struct dcmipp_ent_config stm32mp13_ent_config[] = {
 	{
-		.name = "dcmipp_parallel",
-		.drv = "dcmipp-parallel",
+		.name = "dcmipp_input",
+		.init = dcmipp_inp_ent_init,
+		.release = dcmipp_inp_ent_release,
 	},
 	{
 		.name = "dcmipp_dump_postproc",
-		.drv = "dcmipp-byteproc",
+		.init = dcmipp_byteproc_ent_init,
+		.release = dcmipp_byteproc_ent_release,
 	},
 	{
 		.name = "dcmipp_dump_capture",
-		.drv = "dcmipp-bytecap",
+		.init = dcmipp_bytecap_ent_init,
+		.release = dcmipp_bytecap_ent_release,
 	},
 };
 
-#define ID_PARALLEL 0
+#define ID_INPUT 0
 #define ID_DUMP_BYTEPROC 1
 #define ID_DUMP_CAPTURE 2
 
 static const struct dcmipp_ent_link stm32mp13_ent_links[] = {
-	DCMIPP_ENT_LINK(ID_PARALLEL,      1, ID_DUMP_BYTEPROC, 0,
+	DCMIPP_ENT_LINK(ID_INPUT,	  1, ID_DUMP_BYTEPROC, 0,
 			MEDIA_LNK_FL_ENABLED | MEDIA_LNK_FL_IMMUTABLE),
 	DCMIPP_ENT_LINK(ID_DUMP_BYTEPROC, 1, ID_DUMP_CAPTURE,  0,
 			MEDIA_LNK_FL_ENABLED | MEDIA_LNK_FL_IMMUTABLE),
 };
 
+#define DCMIPP_STM32MP13_VERR	0x10
 static const struct dcmipp_pipeline_config stm32mp13_pipe_cfg = {
 	.ents		= stm32mp13_ent_config,
 	.num_ents	= ARRAY_SIZE(stm32mp13_ent_config),
 	.links		= stm32mp13_ent_links,
-	.num_links	= ARRAY_SIZE(stm32mp13_ent_links)
+	.num_links	= ARRAY_SIZE(stm32mp13_ent_links),
+	.hw_revision	= DCMIPP_STM32MP13_VERR
+};
+
+#define	ID_MAIN_ISP 3
+#define	ID_MAIN_POSTPROC 4
+#define	ID_MAIN_CAPTURE	5
+#define	ID_AUX_POSTPROC 6
+#define	ID_AUX_CAPTURE 7
+#define	ID_ISP_STAT_CAPTURE 8
+#define	ID_ISP_PARAMS_OUTPUT 9
+static const struct dcmipp_ent_config stm32mp25_ent_config[] = {
+	{
+		.name = "dcmipp_input",
+		.init = dcmipp_inp_ent_init,
+		.release = dcmipp_inp_ent_release,
+	},
+	{
+		.name = "dcmipp_dump_postproc",
+		.init = dcmipp_byteproc_ent_init,
+		.release = dcmipp_byteproc_ent_release,
+	},
+	{
+		.name = "dcmipp_dump_capture",
+		.init = dcmipp_bytecap_ent_init,
+		.release = dcmipp_bytecap_ent_release,
+	},
+	{
+		.name = "dcmipp_main_isp",
+		.init = dcmipp_isp_ent_init,
+		.release = dcmipp_isp_ent_release,
+	},
+	{
+		.name = "dcmipp_main_postproc",
+		.init = dcmipp_pixelproc_ent_init,
+		.release = dcmipp_pixelproc_ent_release,
+	},
+	{
+		.name = "dcmipp_main_capture",
+		.init = dcmipp_pixelcap_ent_init,
+		.release = dcmipp_pixelcap_ent_release,
+	},
+	{
+		.name = "dcmipp_aux_postproc",
+		.init = dcmipp_pixelproc_ent_init,
+		.release = dcmipp_pixelproc_ent_release,
+	},
+	{
+		.name = "dcmipp_aux_capture",
+		.init = dcmipp_pixelcap_ent_init,
+		.release = dcmipp_pixelcap_ent_release,
+	},
+	{
+		.name = "dcmipp_main_isp_stat_capture",
+		.init = dcmipp_statcap_ent_init,
+		.release = dcmipp_statcap_ent_release,
+	},
+	{
+		.name = "dcmipp_main_isp_params_output",
+		.init = dcmipp_isp_params_ent_init,
+		.release = dcmipp_isp_params_ent_release,
+	},
+};
+
+static const struct dcmipp_ent_link stm32mp25_ent_links[] = {
+	DCMIPP_ENT_LINK(ID_INPUT,	  1, ID_DUMP_BYTEPROC, 0,
+			MEDIA_LNK_FL_ENABLED | MEDIA_LNK_FL_IMMUTABLE),
+	DCMIPP_ENT_LINK(ID_DUMP_BYTEPROC, 1, ID_DUMP_CAPTURE,  0,
+			MEDIA_LNK_FL_ENABLED | MEDIA_LNK_FL_IMMUTABLE),
+	DCMIPP_ENT_LINK(ID_INPUT,	2, ID_MAIN_ISP,  0,
+			MEDIA_LNK_FL_ENABLED | MEDIA_LNK_FL_IMMUTABLE),
+	DCMIPP_ENT_LINK(ID_MAIN_ISP,	1, ID_MAIN_POSTPROC,  0,
+			MEDIA_LNK_FL_ENABLED | MEDIA_LNK_FL_IMMUTABLE),
+	DCMIPP_ENT_LINK(ID_MAIN_ISP,	1, ID_AUX_POSTPROC,  0, 0),
+	DCMIPP_ENT_LINK(ID_MAIN_POSTPROC,	1, ID_MAIN_CAPTURE,  0,
+			MEDIA_LNK_FL_ENABLED | MEDIA_LNK_FL_IMMUTABLE),
+	DCMIPP_ENT_LINK(ID_INPUT,	3, ID_AUX_POSTPROC,  0, 0),
+	DCMIPP_ENT_LINK(ID_AUX_POSTPROC,	1, ID_AUX_CAPTURE,  0,
+			MEDIA_LNK_FL_ENABLED | MEDIA_LNK_FL_IMMUTABLE),
+	DCMIPP_ENT_LINK(ID_ISP_PARAMS_OUTPUT,	0, ID_MAIN_ISP,	2,
+			MEDIA_LNK_FL_ENABLED | MEDIA_LNK_FL_IMMUTABLE),
+	DCMIPP_ENT_LINK(ID_MAIN_ISP,	3, ID_ISP_STAT_CAPTURE,  0,
+			MEDIA_LNK_FL_ENABLED | MEDIA_LNK_FL_IMMUTABLE),
+};
+
+#define DCMIPP_STM32MP25_VERR	0x30
+static const struct dcmipp_pipeline_config stm32mp25_pipe_cfg = {
+	.ents		= stm32mp25_ent_config,
+	.num_ents	= ARRAY_SIZE(stm32mp25_ent_config),
+	.links		= stm32mp25_ent_links,
+	.num_links	= ARRAY_SIZE(stm32mp25_ent_links),
+	.hw_revision	= DCMIPP_STM32MP25_VERR
 };
 
 /* -------------------------------------------------------------------------- */
@@ -146,20 +246,16 @@ static int dcmipp_create_links(struct dcmipp_device *dcmipp)
 
 	/* Initialize the links between entities */
 	for (i = 0; i < dcmipp->pipe_cfg->num_links; i++) {
-		const struct dcmipp_ent_link *link = &dcmipp->pipe_cfg->links[i];
-		/*
-		 * TODO: Check another way of retrieving ved struct without
-		 * relying on platform_get_drvdata
-		 */
+		const struct dcmipp_ent_link *link =
+			&dcmipp->pipe_cfg->links[i];
 		struct dcmipp_ent_device *ved_src =
-			platform_get_drvdata(dcmipp->subdevs[link->src_ent]);
+			dcmipp->entity[link->src_ent];
 		struct dcmipp_ent_device *ved_sink =
-			platform_get_drvdata(dcmipp->subdevs[link->sink_ent]);
+			dcmipp->entity[link->sink_ent];
 
 		dev_dbg(dcmipp->dev, "Create link \"%s\":%d -> %d:\"%s\" [%s]\n",
 			dcmipp->pipe_cfg->ents[link->src_ent].name,
-			link->src_pad,
-			link->sink_pad,
+			link->src_pad, link->sink_pad,
 			dcmipp->pipe_cfg->ents[link->sink_ent].name,
 			LINK_FLAG_TO_STR(link->flags));
 
@@ -175,121 +271,47 @@ static int dcmipp_create_links(struct dcmipp_device *dcmipp)
 
 static int dcmipp_graph_init(struct dcmipp_device *dcmipp);
 
-static int dcmipp_comp_bind(struct device *master)
+static int dcmipp_create_subdevs(struct dcmipp_device *dcmipp)
 {
-	struct dcmipp_device *dcmipp = platform_get_drvdata(to_platform_device(master));
-	struct dcmipp_bind_data bind_data;
-	int ret;
+	int ret, i;
 
-	/* Register the v4l2 struct */
-	ret = v4l2_device_register(dcmipp->mdev.dev, &dcmipp->v4l2_dev);
-	if (ret) {
-		dev_err(dcmipp->mdev.dev,
-			"v4l2 device register failed (err=%d)\n", ret);
-		return ret;
+	/* Call all subdev inits */
+	for (i = 0; i < dcmipp->pipe_cfg->num_ents; i++) {
+		const char *name = dcmipp->pipe_cfg->ents[i].name;
+
+		dev_dbg(dcmipp->dev, "add subdev %s\n", name);
+		dcmipp->entity[i] =
+			dcmipp->pipe_cfg->ents[i].init(dcmipp->dev, name,
+						       &dcmipp->v4l2_dev,
+						       dcmipp->regs);
+		if (IS_ERR(dcmipp->entity[i])) {
+			dev_err(dcmipp->dev, "failed to init subdev %s\n",
+				name);
+			ret = PTR_ERR(dcmipp->entity[i]);
+			goto err_init_entity;
+		}
 	}
-
-	/* Bind subdevices */
-	bind_data.v4l2_dev = &dcmipp->v4l2_dev;
-	bind_data.rstc = dcmipp->rstc;
-	bind_data.regs = dcmipp->regs;
-	ret = component_bind_all(master, &bind_data);
-	if (ret)
-		goto err_v4l2_unregister;
 
 	/* Initialize links */
 	ret = dcmipp_create_links(dcmipp);
 	if (ret)
-		goto err_comp_unbind_all;
+		goto err_init_entity;
 
 	ret = dcmipp_graph_init(dcmipp);
 	if (ret < 0)
-		return ret;
+		goto err_init_entity;
 
 	return 0;
 
-	media_device_unregister(&dcmipp->mdev);
-	media_device_cleanup(&dcmipp->mdev);
-err_comp_unbind_all:
-	component_unbind_all(master, NULL);
-err_v4l2_unregister:
-	v4l2_device_unregister(&dcmipp->v4l2_dev);
-
+err_init_entity:
+	while (i-- > 0)
+		dcmipp->pipe_cfg->ents[i - 1].release(dcmipp->entity[i - 1]);
 	return ret;
 }
 
-static void dcmipp_comp_unbind(struct device *master)
-{
-	struct dcmipp_device *dcmipp = platform_get_drvdata(to_platform_device(master));
-
-	v4l2_async_nf_unregister(&dcmipp->notifier);
-	v4l2_async_nf_cleanup(&dcmipp->notifier);
-
-	media_device_unregister(&dcmipp->mdev);
-	media_device_cleanup(&dcmipp->mdev);
-	component_unbind_all(master, NULL);
-	v4l2_device_unregister(&dcmipp->v4l2_dev);
-}
-
-static int dcmipp_comp_compare(struct device *comp, void *data)
-{
-	return comp == data;
-}
-
-static struct component_match *dcmipp_add_subdevs(struct dcmipp_device *dcmipp)
-{
-	struct component_match *match = NULL;
-	struct dcmipp_platform_data pdata;
-	int i;
-
-	for (i = 0; i < dcmipp->pipe_cfg->num_ents; i++) {
-		dev_dbg(dcmipp->dev, "new pdev for %s (%s)\n",
-			dcmipp->pipe_cfg->ents[i].drv,
-			dcmipp->pipe_cfg->ents[i].name);
-
-		strscpy(pdata.entity_name, dcmipp->pipe_cfg->ents[i].name,
-			sizeof(pdata.entity_name));
-
-		dcmipp->subdevs[i] =
-			platform_device_register_data
-				(dcmipp->dev,
-				 dcmipp->pipe_cfg->ents[i].drv,
-				 PLATFORM_DEVID_AUTO,
-				 &pdata,
-				 sizeof(pdata));
-		if (IS_ERR(dcmipp->subdevs[i])) {
-			match = ERR_CAST(dcmipp->subdevs[i]);
-			while (--i >= 0)
-				platform_device_unregister(dcmipp->subdevs[i]);
-
-			dev_err(dcmipp->mdev.dev,
-				"%s error (err=%ld)\n", __func__,
-				PTR_ERR(match));
-			return match;
-		}
-
-		component_match_add(dcmipp->dev, &match, dcmipp_comp_compare,
-				    &dcmipp->subdevs[i]->dev);
-	}
-
-	return match;
-}
-
-static void dcmipp_rm_subdevs(struct dcmipp_device *dcmipp)
-{
-	unsigned int i;
-
-	for (i = 0; i < dcmipp->pipe_cfg->num_ents; i++)
-		platform_device_unregister(dcmipp->subdevs[i]);
-}
-
-static const struct component_master_ops dcmipp_comp_ops = {
-	.bind = dcmipp_comp_bind,
-	.unbind = dcmipp_comp_unbind,
-};
-
 static const struct of_device_id dcmipp_of_match[] = {
 	{ .compatible = "st,stm32mp13-dcmipp", .data = &stm32mp13_pipe_cfg},
+	{ .compatible = "st,stm32mp25-dcmipp", .data = &stm32mp25_pipe_cfg},
 	{ /* end node */ },
 };
 MODULE_DEVICE_TABLE(of, dcmipp_of_match);
@@ -339,7 +361,7 @@ static irqreturn_t dcmipp_irq_thread(int irq, void *arg)
 
 	/* Call irq thread of each entities of pipeline */
 	for (i = 0; i < dcmipp->pipe_cfg->num_ents; i++) {
-		ved = platform_get_drvdata(dcmipp->subdevs[i]);
+		ved = dcmipp->entity[i];
 		if (ved->thread_fn && ved->handler_ret == IRQ_WAKE_THREAD)
 			ved->thread_fn(irq, ved);
 	}
@@ -353,10 +375,15 @@ static irqreturn_t dcmipp_irq_callback(int irq, void *arg)
 	struct dcmipp_ent_device *ved;
 	irqreturn_t ret = IRQ_HANDLED;
 	unsigned int i;
+	u32 cmsr2;
+
+	/* Centralized read of CMSR2 */
+	cmsr2 = reg_read(dcmipp, DCMIPP_CMSR2);
 
 	/* Call irq handler of each entities of pipeline */
 	for (i = 0; i < dcmipp->pipe_cfg->num_ents; i++) {
-		ved = platform_get_drvdata(dcmipp->subdevs[i]);
+		ved = dcmipp->entity[i];
+		ved->cmsr2 = cmsr2;
 		if (ved->handler)
 			ved->handler_ret = ved->handler(irq, ved);
 		else if (ved->thread_fn)
@@ -377,71 +404,26 @@ static int dcmipp_graph_notify_bound(struct v4l2_async_notifier *notifier,
 	struct dcmipp_device *dcmipp = notifier_to_dcmipp(notifier);
 	unsigned int ret;
 	int src_pad;
-	struct dcmipp_ent_device *sink;
-	struct device_node *np = dcmipp->dev->of_node;
-	struct v4l2_fwnode_endpoint ep = { .bus_type = 0 };
 
 	dev_dbg(dcmipp->dev, "Subdev \"%s\" bound\n", subdev->name);
 
-	/*
-	 * Link this sub-device to DCMIPP, it could be
-	 * a parallel camera sensor or a CSI-2 to parallel bridge
-	 */
-
+	/* Link this sub-device to DCMIPP input subdev */
 	src_pad = media_entity_get_fwnode_pad(&subdev->entity,
 					      subdev->fwnode,
 					      MEDIA_PAD_FL_SOURCE);
 
-	/* Get bus characteristics from devicetree */
-	np = of_graph_get_next_endpoint(np, NULL);
-	if (!np) {
-		dev_err(dcmipp->dev, "Could not find the endpoint\n");
-		of_node_put(np);
-		return -ENODEV;
-	}
+	ret = media_create_pad_link(&subdev->entity, src_pad,
+				    dcmipp->entity[ID_INPUT]->ent, 0,
+				    MEDIA_LNK_FL_IMMUTABLE |
+				    MEDIA_LNK_FL_ENABLED);
+	if (ret)
+		dev_err(dcmipp->dev, "Failed to create media pad link with subdev \"%s\"\n",
+			subdev->name);
+	else
+		dev_dbg(dcmipp->dev, "DCMIPP is now linked to \"%s\"\n",
+			subdev->name);
 
-	ret = v4l2_fwnode_endpoint_parse(of_fwnode_handle(np), &ep);
-	of_node_put(np);
-	if (ret) {
-		dev_err(dcmipp->dev, "Could not parse the endpoint\n");
-		return ret;
-	}
-
-	if ((ep.bus_type == V4L2_MBUS_PARALLEL ||
-	     ep.bus_type == V4L2_MBUS_BT656) &&
-	     ep.bus.parallel.bus_width > 0) {
-		/* Only 8 bits bus width supported with BT656 bus */
-		if (ep.bus_type == V4L2_MBUS_BT656 &&
-		    ep.bus.parallel.bus_width != 8) {
-			dev_err(dcmipp->dev, "BT656 bus conflicts with %u bits bus width (8 bits required)\n",
-				ep.bus.parallel.bus_width);
-			return -ENODEV;
-		}
-
-		/*
-		 * Parallel input device detected
-		 * Connect it to parallel subdev
-		 */
-		sink = platform_get_drvdata(dcmipp->subdevs[ID_PARALLEL]);
-		sink->bus.flags = ep.bus.parallel.flags;
-		sink->bus.bus_width = ep.bus.parallel.bus_width;
-		sink->bus.data_shift = ep.bus.parallel.data_shift;
-		sink->bus_type = ep.bus_type;
-		ret = media_create_pad_link(&subdev->entity, src_pad,
-					    sink->ent, 0,
-					    MEDIA_LNK_FL_IMMUTABLE |
-					    MEDIA_LNK_FL_ENABLED);
-		if (ret)
-			dev_err(dcmipp->dev, "Failed to create media pad link with subdev \"%s\"\n",
-				subdev->name);
-		else
-			dev_dbg(dcmipp->dev, "DCMIPP is now linked to \"%s\"\n",
-				subdev->name);
-
-		return 0;
-	}
-
-	return ret;
+	return 0;
 }
 
 static const struct v4l2_async_notifier_operations dcmipp_graph_notify_ops = {
@@ -487,12 +469,15 @@ static int dcmipp_graph_init(struct dcmipp_device *dcmipp)
 	return 0;
 }
 
+static const struct media_device_ops dcmipp_media_ops = {
+	.link_notify = v4l2_pipeline_link_notify,
+};
+
 static int dcmipp_probe(struct platform_device *pdev)
 {
 	struct dcmipp_device *dcmipp;
-	struct component_match *comp_match = NULL;
 	struct resource *res;
-	struct clk *kclk;
+	struct clk *kclk, *mclk;
 	const struct dcmipp_pipeline_config *pipe_cfg;
 	int irq;
 	int ret;
@@ -566,15 +551,26 @@ static int dcmipp_probe(struct platform_device *pdev)
 				     "Unable to get kclk\n");
 	dcmipp->kclk = kclk;
 
-	/* Create platform_device for each entity in the topology */
-	dcmipp->subdevs = devm_kcalloc(&pdev->dev, dcmipp->pipe_cfg->num_ents,
-				       sizeof(*dcmipp->subdevs), GFP_KERNEL);
-	if (!dcmipp->subdevs)
+	if (!of_device_is_compatible(pdev->dev.of_node, "st,stm32mp13-dcmipp")) {
+		mclk = devm_clk_get(&pdev->dev, "mclk");
+		if (IS_ERR(mclk))
+			return dev_err_probe(&pdev->dev, PTR_ERR(mclk),
+					     "Unable to get mclk\n");
+		dcmipp->mclk = mclk;
+	}
+
+	dcmipp->entity = devm_kcalloc(&pdev->dev, dcmipp->pipe_cfg->num_ents,
+				      sizeof(*dcmipp->entity), GFP_KERNEL);
+	if (!dcmipp->entity)
 		return -ENOMEM;
 
-	comp_match = dcmipp_add_subdevs(dcmipp);
-	if (IS_ERR(comp_match))
-		return PTR_ERR(comp_match);
+	/* Register the v4l2 struct */
+	ret = v4l2_device_register(&pdev->dev, &dcmipp->v4l2_dev);
+	if (ret) {
+		dev_err(&pdev->dev,
+			"v4l2 device register failed (err=%d)\n", ret);
+		return ret;
+	}
 
 	/* Link the media device within the v4l2_device */
 	dcmipp->v4l2_dev.mdev = &dcmipp->mdev;
@@ -584,19 +580,20 @@ static int dcmipp_probe(struct platform_device *pdev)
 		sizeof(dcmipp->mdev.model));
 	snprintf(dcmipp->mdev.bus_info, sizeof(dcmipp->mdev.bus_info),
 		 "platform:%s", DCMIPP_PDEV_NAME);
+	dcmipp->mdev.hw_revision = pipe_cfg->hw_revision;
 	dcmipp->mdev.dev = &pdev->dev;
+	dcmipp->mdev.ops = &dcmipp_media_ops;
 	media_device_init(&dcmipp->mdev);
 
-	/* Add self to the component system */
-	ret = component_master_add_with_match(&pdev->dev, &dcmipp_comp_ops,
-					      comp_match);
+	pm_runtime_enable(dcmipp->dev);
+
+	/* Initialize subdevs */
+	ret = dcmipp_create_subdevs(dcmipp);
 	if (ret) {
 		media_device_cleanup(&dcmipp->mdev);
-		dcmipp_rm_subdevs(dcmipp);
+		v4l2_device_unregister(&dcmipp->v4l2_dev);
 		return ret;
 	}
-
-	pm_runtime_enable(dcmipp->dev);
 
 	dev_info(&pdev->dev, "Probe done");
 
@@ -606,11 +603,20 @@ static int dcmipp_probe(struct platform_device *pdev)
 static int dcmipp_remove(struct platform_device *pdev)
 {
 	struct dcmipp_device *dcmipp = platform_get_drvdata(pdev);
+	unsigned int i;
 
 	pm_runtime_disable(&pdev->dev);
 
-	component_master_del(&pdev->dev, &dcmipp_comp_ops);
-	dcmipp_rm_subdevs(dcmipp);
+	v4l2_async_nf_unregister(&dcmipp->notifier);
+	v4l2_async_nf_cleanup(&dcmipp->notifier);
+
+	for (i = 0; i < dcmipp->pipe_cfg->num_ents; i++)
+		dcmipp->pipe_cfg->ents[i].release(dcmipp->entity[i]);
+
+	media_device_unregister(&dcmipp->mdev);
+	media_device_cleanup(&dcmipp->mdev);
+
+	v4l2_device_unregister(&dcmipp->v4l2_dev);
 
 	return 0;
 }
@@ -620,6 +626,7 @@ static __maybe_unused int dcmipp_runtime_suspend(struct device *dev)
 	struct dcmipp_device *dcmipp = dev_get_drvdata(dev);
 
 	clk_disable_unprepare(dcmipp->kclk);
+	clk_disable_unprepare(dcmipp->mclk);
 
 	return 0;
 }
@@ -628,6 +635,10 @@ static __maybe_unused int dcmipp_runtime_resume(struct device *dev)
 {
 	struct dcmipp_device *dcmipp = dev_get_drvdata(dev);
 	int ret;
+
+	ret = clk_prepare_enable(dcmipp->mclk);
+	if (ret)
+		dev_err(dev, "%s: Failed to prepare_enable clock\n", __func__);
 
 	ret = clk_prepare_enable(dcmipp->kclk);
 	if (ret)

@@ -27,6 +27,7 @@
 #define IWDG_RLR	0x08 /* ReLoad Register */
 #define IWDG_SR		0x0C /* Status Register */
 #define IWDG_WINR	0x10 /* Windows Register */
+#define IWDG_VERR	0x3F4 /* Version Register */
 
 /* IWDG_KR register bit mask */
 #define KR_KEY_RELOAD	0xAAAA /* reload counter enable */
@@ -45,6 +46,13 @@
 /* IWDG_SR register bit mask */
 #define SR_PVU	BIT(0) /* Watchdog prescaler value update */
 #define SR_RVU	BIT(1) /* Watchdog counter reload value update */
+#define SR_ONF	BIT(8) /* Watchdog enable status bit */
+
+/* IWDG Compatibility */
+#define ONF_MIN_VER	0x31
+
+/* IWDG_VERR register mask */
+#define VERR_MASK	GENMASK(7, 0)
 
 /* set timeout to 100000 us */
 #define TIMEOUT_US	100000
@@ -72,6 +80,7 @@ struct stm32_iwdg {
 	struct clk		*clk_lsi;
 	struct clk		*clk_pclk;
 	unsigned int		rate;
+	unsigned int		hw_version;
 };
 
 static inline u32 reg_read(void __iomem *base, u32 reg)
@@ -199,6 +208,31 @@ static int stm32_iwdg_clk_init(struct platform_device *pdev,
 	return 0;
 }
 
+static bool stm32_iwdg_is_running(struct stm32_iwdg *wdt)
+{
+	bool running;
+	u32 rlr, sr;
+	int ret;
+
+	if (wdt->hw_version >= ONF_MIN_VER)
+		return (reg_read(wdt->regs, IWDG_SR) & SR_ONF) != 0;
+
+	/*
+	 * Workaround for old versions without IWDG_SR_ONF bit:
+	 * - write in IWDG_RLR_OFFSET
+	 * - wait for sync
+	 * - if sync succeeds, then iwdg is running
+	 */
+	reg_write(wdt->regs, IWDG_KR, KR_KEY_EWA);
+	rlr = reg_read(wdt->regs, IWDG_RLR);
+	reg_write(wdt->regs, IWDG_RLR, rlr);
+	ret = readl_poll_timeout(wdt->regs + IWDG_SR, sr, sr & SR_RVU, SLEEP_US, TIMEOUT_US);
+	running = ret ? false : true;
+	reg_write(wdt->regs, IWDG_KR, KR_KEY_DWA);
+
+	return running;
+}
+
 static const struct watchdog_info stm32_iwdg_info = {
 	.options	= WDIOF_SETTIMEOUT |
 			  WDIOF_MAGICCLOSE |
@@ -253,27 +287,15 @@ static int stm32_iwdg_probe(struct platform_device *pdev)
 	wdd->max_hw_heartbeat_ms = ((RLR_MAX + 1) * wdt->data->max_prescaler *
 				    1000) / wdt->rate;
 
+	wdt->hw_version = reg_read(wdt->regs, IWDG_VERR) & VERR_MASK;
+
 	watchdog_set_drvdata(wdd, wdt);
 	watchdog_set_nowayout(wdd, WATCHDOG_NOWAYOUT);
 	watchdog_init_timeout(wdd, 0, dev);
 
-	/*
-	 * In case of CONFIG_WATCHDOG_HANDLE_BOOT_ENABLED is set
-	 * (Means U-Boot/bootloaders leaves the watchdog running)
-	 * When we get here we should make a decision to prevent
-	 * any side effects before user space daemon will take care of it.
-	 * The best option, taking into consideration that there is no
-	 * way to read values back from hardware, is to enforce watchdog
-	 * being run with deterministic values.
-	 */
-	if (IS_ENABLED(CONFIG_WATCHDOG_HANDLE_BOOT_ENABLED)) {
-		ret = stm32_iwdg_start(wdd);
-		if (ret)
-			return ret;
-
+	if (IS_ENABLED(CONFIG_WATCHDOG_HANDLE_BOOT_ENABLED) && stm32_iwdg_is_running(wdt))
 		/* Make sure the watchdog is serviced */
 		set_bit(WDOG_HW_RUNNING, &wdd->status);
-	}
 
 	ret = devm_watchdog_register_device(dev, wdd);
 	if (ret)

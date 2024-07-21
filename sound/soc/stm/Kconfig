@@ -44,4 +44,17 @@ config SND_SOC_STM32_DFSDM
 	  Select this option to enable the STM32 Digital Filter
 	  for Sigma Delta Modulators (DFSDM) driver used
 	  in various STM32 series for digital microphone capture.
+
+config SND_SOC_STM32_MDF
+	tristate "SoC Audio support for STM32 MDF"
+	depends on ARCH_STM32 || COMPILE_TEST
+	depends on SND_SOC
+	depends on STM32_MDF_ADC
+	select SND_SOC_GENERIC_DMAENGINE_PCM
+	select SND_SOC_DMIC
+	select IIO_BUFFER_CB
+	help
+	  Select this option to enable the STM32 Multi-function
+	  Digital Filter (MDF) driver used in STM32MP2 series for
+	  digital microphone capture.
 endmenu

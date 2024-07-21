@@ -123,8 +123,13 @@ struct hdmi_codec_ops {
 /* HDMI codec initalization data */
 struct hdmi_codec_pdata {
 	const struct hdmi_codec_ops *ops;
+	u64 i2s_formats;
 	uint i2s:1;
+	uint no_i2s_playback:1;
+	uint no_i2s_capture:1;
 	uint spdif:1;
+	uint no_spdif_playback:1;
+	uint no_spdif_capture:1;
 	int max_i2s_channels;
 	void *data;
 };

@@ -257,6 +257,7 @@ static const struct of_device_id stm32_cpuidle_of_match[] = {
 	{
 		.compatible = "stm32,cpuidle",
 	},
+	{ /* sentinel */ },
 };
 
 static struct platform_driver stm32_cpuidle_driver = {

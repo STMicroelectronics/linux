@@ -17,6 +17,7 @@ properties:
   compatible:
     enum:
       - st,stm32h7-i2s
+      - st,stm32mp25-i2s
 
   "#sound-dai-cells":
     const: 0
@@ -25,18 +26,12 @@ properties:
     maxItems: 1
 
   clocks:
-    items:
-      - description: clock feeding the peripheral bus interface.
-      - description: clock feeding the internal clock generator.
-      - description: I2S parent clock for sampling rates multiple of 8kHz.
-      - description: I2S parent clock for sampling rates multiple of 11.025kHz.
+    minItems: 2
+    maxItems: 4
 
   clock-names:
-    items:
-      - const: pclk
-      - const: i2sclk
-      - const: x8k
-      - const: x11k
+    minItems: 2
+    maxItems: 4
 
   interrupts:
     maxItems: 1
@@ -54,9 +49,17 @@ properties:
   resets:
     maxItems: 1
 
+  power-domains:
+    maxItems: 1
+
   "#clock-cells":
     description: Configure the I2S device as MCLK clock provider.
     const: 0
+
+  feature-domains:
+    $ref: /schemas/types.yaml#/definitions/phandle-array
+    description: |
+      Phandle to the rifsc device to check access right.
 
 required:
   - compatible
@@ -67,6 +70,47 @@ required:
   - interrupts
   - dmas
   - dma-names
+
+allOf:
+  - if:
+      properties:
+        compatible:
+          contains:
+            const: st,stm32h7-i2s
+
+    then:
+      properties:
+        clocks:
+          items:
+            - description: clock feeding the peripheral bus interface.
+            - description: clock feeding the internal clock generator.
+            - description: I2S parent clock for sampling rates multiple of 8kHz.
+            - description: I2S parent clock for sampling rates multiple of 11.025kHz.
+
+        clock-names:
+          items:
+            - const: pclk
+            - const: i2sclk
+            - const: x8k
+            - const: x11k
+
+  - if:
+      properties:
+        compatible:
+          contains:
+            const: st,stm32mp25-i2s
+
+    then:
+      properties:
+        clocks:
+          items:
+            - description: clock feeding the peripheral bus interface.
+            - description: clock feeding the internal clock generator.
+
+        clock-names:
+          items:
+            - const: pclk
+            - const: i2sclk
 
 additionalProperties: false
 

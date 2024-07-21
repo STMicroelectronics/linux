@@ -8,13 +8,13 @@
  *          for STMicroelectronics.
  */
 
-#include <linux/component.h>
 #include <linux/delay.h>
 #include <linux/module.h>
 #include <linux/mod_devicetable.h>
 #include <linux/platform_device.h>
 #include <linux/vmalloc.h>
 #include <linux/v4l2-mediabus.h>
+#include <media/mipi-csi2.h>
 #include <media/v4l2-rect.h>
 #include <media/v4l2-subdev.h>
 
@@ -70,19 +70,20 @@ static const struct dcmipp_byteproc_pix_map dcmipp_byteproc_pix_map_list[] = {
 	PIXMAP_MBUS_BPP(SGBRG8_1X8, 1),
 	PIXMAP_MBUS_BPP(SGRBG8_1X8, 1),
 	PIXMAP_MBUS_BPP(SRGGB8_1X8, 1),
+	PIXMAP_MBUS_BPP(SBGGR10_1X10, 2),
+	PIXMAP_MBUS_BPP(SGBRG10_1X10, 2),
+	PIXMAP_MBUS_BPP(SGRBG10_1X10, 2),
+	PIXMAP_MBUS_BPP(SRGGB10_1X10, 2),
+	PIXMAP_MBUS_BPP(SBGGR12_1X12, 2),
+	PIXMAP_MBUS_BPP(SGBRG12_1X12, 2),
+	PIXMAP_MBUS_BPP(SGRBG12_1X12, 2),
+	PIXMAP_MBUS_BPP(SRGGB12_1X12, 2),
+	PIXMAP_MBUS_BPP(SBGGR14_1X14, 2),
+	PIXMAP_MBUS_BPP(SGBRG14_1X14, 2),
+	PIXMAP_MBUS_BPP(SGRBG14_1X14, 2),
+	PIXMAP_MBUS_BPP(SRGGB14_1X14, 2),
 	PIXMAP_MBUS_BPP(JPEG_1X8, 1),
 };
-
-static const struct dcmipp_byteproc_pix_map *dcmipp_byteproc_pix_map_by_index(unsigned int i)
-{
-	const struct dcmipp_byteproc_pix_map *l = dcmipp_byteproc_pix_map_list;
-	unsigned int size = ARRAY_SIZE(dcmipp_byteproc_pix_map_list);
-
-	if (i >= size)
-		return NULL;
-
-	return &l[i];
-}
 
 static const struct dcmipp_byteproc_pix_map *dcmipp_byteproc_pix_map_by_code(u32 code)
 {
@@ -163,9 +164,23 @@ static void dcmipp_byteproc_adjust_compose(struct v4l2_rect *r,
 	r->left = 0;
 
 	/* Compose is not possible for JPEG or Bayer formats */
-	if (fmt->code == MEDIA_BUS_FMT_JPEG_1X8 ||
-	    fmt->code == MEDIA_BUS_FMT_SBGGR8_1X8 || fmt->code == MEDIA_BUS_FMT_SGBRG8_1X8 ||
-	    fmt->code == MEDIA_BUS_FMT_SGRBG8_1X8 || fmt->code == MEDIA_BUS_FMT_SRGGB8_1X8) {
+	if ((fmt->code == MEDIA_BUS_FMT_JPEG_1X8) ||
+	    (fmt->code == MEDIA_BUS_FMT_SBGGR8_1X8) ||
+	    (fmt->code == MEDIA_BUS_FMT_SGBRG8_1X8) ||
+	    (fmt->code == MEDIA_BUS_FMT_SGRBG8_1X8) ||
+	    (fmt->code == MEDIA_BUS_FMT_SRGGB8_1X8) ||
+	    (fmt->code == MEDIA_BUS_FMT_SBGGR10_1X10) ||
+	    (fmt->code == MEDIA_BUS_FMT_SGBRG10_1X10) ||
+	    (fmt->code == MEDIA_BUS_FMT_SGRBG10_1X10) ||
+	    (fmt->code == MEDIA_BUS_FMT_SRGGB10_1X10) ||
+	    (fmt->code == MEDIA_BUS_FMT_SBGGR12_1X12) ||
+	    (fmt->code == MEDIA_BUS_FMT_SGBRG12_1X12) ||
+	    (fmt->code == MEDIA_BUS_FMT_SGRBG12_1X12) ||
+	    (fmt->code == MEDIA_BUS_FMT_SRGGB12_1X12) ||
+	    (fmt->code == MEDIA_BUS_FMT_SBGGR14_1X14) ||
+	    (fmt->code == MEDIA_BUS_FMT_SGBRG14_1X14) ||
+	    (fmt->code == MEDIA_BUS_FMT_SGRBG14_1X14) ||
+	    (fmt->code == MEDIA_BUS_FMT_SRGGB14_1X14)) {
 		r->width = fmt->width;
 		r->height = fmt->height;
 		return;
@@ -236,13 +251,26 @@ static int dcmipp_byteproc_enum_mbus_code(struct v4l2_subdev *sd,
 					  struct v4l2_subdev_state *sd_state,
 					  struct v4l2_subdev_mbus_code_enum *code)
 {
+	struct dcmipp_byteproc_device *byteproc = v4l2_get_subdevdata(sd);
 	const struct dcmipp_byteproc_pix_map *vpix;
+	struct v4l2_mbus_framefmt *sink_fmt;
 
-	vpix = dcmipp_byteproc_pix_map_by_index(code->index);
-	if (!vpix)
-		return -EINVAL;
+	if (IS_SINK(code->pad)) {
+		if (code->index >= ARRAY_SIZE(dcmipp_byteproc_pix_map_list))
+			return -EINVAL;
+		vpix = &dcmipp_byteproc_pix_map_list[code->index];
+		code->code = vpix->code;
+	} else {
+		/* byteproc doesn't support transformation on format */
+		if (code->index > 0)
+			return -EINVAL;
 
-	code->code = vpix->code;
+		if (code->which == V4L2_SUBDEV_FORMAT_TRY)
+			sink_fmt = v4l2_subdev_get_try_format(sd, sd_state, 0);
+		else
+			sink_fmt = &byteproc->sink_fmt;
+		code->code = sink_fmt->code;
+	}
 
 	return 0;
 }
@@ -621,6 +649,8 @@ static int dcmipp_byteproc_s_frame_interval(struct v4l2_subdev *sd,
 				  ratio >= 4 ? 2 :
 				  ratio >= 2 ? 1 : 0;
 
+		ratio = dcmipp_frates[byteproc->frate];
+
 		/* Adjust src frame interval to what hardware can really do */
 		byteproc->src_interval.numerator =
 			byteproc->sink_interval.numerator * ratio;
@@ -645,11 +675,7 @@ static int dcmipp_byteproc_s_stream(struct v4l2_subdev *sd, int enable)
 		dcmipp_byteproc_configure_framerate(byteproc);
 
 		ret = dcmipp_byteproc_configure_scale_crop(byteproc);
-		if (ret)
-			goto err;
 	}
-
-err:
 	mutex_unlock(&byteproc->lock);
 
 	return ret;
@@ -666,34 +692,20 @@ static const struct v4l2_subdev_ops dcmipp_byteproc_ops = {
 	.video = &dcmipp_byteproc_video_ops,
 };
 
-/* FIXME */
-static void dcmipp_byteproc_release(struct v4l2_subdev *sd)
+void dcmipp_byteproc_ent_release(struct dcmipp_ent_device *ved)
 {
-	struct dcmipp_byteproc_device *byteproc = v4l2_get_subdevdata(sd);
-
-	kfree(byteproc);
-}
-
-static const struct v4l2_subdev_internal_ops dcmipp_byteproc_int_ops = {
-	.release = dcmipp_byteproc_release,
-};
-
-static void dcmipp_byteproc_comp_unbind(struct device *comp,
-					struct device *master,
-					void *master_data)
-{
-	struct dcmipp_ent_device *ved = dev_get_drvdata(comp);
 	struct dcmipp_byteproc_device *byteproc =
 			container_of(ved, struct dcmipp_byteproc_device, ved);
 
 	dcmipp_ent_sd_unregister(ved, &byteproc->sd);
+	mutex_destroy(&byteproc->lock);
+	kfree(byteproc);
 }
 
-static int dcmipp_byteproc_comp_bind(struct device *comp, struct device *master,
-				     void *master_data)
+struct dcmipp_ent_device *
+dcmipp_byteproc_ent_init(struct device *dev, const char *entity_name,
+			 struct v4l2_device *v4l2_dev, void __iomem *regs)
 {
-	struct dcmipp_bind_data *bind_data = master_data;
-	struct dcmipp_platform_data *pdata = comp->platform_data;
 	struct dcmipp_byteproc_device *byteproc;
 	struct v4l2_rect r = {
 		.top = 0,
@@ -710,32 +722,12 @@ static int dcmipp_byteproc_comp_bind(struct device *comp, struct device *master,
 	/* Allocate the byteproc struct */
 	byteproc = kzalloc(sizeof(*byteproc), GFP_KERNEL);
 	if (!byteproc)
-		return -ENOMEM;
+		return ERR_PTR(-ENOMEM);
 
-	byteproc->regs = bind_data->regs;
+	byteproc->regs = regs;
 
 	/* Initialize the lock */
 	mutex_init(&byteproc->lock);
-
-	/* Initialize ved and sd */
-	ret = dcmipp_ent_sd_register(&byteproc->ved, &byteproc->sd,
-				     bind_data->v4l2_dev,
-				     pdata->entity_name,
-				     MEDIA_ENT_F_PROC_VIDEO_PIXEL_FORMATTER, 2,
-				     (const unsigned long[2]) {
-				     MEDIA_PAD_FL_SINK,
-				     MEDIA_PAD_FL_SOURCE,
-				     },
-				     &dcmipp_byteproc_int_ops,
-				     &dcmipp_byteproc_ops,
-				     NULL, NULL);
-	if (ret) {
-		kfree(byteproc);
-		return ret;
-	}
-
-	dev_set_drvdata(comp, &byteproc->ved);
-	byteproc->dev = comp;
 
 	/* Initialize the frame format */
 	byteproc->sink_fmt = fmt_default;
@@ -744,47 +736,25 @@ static int dcmipp_byteproc_comp_bind(struct device *comp, struct device *master,
 	byteproc->src_interval = interval;
 	byteproc->sink_interval = interval;
 
-	return 0;
+	/* Initialize ved and sd */
+	ret = dcmipp_ent_sd_register(&byteproc->ved, &byteproc->sd,
+				     v4l2_dev,
+				     entity_name,
+				     MEDIA_ENT_F_PROC_VIDEO_PIXEL_FORMATTER, 2,
+				     (const unsigned long[2]) {
+				     MEDIA_PAD_FL_SINK,
+				     MEDIA_PAD_FL_SOURCE,
+				     },
+				     NULL,
+				     &dcmipp_byteproc_ops,
+				     NULL, NULL);
+	if (ret) {
+		mutex_destroy(&byteproc->lock);
+		kfree(byteproc);
+		return ERR_PTR(ret);
+	}
+
+	byteproc->dev = dev;
+
+	return &byteproc->ved;
 }
-
-static const struct component_ops dcmipp_byteproc_comp_ops = {
-	.bind = dcmipp_byteproc_comp_bind,
-	.unbind = dcmipp_byteproc_comp_unbind,
-};
-
-static int dcmipp_byteproc_probe(struct platform_device *pdev)
-{
-	return component_add(&pdev->dev, &dcmipp_byteproc_comp_ops);
-}
-
-static int dcmipp_byteproc_remove(struct platform_device *pdev)
-{
-	component_del(&pdev->dev, &dcmipp_byteproc_comp_ops);
-
-	return 0;
-}
-
-static const struct platform_device_id dcmipp_byteproc_driver_ids[] = {
-	{
-		.name           = DCMIPP_BYTEPROC_DRV_NAME,
-	},
-	{ }
-};
-
-static struct platform_driver dcmipp_byteproc_pdrv = {
-	.probe		= dcmipp_byteproc_probe,
-	.remove		= dcmipp_byteproc_remove,
-	.id_table	= dcmipp_byteproc_driver_ids,
-	.driver		= {
-		.name	= DCMIPP_BYTEPROC_DRV_NAME,
-	},
-};
-
-module_platform_driver(dcmipp_byteproc_pdrv);
-
-MODULE_DEVICE_TABLE(platform, dcmipp_byteproc_driver_ids);
-
-MODULE_AUTHOR("Hugues Fruchet <hugues.fruchet@foss.st.com>");
-MODULE_AUTHOR("Alain Volmat <alain.volmat@foss.st.com>");
-MODULE_DESCRIPTION("STMicroelectronics STM32 Digital Camera Memory Interface with Pixel Processor driver");
-MODULE_LICENSE("GPL");

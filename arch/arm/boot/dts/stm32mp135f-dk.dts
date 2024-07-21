@@ -97,7 +97,7 @@
 		compatible = "gpio-backlight";
 		gpios = <&gpioe 12 GPIO_ACTIVE_HIGH>;
 		default-on;
-		default-brightness-level = <0>;
+		default-brightness-level = <1>;
 		status = "okay";
 	};
 
@@ -409,7 +409,7 @@
 		pinctrl-names = "default";
 		pinctrl-0 = <&goodix_pins_a>;
 		interrupt-parent = <&gpiof>;
-		interrupts = <5 IRQ_TYPE_EDGE_FALLING>;
+		interrupts = <5 IRQ_TYPE_NONE>;
 		reset-gpios = <&gpioh 2 GPIO_ACTIVE_LOW>;
 		AVDD28-supply = <&scmi_v3v3_sw>;
 		VDDIO-supply = <&scmi_v3v3_sw>;
@@ -423,6 +423,7 @@
 	pinctrl-names = "default", "sleep";
 	pinctrl-0 = <&ltdc_pins_a>;
 	pinctrl-1 = <&ltdc_sleep_pins_a>;
+	default-on;
 	status = "okay";
 
 	port {
@@ -440,35 +441,35 @@
 };
 
 &scmi_regu {
-	scmi_vddcpu: voltd-vddcpu {
+	scmi_vddcpu: regulator@6 {
 		reg = <VOLTD_SCMI_STPMIC1_BUCK1>;
 		regulator-name = "vddcpu";
 	};
-	scmi_vdd: voltd-vdd {
+	scmi_vdd: regulator@8 {
 		reg = <VOLTD_SCMI_STPMIC1_BUCK3>;
 		regulator-name = "vdd";
 	};
-	scmi_vddcore: voltd-vddcore {
+	scmi_vddcore: regulator@9 {
 		reg = <VOLTD_SCMI_STPMIC1_BUCK4>;
 		regulator-name = "vddcore";
 	};
-	scmi_vdd_adc: voltd-vdd-adc {
+	scmi_vdd_adc: regulator@10 {
 		reg = <VOLTD_SCMI_STPMIC1_LDO1>;
 		regulator-name = "vdd_adc";
 	};
-	scmi_vdd_usb: voltd-vdd-usb {
+	scmi_vdd_usb: regulator@13 {
 		reg = <VOLTD_SCMI_STPMIC1_LDO4>;
 		regulator-name = "vdd_usb";
 	};
-	scmi_vdd_sd: voltd-vdd-sd {
+	scmi_vdd_sd: regulator@14 {
 		reg = <VOLTD_SCMI_STPMIC1_LDO5>;
 		regulator-name = "vdd_sd";
 	};
-	scmi_v1v8_periph: voltd-v1v8-periph {
+	scmi_v1v8_periph: regulator@15 {
 		reg = <VOLTD_SCMI_STPMIC1_LDO6>;
 		regulator-name = "v1v8_periph";
 	};
-	scmi_v3v3_sw: voltd-v3v3-sw {
+	scmi_v3v3_sw: regulator@19 {
 		reg = <VOLTD_SCMI_STPMIC1_PWR_SW2>;
 		regulator-name = "v3v3_sw";
 	};
@@ -494,6 +495,7 @@
 	pinctrl-1 = <&sdmmc2_b4_od_pins_a &sdmmc2_clk_pins_a>;
 	pinctrl-2 = <&sdmmc2_b4_sleep_pins_a>;
 	non-removable;
+	cap-sdio-irq;
 	st,neg-edge;
 	bus-width = <4>;
 	vmmc-supply = <&v3v3_ao>;
@@ -505,9 +507,6 @@
 	brcmf: bcrmf@1 {
 		reg = <1>;
 		compatible = "brcm,bcm4329-fmac";
-		interrupt-parent = <&gpiof>;
-		interrupts = <0 IRQ_TYPE_LEVEL_HIGH>; /* WL_HOST_WAKE */
-		interrupt-names = "host-wake";
 	};
 };
 
@@ -522,6 +521,9 @@
 	/delete-property/dmas;
 	/delete-property/dma-names;
 	status = "disabled";
+	counter {
+		status = "okay";
+	};
 	pwm {
 		pinctrl-0 = <&pwm3_pins_a>;
 		pinctrl-1 = <&pwm3_sleep_pins_a>;
@@ -537,6 +539,9 @@
 	/delete-property/dmas;
 	/delete-property/dma-names;
 	status = "disabled";
+	counter {
+		status = "okay";
+	};
 	pwm {
 		pinctrl-0 = <&pwm4_pins_a>;
 		pinctrl-1 = <&pwm4_sleep_pins_a>;
@@ -552,6 +557,9 @@
 	/delete-property/dmas;
 	/delete-property/dma-names;
 	status = "disabled";
+	counter {
+		status = "okay";
+	};
 	pwm {
 		pinctrl-0 = <&pwm8_pins_a>;
 		pinctrl-1 = <&pwm8_sleep_pins_a>;
@@ -565,6 +573,9 @@
 
 &timers14 {
 	status = "disabled";
+	counter {
+		status = "okay";
+	};
 	pwm {
 		pinctrl-0 = <&pwm14_pins_a>;
 		pinctrl-1 = <&pwm14_sleep_pins_a>;

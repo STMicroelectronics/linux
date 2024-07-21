@@ -1,0 +1,184 @@
+# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/misc/st,stm32-omm.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: STM32 Octo Memory Manager (OMM)
+
+maintainers:
+  - Patrice Chotard <patrice.chotard@foss.st.com>
+
+description: |
+  The STM32 Octo Memory Manager is a low-level interface that enables an
+  efficient OCTOSPI pin assignment with a full I/O matrix (before alternate
+  function map) and multiplex of single/dual/quad/octal SPI interfaces over
+  the same bus.
+
+properties:
+  compatible:
+    const: st,stm32mp25-omm
+
+  "#address-cells":
+    const: 2
+
+  "#size-cells":
+    const: 1
+
+  ranges:
+    description: |
+      Reflects the memory layout with four integer values per bank. Format:
+      <bank-number> 0 <address of the bank> <size>
+
+  reg:
+    items:
+      - description: registers
+      - description: memory mapping
+
+  reg-names:
+    items:
+      - const: omm
+      - const: omm_mm
+
+  memory-region:
+    $ref: /schemas/types.yaml#/definitions/phandle-array
+    description: Phandle to a node describing memory-map region to be used.
+
+  memory-region-names:
+    minItems: 1
+    items:
+      - const: mm_ospi1
+      - const: mm_ospi2
+
+  clocks:
+    items:
+      - description: Octo Memory Manager clock
+
+  resets:
+    items:
+      - description: Octo Memory Manager reset
+
+  feature-domains:
+    $ref: /schemas/types.yaml#/definitions/phandle-array
+    description: |
+      Phandle to the rifsc device to check access right.
+
+  st,syscfg-amcr:
+    $ref: /schemas/types.yaml#/definitions/phandle-array
+    description: |
+      The Address Mapping Control Register (AMCR) is used to split the 256MB
+      memory map area shared between the 2 OSPI Memory Interface (OMI). The Octo
+      Memory Manager sets the AMCR depending of the memory-region configuration.
+      Format is phandle to syscfg / register offset within syscfg / memory split
+      bitmask.
+    items:
+      minItems: 3
+      maxItems: 3
+
+  st,omm-req2ack-ns:
+    description: |
+      In multiplexed mode (MUXEN = 1), this field defines the time in
+      nanoseconds between two transactions.
+
+  st,omm-cssel-ovr:
+    $ref: /schemas/types.yaml#/definitions/uint32
+    description: |
+      Configure the chip select selector override for the 2 OCTOSPIs.
+      The 2 bits mask muxing description is:
+        -bit 0: Chip select selector override setting for OCTOSPI1
+          0x0: the chip select signal from OCTOSPI1 is sent to NCS1
+          0x1: the chip select signal from OCTOSPI1 is sent to NCS2
+        -bit 1: Chip select selector override setting for OCTOSPI2
+          0x0: the chip select signal from OCTOSPI2 is sent to NCS1
+          0x1: the chip select signal from OCTOSPI2 is sent to NCS2
+
+  st,omm-mux:
+    $ref: /schemas/types.yaml#/definitions/uint32
+    description: |
+      Configure the muxing between the 2 OCTOSPIs busses and the 2 output ports.
+      The muxing 2 bits mask description is:
+        - 0x0: direct mode, default
+        - 0x1: mux OCTOSPI1 and OCTOSPI2 to port 1
+        - 0x2: swapped mode
+        - 0x3: mux OCTOSPI1 and OCTOSPI2 to port 2
+
+  power-domains:
+    maxItems: 1
+
+patternProperties:
+  "^spi@[a-f0-9]+$":
+    type: object
+    $ref: "/schemas/memory-controllers/st,stm32-omi.yaml#"
+
+  "^memory-controller@[a-f0-9]+$":
+    type: object
+    $ref: "/schemas/memory-controllers/st,stm32-omi.yaml#"
+
+required:
+  - compatible
+  - reg
+  - clocks
+  - st,syscfg-amcr
+  - ranges
+
+additionalProperties: false
+
+examples:
+  - |
+    #include <dt-bindings/interrupt-controller/arm-gic.h>
+    #include <dt-bindings/bus/stm32mp25_sys_bus.h>
+    #include <dt-bindings/clock/stm32mp25-clks.h>
+    #include <dt-bindings/reset/stm32mp25-resets.h>
+
+    ommanager@40500000 {
+      #address-cells = <2>;
+      #size-cells = <1>;
+      compatible = "st,stm32mp25-omm";
+      reg = <0x40500000 0x400>, <0x60000000 0x10000000>;
+      reg-names = "omm", "omm_mm";
+      memory-region = <&mm_ospi1>, <&mm_ospi2>;
+      memory-region-names = "mm_ospi1", "mm_ospi2";
+      clocks = <&rcc CK_BUS_OSPIIOM>;
+      resets = <&rcc OSPIIOM_R>;
+      st,syscfg-amcr = <&syscfg 0x2c00 0x7>;
+      st,omm-req2ack-ns = <0x0>;
+      st,omm-mux = <0x0>;
+      st,omm-cssel-ovr = <0x0>;
+      feature-domains = <&rifsc STM32MP25_RIFSC_OCTOSPIM_ID>;
+      power-domains = <&CLUSTER_PD>;
+
+      ranges = <0 0 0x40430000 0x400>,
+               <1 0 0x40440000 0x400>;
+
+      spi@40430000 {
+        #address-cells = <1>;
+        #size-cells = <0>;
+        compatible = "st,stm32mp25-omi";
+        reg = <0 0 0x400>;
+        interrupts = <GIC_SPI 163 IRQ_TYPE_LEVEL_HIGH>;
+        dmas = <&hpdma 2 0x62 0x00003121 0x0>,
+               <&hpdma 2 0x42 0x00003112 0x0>;
+        dma-names = "tx", "rx";
+        st,syscfg-dlyb = <&syscfg 0x1000>;
+        clocks = <&rcc CK_KER_OSPI1>;
+        resets = <&rcc OSPI1_R>, <&rcc OSPI1DLL_R>;
+        feature-domains = <&rifsc STM32MP25_RIFSC_OCTOSPI1_ID>;
+        power-domains = <&CLUSTER_PD>;
+      };
+
+      memory-controller@40440000 {
+        #address-cells = <1>;
+        #size-cells = <0>;
+        compatible = "st,stm32mp25-omi";
+        reg = <1 0 0x400>;
+        interrupts = <GIC_SPI 164 IRQ_TYPE_LEVEL_HIGH>;
+        dmas = <&hpdma 3 0x62 0x00003121 0x0>,
+               <&hpdma 3 0x42 0x00003112 0x0>;
+        dma-names = "tx", "rx";
+        st,syscfg-dlyb = <&syscfg 0x1400>;
+        clocks = <&rcc CK_KER_OSPI2>;
+        resets = <&rcc OSPI2_R>, <&rcc OSPI2DLL_R>;
+        feature-domains = <&rifsc STM32MP25_RIFSC_OCTOSPI2_ID>;
+        power-domains = <&CLUSTER_PD>;
+      };
+    };

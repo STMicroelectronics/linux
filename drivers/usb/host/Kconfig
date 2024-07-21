@@ -126,6 +126,19 @@ config USB_BRCMSTB
 	  Disabling this will keep the controllers and corresponding
 	  PHYs powered down.
 
+config USB_STM32_USBH
+	tristate "STM32 USB2 Host Glue support"
+	depends on ARCH_STM32 || COMPILE_TEST
+	select USB_OHCI_HCD_PLATFORM if USB_OHCI_HCD
+	select USB_EHCI_HCD_PLATFORM if USB_EHCI_HCD
+	help
+	  Enables support for USB2 Host controller on STM32MP25, configures
+	  glue logic around EHCI and OHCI host controller handled via
+          ehci-platform.o and ohci-platform.o
+
+	  Disabling this will keep the controllers and corresponding
+	  PHYs powered down.
+
 config USB_EHCI_HCD
 	tristate "EHCI HCD (USB 2.0) support"
 	depends on HAS_DMA && HAS_IOMEM

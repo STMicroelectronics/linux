@@ -468,6 +468,18 @@ enum rproc_dump_mechanism {
 };
 
 /**
+ * enum rproc_fw_format - firmware image format supported
+ * @RPROC_FW_ELF:    the firmware image must be in ELF format
+ * @RPROC_FW_TEE:    the firmware image must be in format that will be treated by the TEE
+ * @RPROC_FW_LAST:   just keep this one at the end
+ */
+enum rproc_fw_format {
+	RPROC_FW_ELF,
+	RPROC_FW_TEE,
+	RPROC_FW_LAST,
+};
+
+/**
  * struct rproc_dump_segment - segment info from ELF header
  * @node:	list node related to the rproc segment list
  * @da:		device address of the segment
@@ -585,6 +597,7 @@ struct rproc {
 	u16 elf_machine;
 	struct cdev cdev;
 	bool cdev_put_on_release;
+	unsigned int fw_format;
 	DECLARE_BITMAP(features, RPROC_MAX_FEATURES);
 };
 

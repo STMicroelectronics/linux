@@ -35,6 +35,7 @@ config ARM_GIC_V3
 	select IRQ_DOMAIN_HIERARCHY
 	select PARTITION_PERCPU
 	select GENERIC_IRQ_EFFECTIVE_AFF_MASK if SMP
+	select HAVE_ARM_SMCCC_DISCOVERY
 
 config ARM_GIC_V3_ITS
 	bool
@@ -394,6 +395,15 @@ config LS_SCFG_MSI
 config PARTITION_PERCPU
 	bool
 
+config STM32MP_EXTI
+	tristate "STM32MP extended interrupts and event controller"
+	depends on (ARCH_STM32 && !ARM_SINGLE_ARMV7M) || COMPILE_TEST
+	default y
+	select IRQ_DOMAIN
+	select GENERIC_IRQ_CHIP
+	help
+	  Support STM32MP EXTI (extended interrupts and event) controller.
+
 config STM32_EXTI
 	bool
 	select IRQ_DOMAIN
@@ -694,5 +704,12 @@ config SUNPLUS_SP7021_INTC
 	  SP7021 SoC has 2 Chips: C-Chip & P-Chip. This is used as a
 	  chained controller, routing all interrupt source in P-Chip to
 	  the primary controller on C-Chip.
+
+config RPMSG_IRQ
+	tristate "RPMSG irq driver"
+	depends on RPMSG
+	select IRQ_DOMAIN
+	help
+	  Support for the RPMSG Interrupt Controller.
 
 endmenu

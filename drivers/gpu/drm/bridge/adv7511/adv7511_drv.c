@@ -786,8 +786,13 @@ static void adv7511_mode_set(struct adv7511 *adv7511,
 	else
 		low_refresh_rate = ADV7511_LOW_REFRESH_RATE_NONE;
 
-	regmap_update_bits(adv7511->regmap, 0xfb,
-		0x6, low_refresh_rate << 1);
+	if (adv7511->type == ADV7511)
+		regmap_update_bits(adv7511->regmap, 0xfb,
+				   0x6, low_refresh_rate << 1);
+	else
+		regmap_update_bits(adv7511->regmap, 0x4a,
+				   0xc, low_refresh_rate << 2);
+
 	regmap_update_bits(adv7511->regmap, 0x17,
 		0x60, (vsync_polarity << 6) | (hsync_polarity << 5));
 
@@ -922,6 +927,18 @@ static enum drm_mode_status adv7511_bridge_mode_valid(struct drm_bridge *bridge,
 		return adv7511_mode_valid(adv, mode);
 }
 
+static bool adv7511_bridge_mode_fixup(struct drm_bridge *bridge,
+				 const struct drm_display_mode *mode,
+				 struct drm_display_mode *adjusted_mode)
+{
+	struct adv7511 *adv = bridge_to_adv7511(bridge);
+
+	if (adv->type == ADV7533 || adv->type == ADV7535)
+		return adv7533_mode_fixup(adv, mode, adjusted_mode);
+	else
+		return true;
+}
+
 static int adv7511_bridge_attach(struct drm_bridge *bridge,
 				 enum drm_bridge_attach_flags flags)
 {
@@ -970,6 +987,7 @@ static const struct drm_bridge_funcs adv7511_bridge_funcs = {
 	.disable = adv7511_bridge_disable,
 	.mode_set = adv7511_bridge_mode_set,
 	.mode_valid = adv7511_bridge_mode_valid,
+	.mode_fixup = adv7511_bridge_mode_fixup,
 	.attach = adv7511_bridge_attach,
 	.detect = adv7511_bridge_detect,
 	.get_edid = adv7511_bridge_get_edid,

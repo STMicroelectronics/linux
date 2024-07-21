@@ -290,15 +290,35 @@ config NVMEM_SPRD_EFUSE
 	  This driver can also be built as a module. If so, the module
 	  will be called nvmem-sprd-efuse.
 
+config NVMEM_STM32_BSEC_OPTEE_TA
+	def_bool NVMEM_STM32_ROMEM && OPTEE
+	help
+	  Say y here to enable the accesses to STM32MP SoC OTPs by the OP-TEE
+	  trusted application STM32MP BSEC.
+
+	  This library is a used by stm32-romem driver or included in the module
+	  called nvmem-stm32-romem.
+
 config NVMEM_STM32_ROMEM
 	tristate "STMicroelectronics STM32 factory-programmed memory support"
 	depends on ARCH_STM32 || COMPILE_TEST
+	depends on OPTEE || !OPTEE
 	help
 	  Say y here to enable read-only access for STMicroelectronics STM32
 	  factory-programmed memory area.
 
 	  This driver can also be built as a module. If so, the module
 	  will be called nvmem-stm32-romem.
+
+config NVMEM_STM32_TAMP
+	tristate "STMicroelectronics STM32 TAMP backup registers support"
+	depends on ARCH_STM32 || COMPILE_TEST
+	help
+	  Say y here to enable access for STMicroelectronics STM32
+	  TAMP backup registers.
+
+	  This driver can also be built as a module. If so, the module
+	  will be called nvmem_stm32-tamp_bkpregs
 
 config NVMEM_SUNPLUS_OCOTP
 	tristate "Sunplus SoC OTP support"

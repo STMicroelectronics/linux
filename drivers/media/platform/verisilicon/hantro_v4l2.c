@@ -315,8 +315,9 @@ static int hantro_try_fmt(const struct hantro_ctx *ctx,
 
 	pix_mp->field = V4L2_FIELD_NONE;
 
-	v4l2_apply_frmsize_constraints(&pix_mp->width, &pix_mp->height,
-				       &vpu_fmt->frmsize);
+	if (!capture || !ctx->is_encoder)
+		v4l2_apply_frmsize_constraints(&pix_mp->width, &pix_mp->height,
+					       &vpu_fmt->frmsize);
 
 	if (!coded) {
 		/* Fill remaining fields */
@@ -758,6 +759,9 @@ const struct v4l2_ioctl_ops hantro_ioctl_ops = {
 
 	.vidioc_g_selection = vidioc_g_selection,
 	.vidioc_s_selection = vidioc_s_selection,
+
+	.vidioc_decoder_cmd = v4l2_m2m_ioctl_stateless_decoder_cmd,
+	.vidioc_try_decoder_cmd = v4l2_m2m_ioctl_stateless_try_decoder_cmd,
 
 	.vidioc_try_encoder_cmd = v4l2_m2m_ioctl_try_encoder_cmd,
 	.vidioc_encoder_cmd = vidioc_encoder_cmd,

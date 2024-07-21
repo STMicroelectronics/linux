@@ -1120,6 +1120,10 @@ const char *v4l2_ctrl_get_name(u32 id)
 	case V4L2_CID_TEST_PATTERN:		return "Test Pattern";
 	case V4L2_CID_DEINTERLACING_MODE:	return "Deinterlacing Mode";
 	case V4L2_CID_DIGITAL_GAIN:		return "Digital Gain";
+	case V4L2_CID_ISP_STAT_REGION:		return "ISP Stat Region";
+	case V4L2_CID_ISP_STAT_AVG_FILTER:	return "ISP Stat Average Filter";
+	case V4L2_CID_ISP_STAT_BIN_COMP:	return "ISP Stat Bin Component";
+	case V4L2_CID_ISP_STAT_PROFILE:		return "ISP Stat Profile";
 
 	/* DV controls */
 	/* Keep the order of the 'case's the same as in v4l2-controls.h! */
@@ -1189,6 +1193,12 @@ const char *v4l2_ctrl_get_name(u32 id)
 	case V4L2_CID_STATELESS_HEVC_DECODE_MODE:		return "HEVC Decode Mode";
 	case V4L2_CID_STATELESS_HEVC_START_CODE:		return "HEVC Start Code";
 	case V4L2_CID_STATELESS_HEVC_ENTRY_POINT_OFFSETS:	return "HEVC Entry Point Offsets";
+
+	case V4L2_CID_STATELESS_VP8_ENCODE_PARAMS:		return "VP8 Encode Parameters";
+	case V4L2_CID_STATELESS_VP8_ENCODE_QP:			return "VP8 Encode QP";
+
+	case V4L2_CID_STATELESS_H264_ENCODE_PARAMS:             return "H264 Encode Parameters";
+	case V4L2_CID_STATELESS_H264_ENCODE_RC:                 return "H264 Encode Rate-Control";
 
 	/* Colorimetry controls */
 	/* Keep the order of the 'case's the same as in v4l2-controls.h! */
@@ -1529,6 +1539,9 @@ void v4l2_ctrl_fill(u32 id, const char **name, enum v4l2_ctrl_type *type,
 	case V4L2_CID_STATELESS_VP9_FRAME:
 		*type = V4L2_CTRL_TYPE_VP9_FRAME;
 		break;
+	case V4L2_CID_STATELESS_VP8_ENCODE_PARAMS:
+		*type = V4L2_CTRL_TYPE_VP8_ENCODE_PARAMS;
+		break;
 	case V4L2_CID_UNIT_CELL_SIZE:
 		*type = V4L2_CTRL_TYPE_AREA;
 		*flags |= V4L2_CTRL_FLAG_READ_ONLY;
@@ -1538,6 +1551,15 @@ void v4l2_ctrl_fill(u32 id, const char **name, enum v4l2_ctrl_type *type,
 		break;
 	case V4L2_CID_COLORIMETRY_HDR10_MASTERING_DISPLAY:
 		*type = V4L2_CTRL_TYPE_HDR10_MASTERING_DISPLAY;
+		break;
+	case V4L2_CID_ISP_STAT_REGION:
+		*type = V4L2_CTRL_TYPE_ISP_STAT_REGION;
+		break;
+	case V4L2_CID_STATELESS_H264_ENCODE_PARAMS:
+		*type = V4L2_CTRL_TYPE_H264_ENCODE_PARAMS;
+		break;
+	case V4L2_CID_STATELESS_H264_ENCODE_RC:
+		*type = V4L2_CTRL_TYPE_H264_ENCODE_RC;
 		break;
 	default:
 		*type = V4L2_CTRL_TYPE_INTEGER;

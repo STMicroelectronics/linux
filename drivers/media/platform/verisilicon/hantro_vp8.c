@@ -199,3 +199,121 @@ void hantro_vp8_dec_exit(struct hantro_ctx *ctx)
 	dma_free_coherent(vpu->dev, vp8_dec->prob_tbl.size,
 			  vp8_dec->prob_tbl.cpu, vp8_dec->prob_tbl.dma);
 }
+
+int hantro_vp8_enc_init(struct hantro_ctx *ctx)
+{
+	struct hantro_dev *vpu = ctx->dev;
+	struct hantro_aux_buf *aux_buf;
+	unsigned int mb_width, mb_height;
+	size_t luma_size, segment_map_size;
+	static int32_t mode_delta[4] = { 4, -2, 2, 4 };
+	static int32_t ref_delta[4] = { 2, 0, -2, -2 };
+	int ret, i;
+
+	memcpy(ctx->vp8_enc.mode_delta, mode_delta, sizeof(mode_delta));
+	memcpy(ctx->vp8_enc.ref_delta, ref_delta, sizeof(ref_delta));
+
+	mb_width = DIV_ROUND_UP(ctx->src_fmt.width, 16);
+	mb_height = DIV_ROUND_UP(ctx->src_fmt.height, 16);
+	luma_size = mb_width * mb_height * 16 * 16;
+	segment_map_size = round_up(DIV_ROUND_UP(mb_width * mb_height, 4), 64);
+
+	for (i = 0; i < ARRAY_SIZE(ctx->vp8_enc.ref_frames); ++i) {
+		aux_buf = &ctx->vp8_enc.ref_frames[i];
+		aux_buf->size = luma_size * 3 / 2;
+		aux_buf->cpu = dma_alloc_coherent(vpu->dev, aux_buf->size,
+						  &aux_buf->dma, GFP_KERNEL);
+		if (!aux_buf->cpu) {
+			ret = -ENOMEM;
+			goto err_free_ref_frames;
+		}
+		ctx->vp8_enc.ref_bitmaps[i] = 0;
+	}
+	ctx->vp8_enc.last_ref = ctx->vp8_enc.golden_ref = ctx->vp8_enc.alt_ref = -1;
+	ctx->vp8_enc.first_free = 0;
+
+	aux_buf = &ctx->vp8_enc.priv_src;
+	aux_buf->size = 1208 + segment_map_size + PAGE_SIZE; /* TODO: eliminate one page overhead */
+	aux_buf->cpu = dma_alloc_coherent(vpu->dev, aux_buf->size, &aux_buf->dma, GFP_KERNEL);
+	if (!aux_buf->cpu) {
+		ret = -ENOMEM;
+		goto err_free_ref_frames;
+	}
+
+	aux_buf = &ctx->vp8_enc.mv_buf;
+	aux_buf->size = mb_width * mb_height * 4;
+	aux_buf->cpu = dma_alloc_coherent(vpu->dev, aux_buf->size, &aux_buf->dma, GFP_KERNEL);
+	if (!aux_buf->cpu) {
+		ret = -ENOMEM;
+		goto err_free_priv_src;
+	}
+
+	aux_buf = &ctx->vp8_enc.priv_dst;
+	aux_buf->size = PAGE_SIZE; /* TODO: use correct size */
+	aux_buf->cpu = dma_alloc_coherent(vpu->dev, aux_buf->size, &aux_buf->dma, GFP_KERNEL);
+	if (!aux_buf->cpu) {
+		ret = -ENOMEM;
+		goto err_free_mv_buf;
+	}
+
+	aux_buf = &ctx->vp8_enc.ctrl_buf;
+	aux_buf->size = PAGE_SIZE; /* TODO: use correct size */
+	aux_buf->cpu = dma_alloc_coherent(vpu->dev, aux_buf->size, &aux_buf->dma, GFP_KERNEL);
+	if (!aux_buf->cpu) {
+		ret = -ENOMEM;
+		goto err_free_priv_dst;
+	}
+
+	return 0;
+
+err_free_priv_dst:
+	dma_free_coherent(vpu->dev, ctx->vp8_enc.priv_dst.size,
+			  ctx->vp8_enc.priv_dst.cpu,
+			  ctx->vp8_enc.priv_dst.dma);
+
+err_free_mv_buf:
+	dma_free_coherent(vpu->dev, ctx->vp8_enc.mv_buf.size,
+			  ctx->vp8_enc.mv_buf.cpu,
+			  ctx->vp8_enc.mv_buf.dma);
+
+err_free_priv_src:
+	dma_free_coherent(vpu->dev, ctx->vp8_enc.priv_src.size,
+			  ctx->vp8_enc.priv_src.cpu,
+			  ctx->vp8_enc.priv_src.dma);
+
+err_free_ref_frames:
+	while (--i >= 0)
+		dma_free_coherent(vpu->dev, ctx->vp8_enc.ref_frames[i].size,
+				  ctx->vp8_enc.ref_frames[i].cpu,
+				  ctx->vp8_enc.ref_frames[i].dma);
+
+	return ret;
+}
+
+void hantro_vp8_enc_exit(struct hantro_ctx *ctx)
+{
+	struct hantro_dev *vpu = ctx->dev;
+	int i;
+
+	dma_free_coherent(vpu->dev, ctx->vp8_enc.ctrl_buf.size,
+			  ctx->vp8_enc.ctrl_buf.cpu,
+			  ctx->vp8_enc.ctrl_buf.dma);
+
+	dma_free_coherent(vpu->dev, ctx->vp8_enc.priv_dst.size,
+			  ctx->vp8_enc.priv_dst.cpu,
+			  ctx->vp8_enc.priv_dst.dma);
+
+	dma_free_coherent(vpu->dev, ctx->vp8_enc.mv_buf.size,
+			  ctx->vp8_enc.mv_buf.cpu,
+			  ctx->vp8_enc.mv_buf.dma);
+
+	dma_free_coherent(vpu->dev, ctx->vp8_enc.priv_src.size,
+			  ctx->vp8_enc.priv_src.cpu,
+			  ctx->vp8_enc.priv_src.dma);
+
+	for (i = 0; i < ARRAY_SIZE(ctx->vp8_enc.ref_frames); ++i)
+		dma_free_coherent(vpu->dev, ctx->vp8_enc.ref_frames[i].size,
+				  ctx->vp8_enc.ref_frames[i].cpu,
+				  ctx->vp8_enc.ref_frames[i].dma);
+
+}

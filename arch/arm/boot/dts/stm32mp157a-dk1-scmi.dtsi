@@ -24,7 +24,7 @@
 };
 
 &dsi {
-	clocks = <&rcc DSI_K>, <&scmi_clk CK_SCMI_HSE>, <&rcc DSI_PX>;
+	clocks = <&rcc DSI>, <&scmi_clk CK_SCMI_HSE>, <&rcc DSI_PX>;
 };
 
 &gpioz {
@@ -39,6 +39,11 @@
 &i2c4 {
 	clocks = <&scmi_clk CK_SCMI_I2C4>;
 	resets = <&scmi_reset RST_SCMI_I2C4>;
+};
+
+&i2c6 {
+	clocks = <&scmi_clk CK_SCMI_I2C6>;
+	resets = <&scmi_reset RST_SCMI_I2C6>;
 };
 
 &iwdg2 {
