@@ -16,6 +16,8 @@
 #include <linux/of.h>
 #include <linux/of_reserved_mem.h>
 #include <linux/platform_device.h>
+#include <linux/pm_domain.h>
+#include <linux/pm_runtime.h>
 #include <linux/pm_wakeirq.h>
 #include <linux/regmap.h>
 #include <linux/remoteproc.h>
@@ -98,6 +100,10 @@ struct stm32_rproc {
 	struct stm32_syscon cm_state;
 	struct stm32_syscon rsctbl;
 	struct stm32_syscon boot_vec;
+
+	struct device *genpd_dev;
+	struct device_link *genpd_dev_link;
+
 	int wdg_irq;
 	u32 nb_rmems;
 	struct stm32_rproc_mem *rmems;
@@ -401,8 +407,17 @@ stm32_rproc_tee_elf_find_loaded_rsc_table(struct rproc *rproc,
 static int stm32_rproc_tee_start(struct rproc *rproc)
 {
 	struct stm32_rproc *ddata = rproc->priv;
+	int err;
 
-	return tee_rproc_start(ddata->trproc);
+	err = pm_runtime_resume_and_get(rproc->dev.parent);
+	if (err)
+		return err;
+
+	err = tee_rproc_start(ddata->trproc);
+	if (err)
+		pm_runtime_put(rproc->dev.parent);
+
+	return err;
 }
 
 static int stm32_rproc_tee_attach(struct rproc *rproc)
@@ -417,6 +432,10 @@ static int stm32_rproc_tee_stop(struct rproc *rproc)
 	int err;
 
 	stm32_rproc_request_shutdown(rproc);
+
+	err = pm_runtime_put(rproc->dev.parent);
+	if (err < 0)
+		return err;
 
 	err = tee_rproc_stop(ddata->trproc);
 	if (err)
@@ -705,16 +724,35 @@ static int stm32_rproc_start(struct rproc *rproc)
 		}
 	}
 
-	err = stm32_rproc_set_hold_boot(rproc, false);
+	err = pm_runtime_resume_and_get(rproc->dev.parent);
 	if (err)
 		return err;
 
-	return stm32_rproc_set_hold_boot(rproc, true);
+	err = stm32_rproc_set_hold_boot(rproc, false);
+	if (err)
+		goto disable_pm;
+
+	err = stm32_rproc_set_hold_boot(rproc, true);
+	if (err)
+		goto disable_pm;
+
+	return 0;
+
+disable_pm:
+	pm_runtime_put(rproc->dev.parent);
+
+	return err;
 }
 
 static int stm32_rproc_attach(struct rproc *rproc)
 {
+	int err;
+
 	stm32_rproc_add_coredump_trace(rproc);
+
+	err = pm_runtime_resume_and_get(rproc->dev.parent);
+	if (err)
+		return err;
 
 	return stm32_rproc_set_hold_boot(rproc, true);
 }
@@ -752,6 +790,10 @@ static int stm32_rproc_stop(struct rproc *rproc)
 		dev_err(&rproc->dev, "failed to assert the reset\n");
 		return err;
 	}
+
+	err = pm_runtime_put(rproc->dev.parent);
+	if (err < 0)
+		dev_err(&rproc->dev, "failed to disable PM runtime:%d\n", err);
 
 	return stm32_rproc_release(rproc);
 }
@@ -1086,6 +1128,43 @@ static int stm32_rproc_parse_dt(struct platform_device *pdev,
 	return 0;
 }
 
+static void stm32_rproc_powerdomain_remove(struct device *dev,
+					   struct stm32_rproc *ddata)
+{
+	if (ddata->genpd_dev_link)
+		device_link_del(ddata->genpd_dev_link);
+	if (!IS_ERR_OR_NULL(ddata->genpd_dev))
+		dev_pm_domain_detach(ddata->genpd_dev, true);
+}
+
+static int stm32_rproc_powerdomain_init(struct device *dev,
+					struct stm32_rproc *ddata)
+{
+	int err;
+
+	if (!device_property_present(dev, "power-domains"))
+		return 0;
+
+	if (device_property_present(dev, "keep-power-in-suspend"))
+		ddata->genpd_dev = dev_pm_domain_attach_by_name(dev, "sleep");
+	else
+		ddata->genpd_dev = dev_pm_domain_attach_by_name(dev, "default");
+	if (IS_ERR_OR_NULL(ddata->genpd_dev)) {
+		err = ddata->genpd_dev ? PTR_ERR(ddata->genpd_dev) : -ENODEV;
+		dev_err(dev, "failed to get pm-domain: %d\n", err);
+		return err;
+	}
+
+	ddata->genpd_dev_link = device_link_add(dev, ddata->genpd_dev,
+						DL_FLAG_PM_RUNTIME | DL_FLAG_STATELESS);
+	if (!ddata->genpd_dev_link) {
+		dev_pm_domain_detach(ddata->genpd_dev, true);
+		return -ENODEV;
+	}
+
+	return 0;
+}
+
 static int stm32_rproc_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
@@ -1168,7 +1247,11 @@ static int stm32_rproc_probe(struct platform_device *pdev)
 	if (ret)
 		goto free_mb;
 
-	return 0;
+	ret = stm32_rproc_powerdomain_init(dev, ddata);
+	if (ret < 0)
+		return ret;
+
+	return devm_pm_runtime_enable(dev);
 
 free_mb:
 	stm32_rproc_free_mbox(rproc);
@@ -1195,6 +1278,8 @@ static void stm32_rproc_remove(struct platform_device *pdev)
 	if (atomic_read(&rproc->power) > 0)
 		rproc_shutdown(rproc);
 
+	stm32_rproc_powerdomain_remove(dev, ddata);
+
 	rproc_del(rproc);
 	stm32_rproc_free_mbox(rproc);
 
@@ -1219,6 +1304,15 @@ static int stm32_rproc_suspend(struct device *dev)
 {
 	struct rproc *rproc = dev_get_drvdata(dev);
 	struct stm32_rproc *ddata = rproc->priv;
+
+	if (ddata->genpd_dev && rproc->state != RPROC_OFFLINE) {
+		if (!device_property_present(dev, "keep-power-in-suspend")) {
+			dev_err(dev, "remote fw is still running\n");
+			return -EBUSY;
+		}
+		/* wakeup path used by power domain for S2IDLE */
+		device_set_wakeup_path(ddata->genpd_dev);
+	}
 
 	if (device_may_wakeup(dev))
 		return enable_irq_wake(ddata->wdg_irq);
