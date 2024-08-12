@@ -966,6 +966,9 @@ static const struct of_device_id stm32_adc_of_match[] = {
 		.compatible = "st,stm32mp21-adc-core",
 		.data = (void *)&stm32mp21_adc_priv_cfg
 	}, {
+		.compatible = "st,stm32mp23-adc-core",
+		.data = (void *)&stm32mp25_adc_priv_cfg
+	}, {
 		.compatible = "st,stm32mp25-adc-core",
 		.data = (void *)&stm32mp25_adc_priv_cfg
 	}, {
