@@ -29,6 +29,7 @@ properties:
       - st,stm32mp1-adc-core
       - st,stm32mp13-adc-core
       - st,stm32mp21-adc-core
+      - st,stm32mp23-adc-core
       - st,stm32mp25-adc-core
 
   reg:
@@ -249,7 +250,9 @@ allOf:
       properties:
         compatible:
           contains:
-            const: st,stm32mp25-adc-core
+            enum:
+              - st,stm32mp23-adc-core
+              - st,stm32mp25-adc-core
 
     then:
       properties:
@@ -300,6 +303,7 @@ patternProperties:
           - st,stm32mp1-adc
           - st,stm32mp13-adc
           - st,stm32mp21-adc
+          - st,stm32mp23-adc
           - st,stm32mp25-adc
 
       reg:
@@ -352,7 +356,7 @@ patternProperties:
             - 16 channels, numbered from 0 to 15 (for in0..in15) on stm32f4
             - 19 channels, numbered from 0 to 18 (for in0..in18) on stm32mp13.
             - 20 channels, numbered from 0 to 19 (for in0..in19) on stm32h7,
-              stm32mp1, stm32mp21 and stm32mp25.
+              stm32mp1, stm32mp21, stm32mp23 and stm32mp25.
         $ref: /schemas/types.yaml#/definitions/uint32-array
         deprecated: true
 
@@ -582,7 +586,9 @@ patternProperties:
           properties:
             compatible:
               contains:
-                const: st,stm32mp25-adc
+                enum:
+                  - st,stm32mp23-adc
+                  - st,stm32mp25-adc
 
         then:
           properties:
