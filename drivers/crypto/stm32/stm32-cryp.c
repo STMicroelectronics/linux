@@ -45,6 +45,7 @@
 /* Bit [31..16] status  */
 #define FLG_IN_OUT_DMA          BIT(16)
 #define FLG_HEADER_DMA          BIT(17)
+#define FLG_UNALIGNED_DATA      BIT(18)
 
 /* Registers */
 #define CRYP_CR                 0x00000000
@@ -148,6 +149,7 @@
 
 enum stm32_dma_mode {
 	NO_DMA,
+	DMA_UNALIGNED,
 	DMA_PLAIN_SG,
 	DMA_NEED_SG_TRUNC
 };
@@ -217,6 +219,10 @@ struct stm32_cryp {
 	size_t                  header_sg_len;
 	size_t                  out_sg_len;
 	struct completion	dma_completion;
+
+	/* Buffers used for unaligned cases */
+	struct scatterlist	in_sgl[2];
+	struct scatterlist	out_sgl;
 
 	struct dma_chan         *dma_lch_in;
 	struct dma_chan         *dma_lch_out;
@@ -842,6 +848,64 @@ static int stm32_cryp_hw_init(struct stm32_cryp *cryp)
 	return 0;
 }
 
+/*
+ * Fully based on omap_crypto_copy_data. This function copy the content
+ * of a scatterlist into another one.
+ */
+static void stm32_cryp_copy_data(struct scatterlist *src,
+				 struct scatterlist *dst,
+				 int offset, int len)
+{
+	int amt;
+	void *srcb, *dstb;
+	int srco = 0, dsto = offset;
+
+	while (src && dst && len) {
+		if (srco >= src->length) {
+			srco -= src->length;
+			src = sg_next(src);
+			continue;
+		}
+
+		if (dsto >= dst->length) {
+			dsto -= dst->length;
+			dst = sg_next(dst);
+			continue;
+		}
+
+		amt = min(src->length - srco, dst->length - dsto);
+		amt = min(len, amt);
+
+		srcb = kmap_local_page(sg_page(src)) + srco + src->offset;
+		dstb = kmap_local_page(sg_page(dst)) + dsto + dst->offset;
+
+		memcpy(dstb, srcb, amt);
+
+		flush_dcache_page(sg_page(dst));
+
+		kunmap_local(srcb);
+		kunmap_local(dstb);
+
+		srco += amt;
+		dsto += amt;
+		len -= amt;
+	}
+}
+
+static void stm32_cryp_align_cleanup(struct scatterlist *sg, struct scatterlist *orig, int len)
+{
+	void *buf;
+	int pages;
+
+	buf = sg_virt(sg);
+	pages = get_order(len);
+
+	if (orig)
+		stm32_cryp_copy_data(sg, orig, 0, len);
+
+	free_pages((unsigned long)buf, pages);
+}
+
 static void stm32_cryp_finish_req(struct stm32_cryp *cryp, int err)
 {
 	if (!err && (is_gcm(cryp) || is_ccm(cryp)))
@@ -932,14 +996,22 @@ static void stm32_cryp_dma_callback(void *param)
 
 	reg = stm32_cryp_read(cryp, cryp->caps->cr);
 
-	if (is_gcm(cryp) || is_ccm(cryp)) {
-		kfree(cryp->in_sg);
-		kfree(cryp->out_sg);
+	if (cryp->flags & FLG_UNALIGNED_DATA) {
+		cryp->flags &= ~FLG_UNALIGNED_DATA;
+
+		stm32_cryp_align_cleanup(cryp->in_sg, NULL, cryp->req->cryptlen);
+		stm32_cryp_align_cleanup(cryp->out_sg, cryp->req->dst, cryp->req->cryptlen);
+
 	} else {
-		if (cryp->in_sg != cryp->req->src)
+		if (is_gcm(cryp) || is_ccm(cryp)) {
 			kfree(cryp->in_sg);
-		if (cryp->out_sg != cryp->req->dst)
 			kfree(cryp->out_sg);
+		} else {
+			if (cryp->in_sg != cryp->req->src)
+				kfree(cryp->in_sg);
+			if (cryp->out_sg != cryp->req->dst)
+				kfree(cryp->out_sg);
+		}
 	}
 
 	if (cryp->payload_in) {
@@ -1430,12 +1502,12 @@ static enum stm32_dma_mode stm32_cryp_dma_check_sg(struct scatterlist *test_sg, 
 
 	for_each_sg(test_sg, sg, sg_nents(test_sg), i) {
 		if (!IS_ALIGNED(sg->length, block_size) && !sg_is_last(sg))
-			return NO_DMA;
+			return DMA_UNALIGNED;
 
 		if (sg->offset % sizeof(u32))
-			return NO_DMA;
+			return DMA_UNALIGNED;
 
-		if (sg_is_last(sg) && !IS_ALIGNED(sg->length, AES_BLOCK_SIZE))
+		if (sg_is_last(sg) && !IS_ALIGNED(sg->length, block_size))
 			return DMA_NEED_SG_TRUNC;
 	}
 
@@ -1461,22 +1533,72 @@ static enum stm32_dma_mode stm32_cryp_dma_check(struct stm32_cryp *cryp, struct 
 	if (ret == NO_DMA)
 		return ret;
 
-	/* Check CTR counter overflow */
+	/* Check CTR 32 bit counter overflow */
 	if (is_aes(cryp) && is_ctr(cryp)) {
 		u32 c;
 		__be32 iv3;
 
+		if (unlikely(overflows_type(cryp->payload_in, u32)))
+			return NO_DMA;
+
 		memcpy(&iv3, &cryp->req->iv[3 * sizeof(u32)], sizeof(iv3));
 		c = be32_to_cpu(iv3);
-		if ((c + cryp->payload_in) < cryp->payload_in)
+		if (unlikely((c + (u32)cryp->payload_in) < (u32)cryp->payload_in))
 			return NO_DMA;
 	}
 
 	/* Workaround */
-	if (is_aes(cryp) && is_ctr(cryp) && ret == DMA_NEED_SG_TRUNC)
+	if (is_aes(cryp) && is_ctr(cryp) &&
+	    (ret == DMA_NEED_SG_TRUNC ||
+	     (ret == DMA_UNALIGNED && !IS_ALIGNED(cryp->req->cryptlen, AES_BLOCK_SIZE))))
 		return NO_DMA;
 
 	return ret;
+}
+
+static int stm32_cryp_copy_sgs(struct scatterlist **sg, struct scatterlist *new_sg,
+			       int total, int bs)
+{
+	void *buf;
+	int pages;
+	int new_len;
+
+	new_len = ALIGN(total, bs);
+	pages = get_order(new_len);
+
+	buf = (void *)__get_free_pages(GFP_ATOMIC, pages);
+	if (!buf) {
+		pr_err("%s: Couldn't allocate pages for unaligned cases.\n", __func__);
+		return -ENOMEM;
+	}
+
+	scatterwalk_map_and_copy(buf, *sg, 0, total, 0);
+	memset(buf + total, 0, new_len - total);
+
+	sg_init_table(new_sg, 1);
+	sg_set_buf(new_sg, buf, new_len);
+
+	*sg = new_sg;
+
+	return 0;
+}
+
+static int stm32_cryp_align_sgs(struct scatterlist **sg, size_t *new_sg_len, int bs,
+				struct scatterlist *new_sg, int payload)
+{
+	int ret;
+
+	ret = stm32_cryp_copy_sgs(sg, new_sg, payload, bs);
+	if (ret)
+		return ret;
+
+	ret = sg_nents_for_len(new_sg, payload);
+	if (ret < 0)
+		return ret;
+
+	*new_sg_len = (size_t)ret;
+
+	return 0;
 }
 
 static int stm32_cryp_truncate_sg(struct scatterlist **new_sg, size_t *new_sg_len,
@@ -1484,6 +1606,7 @@ static int stm32_cryp_truncate_sg(struct scatterlist **new_sg, size_t *new_sg_le
 {
 	struct scatterlist *cur;
 	int alloc_sg_len;
+	int ret;
 
 	*new_sg_len = 0;
 
@@ -1492,9 +1615,11 @@ static int stm32_cryp_truncate_sg(struct scatterlist **new_sg, size_t *new_sg_le
 		return 0;
 	}
 
-	alloc_sg_len = sg_nents_for_len(sg, skip + size);
-	if (alloc_sg_len < 0)
-		return alloc_sg_len;
+	ret = sg_nents_for_len(sg, skip + size);
+	if (ret < 0)
+		return ret;
+
+	alloc_sg_len = (size_t)ret;
 
 	/* We allocate to much sg entry, but it is easier */
 	*new_sg = kmalloc_array((size_t)alloc_sg_len, sizeof(struct scatterlist), GFP_KERNEL);
@@ -1555,6 +1680,27 @@ static int stm32_cryp_cipher_prepare(struct stm32_cryp *cryp, struct scatterlist
 		if (is_ctr(cryp))
 			memset(cryp->last_ctr, 0, sizeof(cryp->last_ctr));
 
+	} else if (cryp->dma_mode == DMA_UNALIGNED) {
+		cryp->in_sg = in_sg;
+		cryp->out_sg = out_sg;
+
+		cryp->flags |= (FLG_IN_OUT_DMA | FLG_UNALIGNED_DATA);
+
+		ret = stm32_cryp_align_sgs(&cryp->in_sg, &cryp->in_sg_len, cryp->hw_blocksize,
+					   cryp->in_sgl, cryp->payload_in);
+		if (ret)
+			return ret;
+
+		ret = stm32_cryp_align_sgs(&cryp->out_sg, &cryp->out_sg_len, cryp->hw_blocksize,
+					   &cryp->out_sgl, cryp->payload_out);
+		if (ret) {
+			kfree(cryp->in_sg);
+			return ret;
+		}
+
+		scatterwalk_start(&cryp->in_walk, cryp->in_sg);
+		scatterwalk_start(&cryp->out_walk, cryp->out_sg);
+
 	} else if (cryp->dma_mode == DMA_NEED_SG_TRUNC) {
 
 		cryp->flags |= FLG_IN_OUT_DMA;
@@ -1570,7 +1716,7 @@ static int stm32_cryp_cipher_prepare(struct stm32_cryp *cryp, struct scatterlist
 			kfree(cryp->in_sg);
 			return ret;
 		}
-	} else {
+	} else { /* dma_mode == DMA_PLAIN_SG */
 		cryp->flags |= FLG_IN_OUT_DMA;
 
 		cryp->in_sg = in_sg;
@@ -1618,7 +1764,7 @@ static int stm32_cryp_aead_prepare(struct stm32_cryp *cryp, struct scatterlist *
 		return ret;
 
 	ret = stm32_cryp_dma_check_sg(cryp->header_sg, align_size, AES_BLOCK_SIZE);
-	if (ret == NO_DMA) {
+	if (ret == NO_DMA || ret == DMA_UNALIGNED) {
 		/* We cannot DMA the header */
 		kfree(cryp->header_sg);
 		cryp->header_sg = NULL;
@@ -1647,7 +1793,8 @@ static int stm32_cryp_aead_prepare(struct stm32_cryp *cryp, struct scatterlist *
 
 	ret = stm32_cryp_dma_check_sg(cryp->in_sg, align_size, AES_BLOCK_SIZE);
 	ret2 = stm32_cryp_dma_check_sg(cryp->out_sg, align_size, AES_BLOCK_SIZE);
-	if (ret == NO_DMA || ret2 == NO_DMA) {
+	if (ret == NO_DMA || ret2 == NO_DMA ||
+	    ret == DMA_UNALIGNED || ret2 == DMA_UNALIGNED) {
 		kfree(cryp->in_sg);
 		cryp->in_sg = NULL;
 
