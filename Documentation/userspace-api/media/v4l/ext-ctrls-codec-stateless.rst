@@ -1062,6 +1062,9 @@ FWHT Flags
     * - ``V4L2_VP8_FRAME_FLAG_SIGN_BIAS_ALT``
       - 0x20
       - Sign of motion vectors when the alt frame is referenced.
+    * - ``V4L2_VP8_FRAME_FLAG_WEBP``
+      - 0x40
+      - Indicates that this frame is a WebP picture.
 
 .. c:type:: v4l2_vp8_entropy_coder_state
 
