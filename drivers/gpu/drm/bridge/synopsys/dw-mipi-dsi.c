@@ -991,7 +991,12 @@ static void dw_mipi_dsi_mode_set(struct dw_mipi_dsi *dsi,
 	if (ret)
 		DRM_DEBUG_DRIVER("Phy get_lane_mbps() failed\n");
 
-	pm_runtime_get_sync(dsi->dev);
+	ret = pm_runtime_resume_and_get(dsi->dev);
+	if (ret < 0) {
+		dev_err(dsi->dev, "Failed to set mode, cannot resume pm\n");
+		return;
+	}
+
 	dw_mipi_dsi_init(dsi);
 	dw_mipi_dsi_dpi_config(dsi, adjusted_mode);
 	dw_mipi_dsi_packet_handler_config(dsi);
