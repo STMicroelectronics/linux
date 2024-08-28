@@ -86,6 +86,7 @@
 #define OV5640_REG_TIMING_VOFFS		0x3812
 #define OV5640_REG_TIMING_TC_REG20	0x3820
 #define OV5640_REG_TIMING_TC_REG21	0x3821
+#define OV5640_REG_DVP_PCLK_DIVIDER	0x3824
 #define OV5640_REG_AEC_CTRL00		0x3a00
 #define OV5640_REG_AEC_B50_STEP		0x3a08
 #define OV5640_REG_AEC_B60_STEP		0x3a0a
@@ -633,7 +634,7 @@ static const struct reg_value ov5640_setting_low_res[] = {
 	{0x3a0d, 0x04, 0, 0}, {0x3a14, 0x03, 0, 0}, {0x3a15, 0xd8, 0, 0},
 	{0x4001, 0x02, 0, 0}, {0x4004, 0x02, 0, 0},
 	{0x4407, 0x04, 0, 0}, {0x460b, 0x35, 0, 0}, {0x460c, 0x22, 0, 0},
-	{0x3824, 0x02, 0, 0}, {0x5001, 0xa3, 0, 0},
+	{0x5001, 0xa3, 0, 0},
 };
 
 static const struct reg_value ov5640_setting_720P_1280_720[] = {
@@ -648,7 +649,7 @@ static const struct reg_value ov5640_setting_720P_1280_720[] = {
 	{0x3a0d, 0x02, 0, 0}, {0x3a14, 0x02, 0, 0}, {0x3a15, 0xe4, 0, 0},
 	{0x4001, 0x02, 0, 0}, {0x4004, 0x02, 0, 0},
 	{0x4407, 0x04, 0, 0}, {0x460b, 0x37, 0, 0}, {0x460c, 0x20, 0, 0},
-	{0x3824, 0x04, 0, 0}, {0x5001, 0x83, 0, 0},
+	{0x5001, 0x83, 0, 0},
 };
 
 static const struct reg_value ov5640_setting_1080P_1920_1080[] = {
@@ -663,7 +664,7 @@ static const struct reg_value ov5640_setting_1080P_1920_1080[] = {
 	{0x3a0d, 0x04, 0, 0}, {0x3a14, 0x03, 0, 0}, {0x3a15, 0xd8, 0, 0},
 	{0x4001, 0x02, 0, 0}, {0x4004, 0x06, 0, 0},
 	{0x4407, 0x04, 0, 0}, {0x460b, 0x35, 0, 0}, {0x460c, 0x22, 0, 0},
-	{0x3824, 0x02, 0, 0}, {0x5001, 0x83, 0, 0},
+	{0x5001, 0x83, 0, 0},
 	{0x3c07, 0x07, 0, 0}, {0x3c08, 0x00, 0, 0},
 	{0x3c09, 0x1c, 0, 0}, {0x3c0a, 0x9c, 0, 0}, {0x3c0b, 0x40, 0, 0},
 	{0x3612, 0x2b, 0, 0}, {0x3708, 0x64, 0, 0},
@@ -671,7 +672,7 @@ static const struct reg_value ov5640_setting_1080P_1920_1080[] = {
 	{0x3a09, 0x50, 0, 0}, {0x3a0a, 0x01, 0, 0}, {0x3a0b, 0x18, 0, 0},
 	{0x3a0e, 0x03, 0, 0}, {0x3a0d, 0x04, 0, 0}, {0x3a14, 0x04, 0, 0},
 	{0x3a15, 0x60, 0, 0}, {0x4407, 0x04, 0, 0},
-	{0x460b, 0x37, 0, 0}, {0x460c, 0x20, 0, 0}, {0x3824, 0x04, 0, 0},
+	{0x460b, 0x37, 0, 0}, {0x460c, 0x20, 0, 0},
 	{0x4005, 0x1a, 0, 0},
 };
 
@@ -687,7 +688,7 @@ static const struct reg_value ov5640_setting_QSXGA_2592_1944[] = {
 	{0x3a0d, 0x04, 0, 0}, {0x3a14, 0x03, 0, 0}, {0x3a15, 0xd8, 0, 0},
 	{0x4001, 0x02, 0, 0}, {0x4004, 0x06, 0, 0},
 	{0x4407, 0x04, 0, 0}, {0x460b, 0x35, 0, 0}, {0x460c, 0x22, 0, 0},
-	{0x3824, 0x02, 0, 0}, {0x5001, 0x83, 0, 70},
+	{0x5001, 0x83, 0, 70},
 };
 
 static const struct ov5640_mode_info ov5640_mode_data[OV5640_NUM_MODES] = {
@@ -1600,6 +1601,11 @@ static int ov5640_set_dvp_pclk(struct ov5640_dev *sensor)
 		dvp_pclk_divider = 1;
 	else
 		dvp_pclk_divider = 2;
+
+	ret = ov5640_write_reg(sensor, OV5640_REG_DVP_PCLK_DIVIDER,
+			       dvp_pclk_divider);
+	if (ret)
+		return ret;
 
 	pclk_freq = rate / dvp_pclk_divider;
 	max_pclk_freq = sensor->ep.bus.parallel.pclk_max_frequency;
