@@ -289,6 +289,10 @@ static void stm32mp_chip_suspend(struct stm32mp_exti_chip_data *chip_data, u32 w
 	chip_data->ftsr_cache = readl_relaxed(base + bank->ftsr_ofst);
 
 	writel_relaxed(wake_active, base + bank->imr_ofst);
+
+	/* wakeup for IRQ power domain for S2IDLE */
+	if (wake_active)
+		device_set_wakeup_path(chip_data->host_data->dev);
 }
 
 static void stm32mp_chip_resume(struct stm32mp_exti_chip_data *chip_data, u32 mask_cache)
