@@ -11,6 +11,7 @@
 #include <linux/module.h>
 #include <linux/of_platform.h>
 #include <linux/platform_device.h>
+#include <linux/pm_runtime.h>
 
 #define STM32_LPTIM_MAX_REGISTER	0x3fc
 
@@ -108,6 +109,10 @@ static int stm32_lptimer_probe(struct platform_device *pdev)
 		return ret;
 
 	platform_set_drvdata(pdev, ddata);
+
+	ret = devm_pm_runtime_enable(dev);
+	if (ret)
+		return ret;
 
 	return devm_of_platform_populate(&pdev->dev);
 }
