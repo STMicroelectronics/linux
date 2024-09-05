@@ -17,6 +17,7 @@
 #include <linux/module.h>
 #include <linux/pinctrl/consumer.h>
 #include <linux/platform_device.h>
+#include <linux/pm_runtime.h>
 #include <linux/types.h>
 
 struct stm32_lptim_cnt {
@@ -53,7 +54,10 @@ static int stm32_lptim_set_enable_state(struct stm32_lptim_cnt *priv,
 		return ret;
 
 	if (!enable) {
-		clk_disable(priv->clk);
+		ret = pm_runtime_put_sync_suspend(priv->dev);
+		if (ret < 0)
+			return ret;
+
 		priv->enabled = false;
 		return 0;
 	}
@@ -83,6 +87,11 @@ static int stm32_lptim_set_enable_state(struct stm32_lptim_cnt *priv,
 	if (ret)
 		goto disable_clk;
 
+	ret = pm_runtime_resume_and_get(priv->dev);
+	if (ret < 0) {
+		regmap_write(priv->regmap, STM32_LPTIM_CR, 0);
+		return ret;
+	}
 	priv->enabled = true;
 
 	/* Start LP timer in continuous mode */
@@ -449,6 +458,10 @@ static int stm32_lptim_cnt_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, priv);
 
+	ret = devm_pm_runtime_enable(&pdev->dev);
+	if (ret)
+		return ret;
+
 	ret = devm_counter_add(&pdev->dev, counter);
 	if (ret < 0)
 		return dev_err_probe(&pdev->dev, ret, "Failed to add counter\n");
@@ -456,7 +469,6 @@ static int stm32_lptim_cnt_probe(struct platform_device *pdev)
 	return 0;
 }
 
-#ifdef CONFIG_PM_SLEEP
 static int stm32_lptim_cnt_suspend(struct device *dev)
 {
 	struct stm32_lptim_cnt *priv = dev_get_drvdata(dev);
@@ -501,10 +513,32 @@ static int stm32_lptim_cnt_resume(struct device *dev)
 
 	return 0;
 }
-#endif
 
-static SIMPLE_DEV_PM_OPS(stm32_lptim_cnt_pm_ops, stm32_lptim_cnt_suspend,
-			 stm32_lptim_cnt_resume);
+static int stm32_lptim_cnt_runtime_suspend(struct device *dev)
+{
+	struct stm32_lptim_cnt *priv = dev_get_drvdata(dev);
+
+	clk_disable(priv->clk);
+
+	return 0;
+}
+
+static int stm32_lptim_cnt_runtime_resume(struct device *dev)
+{
+	struct stm32_lptim_cnt *priv = dev_get_drvdata(dev);
+	int ret;
+
+	ret = clk_enable(priv->clk);
+	if (ret)
+		dev_err(dev, "failed to enable clock. Error [%d]\n", ret);
+
+	return ret;
+}
+
+static const struct dev_pm_ops stm32_lptim_cnt_pm_ops = {
+	SYSTEM_SLEEP_PM_OPS(stm32_lptim_cnt_suspend, stm32_lptim_cnt_resume)
+	RUNTIME_PM_OPS(stm32_lptim_cnt_runtime_suspend, stm32_lptim_cnt_runtime_resume, NULL)
+};
 
 static const struct of_device_id stm32_lptim_cnt_of_match[] = {
 	{ .compatible = "st,stm32-lptimer-counter", },
@@ -517,7 +551,7 @@ static struct platform_driver stm32_lptim_cnt_driver = {
 	.driver = {
 		.name = "stm32-lptimer-counter",
 		.of_match_table = stm32_lptim_cnt_of_match,
-		.pm = &stm32_lptim_cnt_pm_ops,
+		.pm = pm_ptr(&stm32_lptim_cnt_pm_ops),
 	},
 };
 module_platform_driver(stm32_lptim_cnt_driver);
