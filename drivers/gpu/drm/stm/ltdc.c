@@ -776,127 +776,6 @@ static void ltdc_crtc_atomic_enable(struct drm_crtc *crtc,
 {
 	struct ltdc_device *ldev = crtc_to_ltdc(crtc);
 	struct drm_device *ddev = crtc->dev;
-
-	drm_dbg_driver(crtc->dev, "\n");
-
-	pm_runtime_get_sync(ddev->dev);
-
-	/* Sets the background color value */
-	regmap_write(ldev->regmap, LTDC_BCCR, BCCR_BCBLACK);
-
-	/* Enable IRQ */
-	regmap_set_bits(ldev->regmap, LTDC_IER, IER_FUWIE | IER_FUEIE | IER_TERRIE);
-
-	/* Commit shadow registers = update planes at next vblank */
-	if (!ldev->caps.plane_reg_shadow)
-		regmap_set_bits(ldev->regmap, LTDC_SRCR, SRCR_VBR);
-
-	drm_crtc_vblank_on(crtc);
-}
-
-static void ltdc_crtc_atomic_disable(struct drm_crtc *crtc,
-				     struct drm_atomic_state *state)
-{
-	struct ltdc_device *ldev = crtc_to_ltdc(crtc);
-	struct drm_device *ddev = crtc->dev;
-	int layer_index = 0;
-
-	drm_dbg_driver(crtc->dev, "\n");
-
-	drm_crtc_vblank_off(crtc);
-
-	/* Disable all layers */
-	for (layer_index = 0; layer_index < ldev->caps.nb_layers; layer_index++)
-		regmap_write_bits(ldev->regmap, LTDC_L1CR + layer_index * LAY_OFS, LXCR_MASK, 0);
-
-	/* Disable IRQ */
-	regmap_clear_bits(ldev->regmap, LTDC_IER, IER_FUWIE | IER_FUEIE | IER_TERRIE);
-
-	/* immediately commit disable of layers before switching off LTDC */
-	if (!ldev->caps.plane_reg_shadow)
-		regmap_set_bits(ldev->regmap, LTDC_SRCR, SRCR_IMR);
-
-	pm_runtime_put_sync(ddev->dev);
-
-	/*  clear interrupt error counters */
-	mutex_lock(&ldev->err_lock);
-	ldev->transfer_err = 0;
-	ldev->fifo_err = 0;
-	ldev->fifo_warn = 0;
-	mutex_unlock(&ldev->err_lock);
-}
-
-#define CLK_TOLERANCE_HZ 50
-
-static enum drm_mode_status
-ltdc_crtc_mode_valid(struct drm_crtc *crtc,
-		     const struct drm_display_mode *mode)
-{
-	struct ltdc_device *ldev = crtc_to_ltdc(crtc);
-	int target = mode->clock * 1000;
-	int target_min = target - CLK_TOLERANCE_HZ;
-	int target_max = target + CLK_TOLERANCE_HZ;
-	int result;
-
-	if (ldev->lvds_clk) {
-		result = clk_round_rate(ldev->lvds_clk, target);
-		drm_dbg_driver(crtc->dev, "lvds pixclk rate target %d, available %d\n",
-			       target, result);
-	}
-
-	result = clk_round_rate(ldev->pixel_clk, target);
-
-	drm_dbg_driver(crtc->dev, "clk rate target %d, available %d\n", target, result);
-
-	/* Filter modes according to the max frequency supported by the pads */
-	if (result > ldev->caps.pad_max_freq_hz)
-		return MODE_CLOCK_HIGH;
-
-	/*
-	 * Accept all "preferred" modes:
-	 * - this is important for panels because panel clock tolerances are
-	 *   bigger than hdmi ones and there is no reason to not accept them
-	 *   (the fps may vary a little but it is not a problem).
-	 * - the hdmi preferred mode will be accepted too, but userland will
-	 *   be able to use others hdmi "valid" modes if necessary.
-	 */
-	if (mode->type & DRM_MODE_TYPE_PREFERRED)
-		return MODE_OK;
-
-	/*
-	 * Filter modes according to the clock value, particularly useful for
-	 * hdmi modes that require precise pixel clocks.
-	 */
-	if (result < target_min || result > target_max)
-		return MODE_CLOCK_RANGE;
-
-	return MODE_OK;
-}
-
-static bool ltdc_crtc_mode_fixup(struct drm_crtc *crtc,
-				 const struct drm_display_mode *mode,
-				 struct drm_display_mode *adjusted_mode)
-{
-	struct ltdc_device *ldev = crtc_to_ltdc(crtc);
-	int rate = mode->clock * 1000;
-
-	if (clk_set_rate(ldev->pixel_clk, rate) < 0) {
-		drm_err(crtc->dev, "Cannot set rate (%dHz) for pixel clk\n", rate);
-		return false;
-	}
-
-	adjusted_mode->clock = clk_get_rate(ldev->pixel_clk) / 1000;
-
-	drm_dbg_driver(crtc->dev, "requested clock %dkHz, adjusted clock %dkHz\n",
-		       mode->clock, adjusted_mode->clock);
-
-	return true;
-}
-
-static void ltdc_crtc_mode_set_nofb(struct drm_crtc *crtc)
-{
-	struct ltdc_device *ldev = crtc_to_ltdc(crtc);
-	struct drm_device *ddev = crtc->dev;
 	struct drm_connector_list_iter iter;
 	struct drm_connector *connector = NULL;
 	struct drm_encoder *encoder = NULL, *en_iter;
@@ -908,6 +787,8 @@ static void ltdc_crtc_mode_set_nofb(struct drm_crtc *crtc)
 	u32 bus_flags = 0;
 	u32 val;
 	int ret;
+
+	drm_dbg_driver(crtc->dev, "\n");
 
 	/* get encoder from crtc */
 	drm_for_each_encoder(en_iter, ddev)
@@ -1033,6 +914,117 @@ static void ltdc_crtc_mode_set_nofb(struct drm_crtc *crtc)
 			break;
 		}
 	}
+
+	/* Sets the background color value */
+	regmap_write(ldev->regmap, LTDC_BCCR, BCCR_BCBLACK);
+
+	/* Enable IRQ */
+	regmap_set_bits(ldev->regmap, LTDC_IER, IER_FUWIE | IER_FUEIE | IER_TERRIE);
+
+	/* Commit shadow registers = update planes at next vblank */
+	if (!ldev->caps.plane_reg_shadow)
+		regmap_set_bits(ldev->regmap, LTDC_SRCR, SRCR_VBR);
+
+	drm_crtc_vblank_on(crtc);
+}
+
+static void ltdc_crtc_atomic_disable(struct drm_crtc *crtc,
+				     struct drm_atomic_state *state)
+{
+	struct ltdc_device *ldev = crtc_to_ltdc(crtc);
+	struct drm_device *ddev = crtc->dev;
+	int layer_index = 0;
+
+	drm_dbg_driver(crtc->dev, "\n");
+
+	drm_crtc_vblank_off(crtc);
+
+	/* Disable all layers */
+	for (layer_index = 0; layer_index < ldev->caps.nb_layers; layer_index++)
+		regmap_write_bits(ldev->regmap, LTDC_L1CR + layer_index * LAY_OFS, LXCR_MASK, 0);
+
+	/* Disable IRQ */
+	regmap_clear_bits(ldev->regmap, LTDC_IER, IER_FUWIE | IER_FUEIE | IER_TERRIE);
+
+	/* immediately commit disable of layers before switching off LTDC */
+	if (!ldev->caps.plane_reg_shadow)
+		regmap_set_bits(ldev->regmap, LTDC_SRCR, SRCR_IMR);
+
+	pm_runtime_put_sync(ddev->dev);
+
+	/*  clear interrupt error counters */
+	mutex_lock(&ldev->err_lock);
+	ldev->transfer_err = 0;
+	ldev->fifo_err = 0;
+	ldev->fifo_warn = 0;
+	mutex_unlock(&ldev->err_lock);
+}
+
+#define CLK_TOLERANCE_HZ 50
+
+static enum drm_mode_status
+ltdc_crtc_mode_valid(struct drm_crtc *crtc,
+		     const struct drm_display_mode *mode)
+{
+	struct ltdc_device *ldev = crtc_to_ltdc(crtc);
+	int target = mode->clock * 1000;
+	int target_min = target - CLK_TOLERANCE_HZ;
+	int target_max = target + CLK_TOLERANCE_HZ;
+	int result;
+
+	if (ldev->lvds_clk) {
+		result = clk_round_rate(ldev->lvds_clk, target);
+		drm_dbg_driver(crtc->dev, "lvds pixclk rate target %d, available %d\n",
+			       target, result);
+	}
+
+	result = clk_round_rate(ldev->pixel_clk, target);
+
+	drm_dbg_driver(crtc->dev, "clk rate target %d, available %d\n", target, result);
+
+	/* Filter modes according to the max frequency supported by the pads */
+	if (result > ldev->caps.pad_max_freq_hz)
+		return MODE_CLOCK_HIGH;
+
+	/*
+	 * Accept all "preferred" modes:
+	 * - this is important for panels because panel clock tolerances are
+	 *   bigger than hdmi ones and there is no reason to not accept them
+	 *   (the fps may vary a little but it is not a problem).
+	 * - the hdmi preferred mode will be accepted too, but userland will
+	 *   be able to use others hdmi "valid" modes if necessary.
+	 */
+	if (mode->type & DRM_MODE_TYPE_PREFERRED)
+		return MODE_OK;
+
+	/*
+	 * Filter modes according to the clock value, particularly useful for
+	 * hdmi modes that require precise pixel clocks.
+	 */
+	if (result < target_min || result > target_max)
+		return MODE_CLOCK_RANGE;
+
+	return MODE_OK;
+}
+
+static bool ltdc_crtc_mode_fixup(struct drm_crtc *crtc,
+				 const struct drm_display_mode *mode,
+				 struct drm_display_mode *adjusted_mode)
+{
+	struct ltdc_device *ldev = crtc_to_ltdc(crtc);
+	int rate = mode->clock * 1000;
+
+	if (clk_set_rate(ldev->pixel_clk, rate) < 0) {
+		drm_err(crtc->dev, "Cannot set rate (%dHz) for pixel clk\n", rate);
+		return false;
+	}
+
+	adjusted_mode->clock = clk_get_rate(ldev->pixel_clk) / 1000;
+
+	drm_dbg_driver(crtc->dev, "requested clock %dkHz, adjusted clock %dkHz\n",
+		       mode->clock, adjusted_mode->clock);
+
+	return true;
 }
 
 static void ltdc_crtc_atomic_flush(struct drm_crtc *crtc,
@@ -1118,7 +1110,6 @@ static bool ltdc_crtc_get_scanout_position(struct drm_crtc *crtc,
 static const struct drm_crtc_helper_funcs ltdc_crtc_helper_funcs = {
 	.mode_valid = ltdc_crtc_mode_valid,
 	.mode_fixup = ltdc_crtc_mode_fixup,
-	.mode_set_nofb = ltdc_crtc_mode_set_nofb,
 	.atomic_flush = ltdc_crtc_atomic_flush,
 	.atomic_enable = ltdc_crtc_atomic_enable,
 	.atomic_disable = ltdc_crtc_atomic_disable,
