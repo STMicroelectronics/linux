@@ -66,6 +66,7 @@ struct ltdc_device {
 	int crc_skip_count;
 	bool crc_active;
 	struct reserved_mem *rot_mem;
+	bool plane_enabled[LTDC_MAX_LAYER];
 };
 
 int ltdc_parse_device_tree(struct device *dev);

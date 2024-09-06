@@ -1336,15 +1336,14 @@ static u32 calculateScalingFactor(u32 in, u32 out)
 	return factor & 0xFFFF;
 }
 
-static void ltdc_plane_atomic_update(struct drm_plane *plane,
-				     struct drm_atomic_state *state)
+static void ltdc_plane_update(struct drm_plane *plane, struct drm_atomic_state *state)
 {
 	struct ltdc_device *ldev = plane_to_ltdc(plane);
-	struct drm_plane_state *newstate = drm_atomic_get_new_plane_state(state,
-									  plane);
+	struct drm_device *ddev = plane->dev;
+	struct drm_plane_state *newstate = drm_atomic_get_new_plane_state(state, plane);
 	struct drm_framebuffer *fb = newstate->fb;
 	u32 lofs = plane->index * LAY_OFS;
-	u32 val, pitch_in_bytes, line_length, line_number, ahbp, avbp, bpcr;
+	u32 val, pitch_in_bytes, line_length, line_number, ahbp, avbp;
 	u32 paddr, paddr1, paddr2, lxcr;
 	enum ltdc_pix_fmt pf;
 	unsigned int plane_rotation = DRM_MODE_ROTATE_0;
@@ -1352,7 +1351,10 @@ static void ltdc_plane_atomic_update(struct drm_plane *plane,
 	struct drm_display_mode *mode;
 	u32 pitch, rota0_buf, rota1_buf;
 
-	ltdc_resume(ldev);
+	if (!newstate->crtc || !fb) {
+		drm_dbg_driver(plane->dev, "fb or crtc NULL");
+		return;
+	}
 
 	if (ldev->caps.crtc_rotation) {
 		/* read the global control register */
@@ -1415,9 +1417,19 @@ static void ltdc_plane_atomic_update(struct drm_plane *plane,
 		       "plane:%d fb:%d src: " DRM_RECT_FMT " -> crtc: " DRM_RECT_FMT "\n",
 		       plane->base.id, fb->base.id, DRM_RECT_ARG(&src), DRM_RECT_ARG(&dst));
 
-	regmap_read(ldev->regmap, LTDC_BPCR, &bpcr);
+	if (!pm_runtime_active(ddev->dev)) {
+		if (pm_runtime_resume_and_get(ddev->dev)) {
+			drm_err(plane->dev, "Failed to set plane, cannot resume pm\n");
+			return;
+		}
+	}
 
 	mode = &newstate->crtc->state->adjusted_mode;
+	if (dst.x1 < 0 || dst.y1 < 0 || dst.x2 <= dst.x1 || dst.y2 <= dst.y1 ||
+	    dst.x2 > mode->hdisplay || dst.y2 > mode->vdisplay) {
+		drm_err(plane->dev, "Invalid dst rectangle\n");
+		return;
+	}
 
 	if (plane_rotation & DRM_MODE_ROTATE_90) {
 		/* stop display streaming to allows rotation */
@@ -1643,7 +1655,6 @@ static void ltdc_plane_atomic_update(struct drm_plane *plane,
 
 	/* Enable layer and CLUT if needed */
 	lxcr = fb->format->format == DRM_FORMAT_C8 ? LXCR_CLUTEN : 0;
-	lxcr |= LXCR_LEN;
 
 	/* Enable horizontal mirroring if requested */
 	if (plane_rotation & DRM_MODE_REFLECT_X)
@@ -1677,7 +1688,10 @@ static void ltdc_plane_atomic_update(struct drm_plane *plane,
 		regmap_write(ldev->regmap, LTDC_L1SVSPR + lofs, val + (1 << SCALER_FRACTION));
 	}
 
-	regmap_write_bits(ldev->regmap, LTDC_L1CR + lofs, LXCR_MASK, lxcr);
+	if (ldev->plane_enabled[plane->index])
+		regmap_write_bits(ldev->regmap, LTDC_L1CR + lofs, LXCR_MASK, lxcr | LXCR_LEN);
+	else
+		regmap_write_bits(ldev->regmap, LTDC_L1CR + lofs, LXCR_MASK, lxcr);
 
 	/* Commit shadow registers = update plane at next vblank */
 	if (ldev->caps.plane_reg_shadow)
@@ -1709,8 +1723,21 @@ static void ltdc_plane_atomic_update(struct drm_plane *plane,
 		}
 	}
 	mutex_unlock(&ldev->err_lock);
+}
 
-	ltdc_suspend(ldev);
+static void ltdc_plane_atomic_update(struct drm_plane *plane,
+				     struct drm_atomic_state *state)
+{
+	struct drm_plane_state *newstate = drm_atomic_get_new_plane_state(state, plane);
+	struct drm_device *ddev = plane->dev;
+
+	drm_dbg_driver(plane->dev, "CRTC:%d plane:%d\n", newstate->crtc->base.id, plane->base.id);
+
+	if (!pm_runtime_active(ddev->dev))
+		return;
+
+	/* Update plane settings */
+	ltdc_plane_update(plane, state);
 }
 
 static void ltdc_plane_atomic_disable(struct drm_plane *plane,
@@ -1719,7 +1746,13 @@ static void ltdc_plane_atomic_disable(struct drm_plane *plane,
 	struct drm_plane_state *oldstate = drm_atomic_get_old_plane_state(state,
 									  plane);
 	struct ltdc_device *ldev = plane_to_ltdc(plane);
+	struct drm_device *ddev = plane->dev;
 	u32 lofs = plane->index * LAY_OFS;
+
+	ldev->plane_enabled[plane->index] = false;
+
+	if (!pm_runtime_active(ddev->dev))
+		return;
 
 	/* Disable layer */
 	regmap_write_bits(ldev->regmap, LTDC_L1CR + lofs, LXCR_MASK, 0);
@@ -1734,6 +1767,28 @@ static void ltdc_plane_atomic_disable(struct drm_plane *plane,
 
 	drm_dbg_driver(plane->dev, "CRTC:%d plane:%d\n",
 		       oldstate->crtc->base.id, plane->base.id);
+}
+
+static void ltdc_plane_atomic_enable(struct drm_plane *plane,
+				     struct drm_atomic_state *state)
+{
+	struct drm_plane_state *newstate = drm_atomic_get_new_plane_state(state, plane);
+	struct ltdc_device *ldev = plane_to_ltdc(plane);
+	struct drm_device *ddev = plane->dev;
+
+	drm_dbg_driver(plane->dev, "CRTC:%d plane:%d\n", newstate->crtc->base.id, plane->base.id);
+
+	ldev->plane_enabled[plane->index] = true;
+
+	if (!pm_runtime_active(ddev->dev)) {
+		if (pm_runtime_resume_and_get(ddev->dev)) {
+			drm_err(plane->dev, "Failed to enable plane, cannot resume pm\n");
+			return;
+		}
+	}
+
+	/* Update plane settings */
+	ltdc_plane_update(plane, state);
 }
 
 static void ltdc_plane_atomic_print_state(struct drm_printer *p,
@@ -1768,6 +1823,7 @@ static const struct drm_plane_helper_funcs ltdc_plane_helper_funcs = {
 	.atomic_check = ltdc_plane_atomic_check,
 	.atomic_update = ltdc_plane_atomic_update,
 	.atomic_disable = ltdc_plane_atomic_disable,
+	.atomic_enable = ltdc_plane_atomic_enable,
 };
 
 static struct drm_plane *ltdc_plane_create(struct drm_device *ddev,
