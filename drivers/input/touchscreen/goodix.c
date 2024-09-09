@@ -1386,6 +1386,9 @@ reset:
 		error = goodix_reset(ts);
 		if (error)
 			return error;
+	} else {
+		/* Need to wait at least 50 ms */
+		msleep(50);
 	}
 
 	error = goodix_i2c_test(client);
