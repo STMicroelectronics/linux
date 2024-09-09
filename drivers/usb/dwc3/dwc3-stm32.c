@@ -195,6 +195,14 @@ static int stm32_dwc3_probe(struct platform_device *pdev)
 	if (ret)
 		return dev_err_probe(dev, ret, "failed to add dwc3 core\n");
 
+	ret = devm_pm_runtime_enable(dev);
+	if (ret)
+		return dev_err_probe(dev, ret, "Failed to enable pm runtime\n");
+
+	ret = pm_runtime_resume_and_get(dev);
+	if (ret)
+		return dev_err_probe(dev, ret, "pm runtime resume failed\n");
+
 	platform_set_drvdata(pdev, dwc3_data);
 
 	if (wakeup_source)
