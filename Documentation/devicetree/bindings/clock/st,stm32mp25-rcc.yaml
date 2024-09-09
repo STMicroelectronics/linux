@@ -113,6 +113,9 @@ properties:
       - description: CK_SCMI_TIMG2 Peripheral bridge for timer2
       - description: CK_SCMI_PLL3 PLL3 clock
       - description: clk_dsi_txbyte DSI byte clock
+      - description: CK_SCMI_HSI_KER_CK Kernel High Speed Internal oscillator
+      - description: CK_SCMI_HSE_KER_CK Kernel High Speed External oscillator
+      - description: CK_SCMI_MSI_KER_CK Kernel Low Power Internal oscillator
 
   access-controllers:
     maxItems: 1
@@ -214,6 +217,9 @@ examples:
                   <&scmi_clk CK_SCMI_TIMG1>,
                   <&scmi_clk CK_SCMI_TIMG2>,
                   <&scmi_clk CK_SCMI_PLL3>,
-                  <&clk_dsi_txbyte>;
+                  <&clk_dsi_txbyte>,
+                  <&scmi_clk CK_SCMI_HSI_KER_CK>,
+                  <&scmi_clk CK_SCMI_HSE_KER_CK>,
+                  <&scmi_clk CK_SCMI_MSI_KER_CK>;
     };
 ...
