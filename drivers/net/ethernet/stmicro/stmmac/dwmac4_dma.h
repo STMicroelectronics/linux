@@ -139,11 +139,16 @@ static inline u32 dma_chanx_base_addr(const struct dwmac4_addrs *addrs,
 
 /* DMA Tx Channel X Control register defines */
 #define DMA_CONTROL_EDSE		BIT(28)
+#define DMA_CONTROL_TQOS		GENMASK(27, 24)
+#define DMA_CONTROL_TQOS_SHIFT		24
+#define DMA_CONTROL_XQOS_MAX		0xf
 #define DMA_CONTROL_TSE			BIT(12)
 #define DMA_CONTROL_OSP			BIT(4)
 #define DMA_CONTROL_ST			BIT(0)
 
 /* DMA Rx Channel X Control register defines */
+#define DMA_CONTROL_RQOS		GENMASK(27, 24)
+#define DMA_CONTROL_RQOS_SHIFT		24
 #define DMA_CONTROL_SR			BIT(0)
 #define DMA_RBSZ_MASK			GENMASK(14, 1)
 #define DMA_RBSZ_SHIFT			1

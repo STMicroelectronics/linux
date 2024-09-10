@@ -80,6 +80,12 @@ static void dwmac4_dma_init_rx_chan(struct stmmac_priv *priv,
 
 	value = readl(ioaddr + DMA_CHAN_RX_CONTROL(dwmac4_addrs, chan));
 	value = value | (rxpbl << DMA_BUS_MODE_RPBL_SHIFT);
+
+	/* Set Receive QOS */
+	value &= ~DMA_CONTROL_RQOS;
+	value |= (dma_cfg->rxqos & DMA_CONTROL_XQOS_MAX) <<
+		 DMA_CONTROL_RQOS_SHIFT;
+
 	writel(value, ioaddr + DMA_CHAN_RX_CONTROL(dwmac4_addrs, chan));
 
 	if (IS_ENABLED(CONFIG_ARCH_DMA_ADDR_T_64BIT) && likely(dma_cfg->eame))
@@ -104,6 +110,11 @@ static void dwmac4_dma_init_tx_chan(struct stmmac_priv *priv,
 
 	/* Enable OSP to get best performance */
 	value |= DMA_CONTROL_OSP;
+
+	/* Set Transmit QOS */
+	value &= ~DMA_CONTROL_TQOS;
+	value |= (dma_cfg->txqos & DMA_CONTROL_XQOS_MAX) <<
+		 DMA_CONTROL_TQOS_SHIFT;
 
 	writel(value, ioaddr + DMA_CHAN_TX_CONTROL(dwmac4_addrs, chan));
 
