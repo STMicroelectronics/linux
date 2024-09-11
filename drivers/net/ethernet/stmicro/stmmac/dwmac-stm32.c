@@ -113,6 +113,7 @@ struct stm32_ops {
 			  struct device *dev);
 	u32 syscfg_clr_off;
 	struct stm32_syscfg_pmcsetr pmcsetr;
+	bool clk_rx_enable_in_suspend;
 };
 
 static int stm32_dwmac_init(struct plat_stmmacenet_data *plat_dat)
@@ -130,7 +131,8 @@ static int stm32_dwmac_init(struct plat_stmmacenet_data *plat_dat)
 	if (ret)
 		return ret;
 
-	if (!dwmac->dev->power.is_suspended) {
+	if (!dwmac->ops->clk_rx_enable_in_suspend ||
+	    !dwmac->dev->power.is_suspended) {
 		ret = clk_prepare_enable(dwmac->clk_rx);
 		if (ret) {
 			clk_disable_unprepare(dwmac->clk_tx);
@@ -614,7 +616,8 @@ static struct stm32_ops stm32mp13_dwmac_data = {
 		.eth2_ref_clk_sel	= BIT(25),
 		.eth2_sel_rgmii		= BIT(29),
 		.eth2_sel_rmii		= BIT(31)
-	}
+	},
+	.clk_rx_enable_in_suspend = true
 };
 
 static const struct of_device_id stm32_dwmac_match[] = {

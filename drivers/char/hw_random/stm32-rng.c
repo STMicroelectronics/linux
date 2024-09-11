@@ -16,16 +16,19 @@
 #include <linux/reset.h>
 #include <linux/slab.h>
 
-#define RNG_CR		0x00
-#define RNG_CR_RNGEN	BIT(2)
-#define RNG_CR_CED	BIT(5)
-#define RNG_CR_CONDRST	BIT(30)
-#define RNG_CR_CONFLOCK	BIT(31)
+#define RNG_CR			0x00
+#define RNG_CR_RNGEN		BIT(2)
+#define RNG_CR_CED		BIT(5)
+#define RNG_CR_CLKDIV_SHIFT	16
+#define RNG_CR_CONDRST		BIT(30)
+#define RNG_CR_CONFLOCK		BIT(31)
 
-#define RNG_SR		0x04
-#define RNG_SR_SEIS	BIT(6)
-#define RNG_SR_CEIS	BIT(5)
-#define RNG_SR_DRDY	BIT(0)
+#define RNG_SR			0x04
+#define RNG_SR_DRDY		BIT(0)
+#define RNG_SR_CECS		BIT(1)
+#define RNG_SR_SECS		BIT(2)
+#define RNG_SR_CEIS		BIT(5)
+#define RNG_SR_SEIS		BIT(6)
 
 #define RNG_DR		0x08
 
@@ -33,9 +36,10 @@
 #define RNG_NIST_CONFIG_B	0x1801000
 #define RNG_NIST_CONFIG_MASK	GENMASK(25, 8)
 
-#define RNG_MAX_NOISE_CLK_FREQ	3000000
+#define RNG_NB_RECOVER_TRIES	3
 
 struct stm32_rng_data {
+	uint	max_clock_rate;
 	bool	has_cond_reset;
 };
 
@@ -49,39 +53,169 @@ struct stm32_rng_private {
 	bool ced;
 };
 
+/*
+ * Extracts from the STM32 RNG specification when RNG supports CONDRST.
+ *
+ * When a noise source (or seed) error occurs, the RNG stops generating
+ * random numbers and sets to “1” both SEIS and SECS bits to indicate
+ * that a seed error occurred. (...)
+ *
+ * 1. Software reset by writing CONDRST at 1 and at 0 (see bitfield
+ * description for details). This step is needed only if SECS is set.
+ * Indeed, when SEIS is set and SECS is cleared it means RNG performed
+ * the reset automatically (auto-reset).
+ * 2. If SECS was set in step 1 (no auto-reset) wait for CONDRST
+ * to be cleared in the RNG_CR register, then confirm that SEIS is
+ * cleared in the RNG_SR register. Otherwise just clear SEIS bit in
+ * the RNG_SR register.
+ * 3. If SECS was set in step 1 (no auto-reset) wait for SECS to be
+ * cleared by RNG. The random number generation is now back to normal.
+ */
+static int stm32_rng_conceal_seed_error_cond_reset(struct stm32_rng_private *priv)
+{
+	struct device *dev = (struct device *)priv->rng.priv;
+	u32 sr = readl_relaxed(priv->base + RNG_SR);
+	u32 cr = readl_relaxed(priv->base + RNG_CR);
+	int err;
+
+	if (sr & RNG_SR_SECS) {
+		/* Conceal by resetting the subsystem (step 1.) */
+		writel_relaxed(cr | RNG_CR_CONDRST, priv->base + RNG_CR);
+		writel_relaxed(cr & ~RNG_CR_CONDRST, priv->base + RNG_CR);
+	} else {
+		/* RNG auto-reset (step 2.) */
+		writel_relaxed(sr & ~RNG_SR_SEIS, priv->base + RNG_SR);
+		goto end;
+	}
+
+	err = readl_relaxed_poll_timeout_atomic(priv->base + RNG_CR, cr, !(cr & RNG_CR_CONDRST), 10,
+						100000);
+	if (err) {
+		dev_err(dev, "%s: timeout %x\n", __func__, sr);
+		return err;
+	}
+
+	/* Check SEIS is cleared (step 2.) */
+	if (readl_relaxed(priv->base + RNG_SR) & RNG_SR_SEIS)
+		return -EINVAL;
+
+	err = readl_relaxed_poll_timeout_atomic(priv->base + RNG_SR, sr, !(sr & RNG_SR_SECS), 10,
+						100000);
+	if (err) {
+		dev_err(dev, "%s: timeout %x\n", __func__, sr);
+		return err;
+	}
+
+end:
+	return 0;
+}
+
+/*
+ * Extracts from the STM32 RNG specification, when CONDRST is not supported
+ *
+ * When a noise source (or seed) error occurs, the RNG stops generating
+ * random numbers and sets to “1” both SEIS and SECS bits to indicate
+ * that a seed error occurred. (...)
+ *
+ * The following sequence shall be used to fully recover from a seed
+ * error after the RNG initialization:
+ * 1. Clear the SEIS bit by writing it to “0”.
+ * 2. Read out 12 words from the RNG_DR register, and discard each of
+ * them in order to clean the pipeline.
+ * 3. Confirm that SEIS is still cleared. Random number generation is
+ * back to normal.
+ */
+static int stm32_rng_conceal_seed_error_sw_reset(struct stm32_rng_private *priv)
+{
+	unsigned int i = 0;
+	u32 sr = readl_relaxed(priv->base + RNG_SR);
+
+	writel_relaxed(sr & ~RNG_SR_SEIS, priv->base + RNG_SR);
+
+	for (i = 12; i != 0; i--)
+		(void)readl_relaxed(priv->base + RNG_DR);
+
+	if (readl_relaxed(priv->base + RNG_SR) & RNG_SR_SEIS)
+		return -EINVAL;
+
+	return 0;
+}
+
+static int stm32_rng_conceal_seed_error(struct hwrng *rng)
+{
+	struct stm32_rng_private *priv = container_of(rng, struct stm32_rng_private, rng);
+
+	dev_dbg((struct device *)priv->rng.priv, "Concealing seed error\n");
+
+	if (priv->data->has_cond_reset)
+		return stm32_rng_conceal_seed_error_cond_reset(priv);
+	else
+		return stm32_rng_conceal_seed_error_sw_reset(priv);
+};
+
+
 static int stm32_rng_read(struct hwrng *rng, void *data, size_t max, bool wait)
 {
-	struct stm32_rng_private *priv =
-	    container_of(rng, struct stm32_rng_private, rng);
+	struct stm32_rng_private *priv = container_of(rng, struct stm32_rng_private, rng);
+	unsigned int i = 0;
+	int retval = 0, err = 0;
 	u32 sr;
-	int retval = 0;
 
 	pm_runtime_get_sync((struct device *) priv->rng.priv);
 
 	while (max > sizeof(u32)) {
 		sr = readl_relaxed(priv->base + RNG_SR);
-		/* Manage timeout which is based on timer and take */
-		/* care of initial delay time when enabling rng	*/
+		/*
+		 * Manage timeout which is based on timer and take
+		 * care of initial delay time when enabling the RNG.
+		 */
 		if (!sr && wait) {
-			retval = readl_relaxed_poll_timeout_atomic(priv->base
+			err = readl_relaxed_poll_timeout_atomic(priv->base
 								   + RNG_SR,
 								   sr, sr,
 								   10, 50000);
-			if (retval)
+			if (err) {
 				dev_err((struct device *)priv->rng.priv,
 					"%s: timeout %x!\n", __func__, sr);
-		}
-
-		/* If error detected or data not ready... */
-		if (sr != RNG_SR_DRDY) {
-			if (WARN_ONCE(sr & (RNG_SR_SEIS | RNG_SR_CEIS),
-					"bad RNG status - %x\n", sr))
-				writel_relaxed(0, priv->base + RNG_SR);
+				break;
+			}
+		} else if (!sr) {
+			/* The FIFO is being filled up */
 			break;
 		}
 
-		*(u32 *)data = readl_relaxed(priv->base + RNG_DR);
+		if (sr != RNG_SR_DRDY) {
+			if (sr & RNG_SR_SEIS) {
+				err = stm32_rng_conceal_seed_error(rng);
+				i++;
+				if (err && i > RNG_NB_RECOVER_TRIES) {
+					dev_err((struct device *)priv->rng.priv,
+						"Couldn't recover from seed error\n");
+					return -ENOTRECOVERABLE;
+				}
 
+				continue;
+			}
+
+			if (WARN_ONCE((sr & RNG_SR_CEIS), "RNG clock too slow - %x\n", sr))
+				writel_relaxed(0, priv->base + RNG_SR);
+		}
+
+		/* Late seed error case: DR being 0 is an error status */
+		*(u32 *)data = readl_relaxed(priv->base + RNG_DR);
+		if (!*(u32 *)data) {
+			err = stm32_rng_conceal_seed_error(rng);
+			i++;
+			if (err && i > RNG_NB_RECOVER_TRIES) {
+				dev_err((struct device *)priv->rng.priv,
+					"Couldn't recover from seed error");
+				return -ENOTRECOVERABLE;
+			}
+
+			continue;
+		}
+
+		i = 0;
 		retval += sizeof(u32);
 		data += sizeof(u32);
 		max -= sizeof(u32);
@@ -107,7 +241,7 @@ static uint stm32_rng_clock_freq_restrain(struct hwrng *rng)
 	 * No need to handle the case when clock-div > 0xF as it is physically
 	 * impossible
 	 */
-	while ((clock_rate >> clock_div) > RNG_MAX_NOISE_CLK_FREQ)
+	while ((clock_rate >> clock_div) > priv->data->max_clock_rate)
 		clock_div++;
 
 	pr_debug("RNG clk rate : %lu\n", clk_get_rate(priv->clk) >> clock_div);
@@ -135,7 +269,8 @@ static int stm32_rng_init(struct hwrng *rng)
 		uint clock_div = stm32_rng_clock_freq_restrain(rng);
 
 		reg &= ~RNG_NIST_CONFIG_MASK;
-		reg |= RNG_CR_CONDRST | RNG_NIST_CONFIG_B | clock_div;
+		reg |= RNG_CR_CONDRST | RNG_NIST_CONFIG_B |
+		       (clock_div << RNG_CR_CLKDIV_SHIFT);
 		writel_relaxed(reg, priv->base + RNG_CR);
 		reg &= ~RNG_CR_CONDRST;
 		reg |= RNG_CR_CONFLOCK;
@@ -144,6 +279,7 @@ static int stm32_rng_init(struct hwrng *rng)
 							(!(reg & RNG_CR_CONDRST)),
 							10, 50000);
 		if (err) {
+			clk_disable_unprepare(priv->clk);
 			dev_err((struct device *)priv->rng.priv,
 				"%s: timeout %x!\n", __func__, reg);
 			return -EINVAL;
@@ -233,10 +369,12 @@ static const struct dev_pm_ops stm32_rng_pm_ops = {
 
 static const struct stm32_rng_data stm32mp13_rng_data = {
 	.has_cond_reset = true,
+	.max_clock_rate = 48000000,
 };
 
 static const struct stm32_rng_data stm32_rng_data = {
 	.has_cond_reset = false,
+	.max_clock_rate = 48000000,
 };
 
 static const struct of_device_id stm32_rng_match[] = {
@@ -258,18 +396,13 @@ static int stm32_rng_probe(struct platform_device *ofdev)
 	struct device *dev = &ofdev->dev;
 	struct device_node *np = ofdev->dev.of_node;
 	struct stm32_rng_private *priv;
-	struct resource res;
-	int err;
+	struct resource *res;
 
 	priv = devm_kzalloc(dev, sizeof(struct stm32_rng_private), GFP_KERNEL);
 	if (!priv)
 		return -ENOMEM;
 
-	err = of_address_to_resource(np, 0, &res);
-	if (err)
-		return err;
-
-	priv->base = devm_ioremap_resource(dev, &res);
+	priv->base = devm_platform_get_and_ioremap_resource(ofdev, 0, &res);
 	if (IS_ERR(priv->base))
 		return PTR_ERR(priv->base);
 
