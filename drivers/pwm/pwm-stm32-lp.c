@@ -15,9 +15,11 @@
 #include <linux/of.h>
 #include <linux/pinctrl/consumer.h>
 #include <linux/platform_device.h>
+#include <linux/pm_runtime.h>
 #include <linux/pwm.h>
 
 struct stm32_pwm_lp {
+	struct device *dev;
 	struct clk *clk;
 	struct regmap *regmap;
 	unsigned int num_cc_chans;
@@ -157,7 +159,7 @@ static int stm32_pwm_lp_apply(struct pwm_chip *chip, struct pwm_device *pwm,
 			}
 
 			/* disable clock to PWM counter */
-			clk_disable(priv->clk);
+			return pm_runtime_put_sync_suspend(priv->dev);
 		}
 		return 0;
 	}
@@ -186,6 +188,13 @@ static int stm32_pwm_lp_apply(struct pwm_chip *chip, struct pwm_device *pwm,
 	dty = prd * state->duty_cycle;
 	dty = DIV_ROUND_CLOSEST_ULL(dty, state->period);
 
+	if (!cstate.enabled) {
+		/* enable clock to drive PWM counter */
+		ret = pm_runtime_resume_and_get(priv->dev);
+		if (ret)
+			return ret;
+	}
+
 	ret = regmap_read(priv->regmap, STM32_LPTIM_CFGR, &cfgr);
 	if (ret)
 		return ret;
@@ -205,7 +214,7 @@ static int stm32_pwm_lp_apply(struct pwm_chip *chip, struct pwm_device *pwm,
 
 	if (!cstate.enabled) {
 		/* enable clock to drive PWM counter */
-		ret = clk_enable(priv->clk);
+		ret = pm_runtime_resume_and_get(priv->dev);
 		if (ret)
 			return ret;
 	}
@@ -286,7 +295,7 @@ static int stm32_pwm_lp_apply(struct pwm_chip *chip, struct pwm_device *pwm,
 	return 0;
 err:
 	if (!cstate.enabled)
-		clk_disable(priv->clk);
+		pm_runtime_put_sync_suspend(priv->dev);
 
 	return ret;
 }
@@ -300,6 +309,12 @@ static int stm32_pwm_lp_get_state(struct pwm_chip *chip,
 	u32 val, presc, prd, ccmr1;
 	bool enabled;
 	u64 tmp;
+	int ret;
+
+	/* Enable the clock to access registers */
+	ret = pm_runtime_resume_and_get(priv->dev);
+	if (ret < 0)
+		return ret;
 
 	regmap_read(priv->regmap, STM32_LPTIM_CR, &val);
 	enabled = !!FIELD_GET(STM32_LPTIM_ENABLE, val);
@@ -315,10 +330,11 @@ static int stm32_pwm_lp_get_state(struct pwm_chip *chip,
 
 	/* Keep PWM counter clock refcount in sync with PWM initial state */
 	if (state->enabled) {
-		int ret = clk_enable(priv->clk);
-
-		if (ret)
+		ret = pm_runtime_resume_and_get(priv->dev);
+		if (ret < 0) {
+			pm_runtime_put_sync_suspend(priv->dev);
 			return ret;
+		}
 	}
 
 	regmap_read(priv->regmap, STM32_LPTIM_CFGR, &val);
@@ -342,7 +358,7 @@ static int stm32_pwm_lp_get_state(struct pwm_chip *chip,
 	tmp = (tmp << presc) * NSEC_PER_SEC;
 	state->duty_cycle = DIV_ROUND_CLOSEST_ULL(tmp, rate);
 
-	return 0;
+	return pm_runtime_put_sync_suspend(priv->dev);
 }
 
 static const struct pwm_ops stm32_pwm_lp_ops = {
@@ -370,11 +386,16 @@ static int stm32_pwm_lp_probe(struct platform_device *pdev)
 	if (IS_ERR(chip))
 		return PTR_ERR(chip);
 	priv = to_stm32_pwm_lp(chip);
+	priv->dev = &pdev->dev;
 
 	priv->regmap = ddata->regmap;
 	priv->clk = ddata->clk;
 	priv->num_cc_chans = ddata->num_cc_chans;
 	chip->ops = &stm32_pwm_lp_ops;
+
+	ret = devm_pm_runtime_enable(&pdev->dev);
+	if (ret)
+		return ret;
 
 	ret = devm_pwmchip_add(&pdev->dev, chip);
 	if (ret < 0)
@@ -408,8 +429,31 @@ static int stm32_pwm_lp_resume(struct device *dev)
 	return pinctrl_pm_select_default_state(dev);
 }
 
-static DEFINE_SIMPLE_DEV_PM_OPS(stm32_pwm_lp_pm_ops, stm32_pwm_lp_suspend,
-				stm32_pwm_lp_resume);
+static int stm32_pwm_lp_runtime_suspend(struct device *dev)
+{
+	struct stm32_pwm_lp *priv = dev_get_drvdata(dev);
+
+	clk_disable(priv->clk);
+
+	return 0;
+}
+
+static int stm32_pwm_lp_runtime_resume(struct device *dev)
+{
+	struct stm32_pwm_lp *priv = dev_get_drvdata(dev);
+	int ret;
+
+	ret = clk_enable(priv->clk);
+	if (ret)
+		dev_err(dev, "failed to enable clock. Error [%d]\n", ret);
+
+	return ret;
+}
+
+static const struct dev_pm_ops stm32_pwm_lp_pm_ops = {
+	SYSTEM_SLEEP_PM_OPS(stm32_pwm_lp_suspend, stm32_pwm_lp_resume)
+	RUNTIME_PM_OPS(stm32_pwm_lp_runtime_suspend, stm32_pwm_lp_runtime_resume, NULL)
+};
 
 static const struct of_device_id stm32_pwm_lp_of_match[] = {
 	{ .compatible = "st,stm32-pwm-lp", },
