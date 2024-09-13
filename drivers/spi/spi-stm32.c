@@ -1213,7 +1213,8 @@ static int stm32h7_spi_transfer_one_poll(struct stm32_spi *spi)
 	sr = readl_relaxed(spi->base + STM32H7_SPI_SR);
 	/* Keep writing / reading while waiting for the end of transfer */
 	while (spi->tx_len || spi->rx_len || !(sr & STM32H7_SPI_SR_EOT)) {
-		if (spi->rx_len && (sr & (STM32H7_SPI_SR_RXP | STM32H7_SPI_SR_RXWNE)))
+		if (spi->rx_len && (sr & (STM32H7_SPI_SR_RXP | STM32H7_SPI_SR_RXWNE |
+					  STM32H7_SPI_SR_RXPLVL)))
 			stm32h7_spi_read_rxfifo(spi);
 
 		if (spi->tx_len && (sr & STM32H7_SPI_SR_TXP))
