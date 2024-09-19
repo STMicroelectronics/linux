@@ -391,3 +391,13 @@ config RISCV_SBI_MPXY_MBOX
 	  If unsure say N.
 
 endif
+
+config MAILBOX_CDEV
+	tristate "mailbox client char device"
+	select MAILBOX
+	help
+	  Say Y here to export mailboxes as a character device files, usually
+	  found in /dev/mailbox<%x>. They make it possible for ser-space
+	  programs to send and receive message through this interface.
+
+	  It's safe to say N if you don't want to use this interface.
