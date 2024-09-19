@@ -23,6 +23,7 @@ properties:
               - hannstar,hsd060bhw4
               - microchip,ac40t08a-mipi-panel
               - powkiddy,x55-panel
+              - rocktech,rk055mhd042a0
           - const: himax,hx8394
       - items:
           - enum:
@@ -64,6 +65,7 @@ allOf:
           compatible:
             enum:
               - microchip,ac40t08a-mipi-panel
+              - rocktech,rk055mhd042a0
     then:
       required:
         - reset-gpios
