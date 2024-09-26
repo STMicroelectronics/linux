@@ -218,6 +218,7 @@ struct stm32_usart_info {
 #define TX_BUF_L RX_BUF_L	 /* dma tx buffer length     */
 
 #define STM32_USART_TIMEOUT_USEC USEC_PER_SEC /* 1s timeout in µs */
+#define STM32_USART_AUTOSUSPEND_DELAY_MS 500
 
 #define LPUART_RECEIVE_TIMEOUT_MS 1000
 
