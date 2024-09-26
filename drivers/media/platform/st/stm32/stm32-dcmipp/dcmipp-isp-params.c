@@ -322,6 +322,7 @@ dcmipp_isp_params_apply_ex(struct dcmipp_isp_params_device *vout,
 		  cfg->shift_g << DCMIPP_P1EXCR2_SHFG_SHIFT);
 }
 
+#define DCMIPP_P1DMCR_ENABLE		BIT(0)
 #define DCMIPP_P1DMCR			0x870
 #define DCMIPP_P1DMCR_PEAK_SHIFT	16
 #define DCMIPP_P1DMCR_PEAK_MASK		0x07
@@ -355,7 +356,8 @@ dcmipp_isp_params_apply_dm(struct dcmipp_isp_params_device *vout,
 	       DCMIPP_P1DMCR_EDGE_MASK << DCMIPP_P1DMCR_EDGE_SHIFT;
 
 	dmcr = reg_read(vout, DCMIPP_P1DMCR) & ~mask;
-	reg_write(vout, DCMIPP_P1DMCR, dmcr |
+	reg_write(vout, DCMIPP_P1DMCR, (dmcr & ~DCMIPP_P1DMCR_ENABLE) |
+		  (cfg->en ? DCMIPP_P1DMCR_ENABLE : 0) |
 		  cfg->peak << DCMIPP_P1DMCR_PEAK_SHIFT |
 		  cfg->lineh << DCMIPP_P1DMCR_LINEH_SHIFT |
 		  cfg->linev << DCMIPP_P1DMCR_LINEV_SHIFT |
