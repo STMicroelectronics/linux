@@ -59,6 +59,11 @@ properties:
     description:
       Contains the firewall ID associated to the peripheral.
 
+  st,mem-map:
+    $ref: /schemas/types.yaml#/definitions/uint32-array
+    description:
+      Defines the memory address ranges covered by the RISAL instances.
+
 patternProperties:
   "^.*@[0-9a-f]+$":
     description: Peripherals
