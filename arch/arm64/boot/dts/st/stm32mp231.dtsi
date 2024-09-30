@@ -283,6 +283,7 @@
 			#address-cells = <1>;
 			#size-cells = <1>;
 			#access-controller-cells = <1>;
+			st,mem-map = <0x200c0000 0x2000 0x200c2000 0x2000 0x200c4000 0x4000>;
 
 			i2s2: audio-controller@400b0000 {
 				compatible = "st,stm32mp25-i2s";
