@@ -137,7 +137,7 @@ static irqreturn_t stm32_ipcc_rx_irq(int irq, void *data)
 
 		dev_dbg(dev, "%s: chan:%d rx\n", __func__, chan);
 
-		chnl = &ipcc->chnl[chan];
+		chnl = &ipcc->chnl[chan * 2];
 
 		/*
 		 * Depending on the DT parameter,call the client under interrupt context
@@ -181,7 +181,7 @@ static irqreturn_t stm32_ipcc_tx_irq(int irq, void *data)
 		stm32_ipcc_set_bits(&ipcc->lock, ipcc->reg_proc + IPCC_XMR,
 				    TX_BIT_CHAN(chan));
 
-		mbox_chan_txdone(&ipcc->controller.chans[chan], 0);
+		mbox_chan_txdone(&ipcc->controller.chans[chan * 2 + 1], 0);
 
 		ret = IRQ_HANDLED;
 	}
@@ -192,7 +192,7 @@ static irqreturn_t stm32_ipcc_tx_irq(int irq, void *data)
 static int stm32_ipcc_send_data(struct mbox_chan *link, void *data)
 {
 	struct stm32_ipcc_ch *chnl = (struct stm32_ipcc_ch *)link->con_priv;
-	unsigned long chan = chnl->chan;
+	unsigned long chan = chnl->chan / 2;
 	struct stm32_ipcc *ipcc = container_of(link->mbox, struct stm32_ipcc,
 					       controller);
 
@@ -223,6 +223,12 @@ static int stm32_ipcc_startup(struct mbox_chan *link)
 		return ret;
 	}
 
+        if (chan % 2 != 0) {
+            // transmit subchannel
+            return 0;
+        }
+        chan = chan / 2;
+
 	/* unmask 'rx channel occupied' interrupt */
 	stm32_ipcc_clr_bits(&ipcc->lock, ipcc->reg_proc + IPCC_XMR,
 			    RX_BIT_CHAN(chan));
@@ -233,7 +239,7 @@ static int stm32_ipcc_startup(struct mbox_chan *link)
 static void stm32_ipcc_shutdown(struct mbox_chan *link)
 {
 	struct stm32_ipcc_ch *chnl = (struct stm32_ipcc_ch *)link->con_priv;
-	unsigned long chan = chnl->chan;
+	unsigned long chan = chnl->chan / 2;
 	struct stm32_ipcc *ipcc = container_of(link->mbox, struct stm32_ipcc,
 					       controller);
 
@@ -413,7 +419,7 @@ static int stm32_ipcc_probe(struct platform_device *pdev)
 	ipcc->controller.txdone_irq = true;
 	ipcc->controller.ops = &stm32_ipcc_ops;
 	ipcc->controller.of_xlate = &stm32_ipcc_xlate;
-	ipcc->controller.num_chans = ipcc->n_chans;
+	ipcc->controller.num_chans = ipcc->n_chans * 2;
 	ipcc->controller.chans = devm_kcalloc(dev, ipcc->controller.num_chans,
 					      sizeof(*ipcc->controller.chans),
 					      GFP_KERNEL);
