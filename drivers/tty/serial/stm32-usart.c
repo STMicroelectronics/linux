@@ -99,6 +99,7 @@ static struct stm32_usart_info __maybe_unused stm32h7_info = {
 		.tdr		= 0x28,
 		.presc		= 0x2c,
 		.hwcfgr1	= 0x3f0,
+		.hwcfgr2	= 0x3ec,
 	},
 	.cfg = {
 		.uart_enable_bit = 0,
@@ -1011,6 +1012,22 @@ static void stm32_usart_transmit_chars(struct uart_port *port)
 	}
 }
 
+static void stm32_usart_enable_am(struct stm32_port *stm32_port)
+{
+	if (!stm32_port->wakeup_am) {
+		clk_prepare_enable(stm32_port->clk_am);
+		stm32_port->wakeup_am = true;
+	}
+}
+
+static void stm32_usart_disable_am(struct stm32_port *stm32_port)
+{
+	if (stm32_port->wakeup_am) {
+		clk_disable_unprepare(stm32_port->clk_am);
+		stm32_port->wakeup_am = false;
+	}
+}
+
 static irqreturn_t stm32_usart_interrupt(int irq, void *ptr)
 {
 	struct uart_port *port = ptr;
@@ -1042,7 +1059,11 @@ static irqreturn_t stm32_usart_interrupt(int irq, void *ptr)
 	if (irqd_is_wakeup_set(irq_get_irq_data(port->irq)) &&
 	    (cr1 & USART_CR1_RXNEIE) && (sr & USART_SR_RXNE)) {
 		stm32_usart_clr_bits(port, ofs->cr1, USART_CR1_RXNEIE);
+		if (stm32_port->clk_am)
+			stm32_usart_disable_am(stm32_port);
+
 		pm_wakeup_event(tport->tty->dev, 0);
+
 		ret = IRQ_HANDLED;
 	}
 
@@ -1751,7 +1772,8 @@ static int stm32_usart_init_port(struct stm32_port *stm32port,
 {
 	struct uart_port *port = &stm32port->port;
 	struct resource *res;
-	int ret, irq;
+	struct clk_bulk_data *clks = NULL;
+	int ret, irq, num_clks;
 
 	irq = platform_get_irq(pdev, 0);
 	if (irq < 0)
@@ -1785,10 +1807,11 @@ static int stm32_usart_init_port(struct stm32_port *stm32port,
 
 	spin_lock_init(&port->lock);
 
-	stm32port->clk = devm_clk_get(&pdev->dev, NULL);
-	if (IS_ERR(stm32port->clk))
-		return PTR_ERR(stm32port->clk);
+	num_clks = devm_clk_bulk_get_all(&pdev->dev, &clks);
+	if (num_clks <= 0)
+		return num_clks ? : -ENOENT;
 
+	stm32port->clk = clks[0].clk;
 	/* Ensure that clk rate is correct by enabling the clk */
 	ret = clk_prepare_enable(stm32port->clk);
 	if (ret)
@@ -1798,6 +1821,18 @@ static int stm32_usart_init_port(struct stm32_port *stm32port,
 	if (!stm32port->port.uartclk) {
 		ret = -EINVAL;
 		goto err_clk;
+	}
+
+	if (stm32port->info->ofs.hwcfgr2 != UNDEF_REG) {
+		u32 hwcfgr2 = readl_relaxed(stm32port->port.membase +
+					    stm32port->info->ofs.hwcfgr2);
+		if (FIELD_GET(USART_HWCFGR2_CFG3, hwcfgr2)) {
+			if (num_clks > 1)
+				stm32port->clk_am = clks[1].clk;
+			else
+				dev_warn(&pdev->dev,
+					 "Wakeup might not be available: No autonomous clock\n");
+		}
 	}
 
 	stm32port->fifoen = stm32port->info->cfg.has_fifo;
@@ -2341,6 +2376,7 @@ static int __maybe_unused stm32_usart_serial_en_wakeup(struct uart_port *port,
 static int __maybe_unused stm32_usart_serial_suspend(struct device *dev)
 {
 	struct uart_port *port = dev_get_drvdata(dev);
+	struct stm32_port *stm32port = to_stm32_port(port);
 	int ret;
 
 	uart_suspend_port(&stm32_usart_driver, port);
@@ -2349,6 +2385,9 @@ static int __maybe_unused stm32_usart_serial_suspend(struct device *dev)
 		ret = stm32_usart_serial_en_wakeup(port, true);
 		if (ret)
 			return ret;
+
+		if (stm32port->clk_am)
+			stm32_usart_enable_am(stm32port);
 	}
 
 	/*
@@ -2370,11 +2409,15 @@ static int __maybe_unused stm32_usart_serial_suspend(struct device *dev)
 static int __maybe_unused stm32_usart_serial_resume(struct device *dev)
 {
 	struct uart_port *port = dev_get_drvdata(dev);
+	struct stm32_port *stm32port = to_stm32_port(port);
 	int ret;
 
 	pinctrl_pm_select_default_state(dev);
 
 	if (device_may_wakeup(dev) || device_wakeup_path(dev)) {
+		if (stm32port->clk_am)
+			stm32_usart_disable_am(stm32port);
+
 		ret = stm32_usart_serial_en_wakeup(port, false);
 		if (ret)
 			return ret;
