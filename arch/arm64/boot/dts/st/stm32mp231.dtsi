@@ -1438,6 +1438,86 @@
 				status = "disabled";
 			};
 
+			mdf1: mdf@404d0000 {
+				compatible = "st,stm32mp23-mdf";
+				ranges = <0 0x404d0000 0x1000>;
+				reg = <0x404d0000 0x8>, <0x404d0ff0 0x10>;
+				#address-cells = <1>;
+				#size-cells = <1>;
+				clocks = <&rcc CK_KER_MDF1>;
+				clock-names = "ker_ck";
+				clock-ranges;
+				resets = <&rcc MDF1_R>;
+				reset-names = "mdf";
+				access-controllers = <&rifsc 54>;
+				power-domains = <&d1_pd>;
+				status = "disabled";
+
+				sitf0: sitf@80 {
+					compatible = "st,stm32mp25-sitf-mdf";
+					reg = <0x80 0x4>;
+					status = "disabled";
+				};
+
+				sitf1: sitf@100 {
+					compatible = "st,stm32mp25-sitf-mdf";
+					reg = <0x100 0x4>;
+					status = "disabled";
+				};
+
+				sitf2: sitf@180 {
+					compatible = "st,stm32mp25-sitf-mdf";
+					reg = <0x180 0x4>;
+					status = "disabled";
+				};
+
+				sitf3: sitf@200 {
+					compatible = "st,stm32mp25-sitf-mdf";
+					reg = <0x200 0x4>;
+					status = "disabled";
+				};
+
+				filter0: filter@84 {
+					compatible = "st,stm32mp25-mdf-dmic";
+					reg = <0x84 0x70>;
+					#io-channel-cells = <1>;
+					interrupts = <GIC_SPI 184 IRQ_TYPE_LEVEL_HIGH>;
+					dmas = <&hpdma 63 0x63 0x12>;
+					dma-names = "rx";
+					status = "disabled";
+				};
+
+				filter1: filter@104 {
+					compatible = "st,stm32mp25-mdf-dmic";
+					reg = <0x104 0x70>;
+					#io-channel-cells = <1>;
+					interrupts = <GIC_SPI 185 IRQ_TYPE_LEVEL_HIGH>;
+					dmas = <&hpdma 64 0x63 0x12>;
+					dma-names = "rx";
+					status = "disabled";
+				};
+
+				filter2: filter@184 {
+					compatible = "st,stm32mp25-mdf-dmic";
+					reg = <0x184 0x70>;
+					#io-channel-cells = <1>;
+					interrupts = <GIC_SPI 186 IRQ_TYPE_LEVEL_HIGH>;
+					dmas = <&hpdma 65 0x63 0x12>;
+					dma-names = "rx";
+					status = "disabled";
+				};
+
+				filter3: filter@204 {
+					compatible = "st,stm32mp25-mdf-dmic";
+					reg = <0x204 0x70>;
+					#io-channel-cells = <1>;
+					interrupts = <GIC_SPI 187 IRQ_TYPE_LEVEL_HIGH>;
+					dmas = <&hpdma 66 0x63 0x12>;
+					dma-names = "rx";
+					status = "disabled";
+				};
+			};
+
 			hash: hash@42010000 {
 				compatible = "st,stm32mp13-hash";
 				reg = <0x42010000 0x400>;
