@@ -70,6 +70,22 @@
 		reg = <0x0 0x80000000 0x0 0x80000000>;
 	};
 
+	vdiv_cc1: voltage-divider-cc1 {
+		compatible = "voltage-divider";
+		#io-channel-cells = <1>;
+		io-channels = <&adc1 0>;
+		output-ohms = <3900>;
+		full-ohms = <5100>;
+	};
+
+	vdiv_cc2: voltage-divider-cc2 {
+		compatible = "voltage-divider";
+		#io-channel-cells = <1>;
+		io-channels = <&adc1 1>;
+		output-ohms = <3900>;
+		full-ohms = <5100>;
+	};
+
 	wifi_pwrseq: wifi-pwrseq {
 		compatible = "mmc-pwrseq-simple";
 		reset-gpios = <&gpiob 2 GPIO_ACTIVE_LOW>;
@@ -80,6 +96,24 @@
 
 &a35ss_syscfg {
 	status = "okay";
+};
+
+&adc_1 {
+	/* No pinctrl for ANA0 and ANA1 dedicated pins (channels 0 and 1) */
+	vdda-supply = <&scmi_vdda18adc>;
+	vref-supply = <&scmi_vdda_1v8>;
+	status = "okay";
+	adc1: adc@0 {
+		status = "okay";
+		channel@0 {
+			reg = <0>;
+			st,min-sample-time-ns = <100>;
+		};
+		channel@1{
+			reg = <1>;
+			st,min-sample-time-ns = <100>;
+		};
+	};
 };
 
 &arm_wdt {
