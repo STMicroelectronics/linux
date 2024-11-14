@@ -676,6 +676,16 @@
 	bootph-all;
 };
 
+&timers3 {
+	status = "okay";
+	pwm3: pwm {
+		pinctrl-0 = <&pwm3_ch2_pins_a>;
+		pinctrl-1 = <&pwm3_ch2_sleep_pins_a>;
+		pinctrl-names = "default", "sleep";
+		status = "okay";
+	};
+};
+
 /* Bluetooth */
 &usart1 {
 	pinctrl-names = "default", "sleep", "idle";

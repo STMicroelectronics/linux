@@ -497,6 +497,23 @@
 	};
 
 	/omit-if-no-ref/
+	pwm3_ch2_pins_a: pwm3-ch2-0 {
+		pins {
+			pinmux = <STM32_PINMUX('I', 7, AF8)>; /* TIM3_CH2 */
+			bias-pull-down;
+			drive-push-pull;
+			slew-rate = <0>;
+		};
+	};
+
+	/omit-if-no-ref/
+	pwm3_ch2_sleep_pins_a: pwm3-ch2-sleep-0 {
+		pins {
+			pinmux = <STM32_PINMUX('I', 7, ANALOG)>; /* TIM3_CH2 */
+		};
+	};
+
+	/omit-if-no-ref/
 	pwm3_pins_a: pwm3-0 {
 		pins {
 			pinmux = <STM32_PINMUX('B', 15, AF7)>; /* TIM3_CH2 */
