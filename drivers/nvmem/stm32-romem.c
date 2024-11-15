@@ -11,6 +11,7 @@
 #include <linux/module.h>
 #include <linux/nvmem-provider.h>
 #include <linux/of.h>
+#include <linux/of_reserved_mem.h>
 #include <linux/platform_device.h>
 #include <linux/property.h>
 #include <linux/tee_drv.h>
@@ -27,6 +28,19 @@
 /* shadow registers offset */
 #define STM32MP15_BSEC_DATA0		0x200
 
+/* Magic use to indicated valid mirror = 'B' 'S' 'E' 'C' */
+#define BSEC_MAGIC			0x42534543
+#define OTP_MAX_SIZE			256
+
+struct ns_mirror {
+	u32 magic;
+	u32 state;
+	struct {
+		u32 value;
+		u32 status;
+	} otp[OTP_MAX_SIZE];
+};
+
 struct stm32_romem_cfg {
 	int size;
 	u8 lower;
@@ -35,6 +49,7 @@ struct stm32_romem_cfg {
 
 struct stm32_romem_priv {
 	void __iomem *base;
+	void *mirror_base;
 	struct nvmem_config cfg;
 	u8 lower;
 	struct tee_context *ctx;
@@ -91,7 +106,14 @@ static int stm32_bsec_read(void *context, unsigned int offset, void *buf,
 	for (i = roffset; (i < roffset + rbytes); i += 4) {
 		u32 otp = i >> 2;
 
-		if (otp < priv->lower) {
+		if (priv->mirror_base) {
+			if (otp >= OTP_MAX_SIZE) {
+				ret = -EACCES;
+				goto err;
+			}
+
+			val = ((struct ns_mirror *)priv->mirror_base)->otp[otp].value;
+		} else if (otp < priv->lower) {
 			/* read lower data from shadow registers */
 			val = readl_relaxed(
 				priv->base + STM32MP15_BSEC_DATA0 + i);
@@ -101,7 +123,7 @@ static int stm32_bsec_read(void *context, unsigned int offset, void *buf,
 			if (ret) {
 				dev_err(dev, "Can't read data%d (%d)\n", otp,
 					ret);
-				return ret;
+				goto err;
 			}
 		}
 		/* skip first bytes in case of unaligned read */
@@ -116,6 +138,10 @@ static int stm32_bsec_read(void *context, unsigned int offset, void *buf,
 	}
 
 	return 0;
+
+err:
+	memset(buf, 0, bytes);
+	return ret;
 }
 
 static int stm32_bsec_write(void *context, unsigned int offset, void *buf,
@@ -219,8 +245,33 @@ static int stm32_romem_probe(struct platform_device *pdev)
 		priv->cfg.size = resource_size(res);
 		priv->cfg.reg_read = stm32_romem_read;
 	} else {
+		struct reserved_mem *rmem = NULL;
+		struct device_node *node;
+
 		priv->cfg.size = cfg->size;
 		priv->lower = cfg->lower;
+
+		node = of_parse_phandle(dev->of_node, "memory-region", 0);
+		if (node)
+			rmem = of_reserved_mem_lookup(node);
+		of_node_put(node);
+
+		if (rmem) {
+			priv->mirror_base = devm_memremap(dev, rmem->base,
+							  rmem->size,
+							  MEMREMAP_WB);
+			if (priv->mirror_base &&
+			    (((struct ns_mirror *)priv->mirror_base)->magic ==
+			     BSEC_MAGIC)) {
+				priv->cfg.read_only = true;
+				priv->cfg.reg_read = stm32_bsec_read;
+
+				goto end;
+			} else {
+				priv->mirror_base = NULL;
+			}
+		}
+
 		if (cfg->ta || optee_presence_check()) {
 			rc = stm32_bsec_optee_ta_open(&priv->ctx);
 			if (rc) {
@@ -246,6 +297,7 @@ static int stm32_romem_probe(struct platform_device *pdev)
 		}
 	}
 
+end:
 	return PTR_ERR_OR_ZERO(devm_nvmem_register(dev, &priv->cfg));
 }
 
