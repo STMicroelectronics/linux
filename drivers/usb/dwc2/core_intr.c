@@ -513,8 +513,24 @@ static void dwc2_handle_disconnect_intr(struct dwc2_hsotg *hsotg)
  */
 static void dwc2_handle_usb_suspend_intr(struct dwc2_hsotg *hsotg)
 {
+	u32 gintsts = dwc2_readl(hsotg, GINTSTS) & dwc2_readl(hsotg, GINTMSK);
 	u32 dsts;
 	int ret;
+
+	if (gintsts & GINTSTS_ERLYSUSP) {
+		dev_dbg(hsotg->dev, "USBSUSP temporarily ignored, raced with ERLYSUSP\n");
+		return;
+	}
+
+	if (gintsts & (GINTSTS_OEPINT | GINTSTS_IEPINT)) {
+		u32 daint = dwc2_readl(hsotg, DAINT);
+		u32 daintmsk = dwc2_readl(hsotg, DAINTMSK);
+
+		if (daint & daintmsk) {
+			dev_dbg(hsotg->dev, "USBSUSP temporarily ignored, before EP IRQ\n");
+			return;
+		}
+	}
 
 	/* Clear interrupt */
 	dwc2_writel(hsotg, GINTSTS_USBSUSP, GINTSTS);
