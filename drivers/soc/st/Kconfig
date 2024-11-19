@@ -12,6 +12,17 @@ config STM32MP_PM_DOMAIN
 	  control the power state of devices and peripherals on STM32MP
 	  platforms. If unsure, say Y.
 
+config STM32_HOG
+	tristate "STM32 hog"
+	default y
+	help
+	  Say Y here to enable the STM32 hog driver, which prepares and enables
+	  a set of clocks very early during kernel initialization. The driver
+	  retrieves all clocks referenced by its device node and keeps them
+	  enabled for the whole lifetime of the platform device. This is
+	  typically used to ensure that critical peripherals or SoC resources
+	  remain clocked even if no functional driver has claimed them yet.
+
 config STM32_PM_DOMAINS
 	bool "STM32 PM domains"
 	depends on MACH_STM32MP157
