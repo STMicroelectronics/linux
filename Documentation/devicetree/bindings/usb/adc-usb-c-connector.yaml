@@ -1,0 +1,62 @@
+# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/usb/adc-usb-c-connector.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: ADC based Type-C controller
+
+maintainers:
+  - Ram Dayal <ram.dayal@st.com>
+
+description: |
+  This binding describes the ADC based Type-C controller with ADC monitoring with CC lines.
+
+properties:
+  compatible:
+    const: adc-usb-c-connector
+
+  io-channels:
+    description: List of phandles to the IIO channels for CC1 and CC2.
+    items:
+      - description: Phandle to the IIO channel for CC1.
+      - description: Phandle to the IIO channel for CC2.
+
+  io-channel-names:
+    description: Names of the IIO channels.
+    items:
+      - const: cc1
+      - const: cc2
+
+  connector:
+    type: object
+    $ref: /schemas/connector/usb-connector.yaml#
+    description: USB Type-C connector properties.
+
+required:
+  - compatible
+  - io-channels
+  - io-channel-names
+  - connector
+
+additionalProperties: false
+
+examples:
+  - |
+    typec {
+        compatible = "adc-usb-c-connector";
+        io-channels = <&adc 0>, <&adc 1>;
+        io-channel-names = "cc1", "cc2";
+
+        connector {
+            compatible = "usb-c-connector";
+            label = "USB-C";
+            data-role = "device";
+            power-role = "sink";
+            port {
+                usb_c_port: endpoint {
+                    remote-endpoint = <&usb_c_device_port>;
+                };
+            };
+        };
+    };
