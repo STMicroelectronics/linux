@@ -52,6 +52,17 @@ source "drivers/usb/typec/ucsi/Kconfig"
 
 source "drivers/usb/typec/tipd/Kconfig"
 
+config TYPEC_ADC
+	tristate "ADC based Type-C controller Driver"
+	depends on IIO && POWER_SUPPLY
+	help
+	  This option enables ADC based Type-C controller which monitors
+	  CC lines and updates power profile.
+
+	  If you say Y here, the driver will be built into the kernel.
+	  If you say M here, the driver will be built as a module.
+	  If you say N here, the driver will not be built.
+
 config TYPEC_ANX7411
 	tristate "Analogix ANX7411 Type-C DRP Port controller driver"
 	depends on I2C
