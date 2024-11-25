@@ -98,7 +98,9 @@ static void dwc2_handle_otg_intr(struct dwc2_hsotg *hsotg)
 		gotgctl = dwc2_readl(hsotg, GOTGCTL);
 
 		if (dwc2_is_device_mode(hsotg)) {
-			if (hsotg->params.eusb2_disc) {
+			if (hsotg->params.eusb2_disc ||
+			    (hsotg->params.power_down == DWC2_POWER_DOWN_PARAM_NONE &&
+			     hsotg->bus_suspended && !hsotg->params.no_clock_gating)) {
 				/* Clear the Gate hclk. */
 				pcgctl = dwc2_readl(hsotg, PCGCTL);
 				pcgctl &= ~PCGCTL_GATEHCLK;
