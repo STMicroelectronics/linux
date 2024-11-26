@@ -119,6 +119,24 @@
 		};
 	};
 
+	typec {
+		compatible = "adc-usb-c-connector";
+		io-channels = <&vdiv_cc1 0>, <&vdiv_cc2 0>;
+		io-channel-names = "cc1", "cc2";
+
+		connector {
+			compatible = "usb-c-connector";
+			label = "USB-C";
+			data-role = "device";
+			power-role = "sink";
+			port {
+				usb_c_port: endpoint {
+					remote-endpoint = <&usb_c_device_port>;
+				};
+			};
+		};
+	};
+
 	vdiv_cc1: voltage-divider-cc1 {
 		compatible = "voltage-divider";
 		#io-channel-cells = <1>;
@@ -633,4 +651,9 @@
 	dr_mode = "peripheral";
 	usb-role-switch;
 	status = "okay";
+	port {
+		usb_c_device_port: endpoint {
+			remote-endpoint = <&usb_c_port>;
+		};
+	};
 };
