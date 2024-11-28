@@ -4782,6 +4782,7 @@ static int dwc2_hsotg_pullup(struct usb_gadget *gadget, int is_on)
 {
 	struct dwc2_hsotg *hsotg = to_hsotg(gadget);
 	unsigned long flags;
+	int ret;
 
 	dev_dbg(hsotg->dev, "%s: is_on: %d op_state: %d\n", __func__, is_on,
 		hsotg->op_state);
@@ -4790,6 +4791,12 @@ static int dwc2_hsotg_pullup(struct usb_gadget *gadget, int is_on)
 	if (hsotg->op_state != OTG_STATE_B_PERIPHERAL) {
 		hsotg->enabled = is_on;
 		return 0;
+	}
+
+	if (hsotg->params.stm32_has_batt_chg_det && is_on) {
+		ret = stm32mp2_usb2phy_batt_chg_det(hsotg);
+		if (ret)
+			dev_dbg(hsotg->dev, "%s: battery detection failed\n", __func__);
 	}
 
 	spin_lock_irqsave(&hsotg->lock, flags);

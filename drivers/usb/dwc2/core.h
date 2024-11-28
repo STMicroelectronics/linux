@@ -10,6 +10,7 @@
 
 #include <linux/acpi.h>
 #include <linux/phy/phy.h>
+#include <linux/power_supply.h>
 #include <linux/regulator/consumer.h>
 #include <linux/usb/gadget.h>
 #include <linux/usb/otg.h>
@@ -481,6 +482,7 @@ struct dwc2_core_params {
 	bool activate_stm32_bvaloval_en;
 	bool activate_ingenic_overcurrent_detection;
 	bool activate_stm32_otgarcr_en;
+	bool stm32_has_batt_chg_det;
 	bool ipg_isoc_en;
 	u16 max_packet_count;
 	u32 max_transfer_size;
@@ -1237,6 +1239,11 @@ struct dwc2_hsotg {
 	struct dwc2_hsotg_ep *eps_in[MAX_EPS_CHANNELS];
 	struct dwc2_hsotg_ep *eps_out[MAX_EPS_CHANNELS];
 #endif /* CONFIG_USB_DWC2_PERIPHERAL || CONFIG_USB_DWC2_DUAL_ROLE */
+	struct power_supply *psy_batt_chg;
+	struct power_supply_desc batt_chg_psy_desc;
+	int chg_current;
+	enum power_supply_type batt_chg_psy_type;
+	bool has_batt_chg_det;
 };
 
 /* Normal architectures just use readl/write */
@@ -1420,6 +1427,8 @@ void dwc2_drd_exit(struct dwc2_hsotg *hsotg);
 void dwc2_dump_dev_registers(struct dwc2_hsotg *hsotg);
 void dwc2_dump_host_registers(struct dwc2_hsotg *hsotg);
 void dwc2_dump_global_registers(struct dwc2_hsotg *hsotg);
+int stm32mp2_usb2phy_batt_chg_det(struct dwc2_hsotg *hsotg);
+int stm32mp2_usb2phy_usb_chg_psy_register(struct dwc2_hsotg *hsotg);
 
 /* Gadget defines */
 #if IS_ENABLED(CONFIG_USB_DWC2_PERIPHERAL) || \
