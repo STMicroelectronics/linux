@@ -179,6 +179,13 @@ config STM32_FIREWALL
 	  hardware resources linked to a firewall controller can be requested
 	  through this STM32 framework.
 
+config STM32_RIFSC_DEBUG
+	bool "STM32 Unprivileged access to debug resources"
+	depends on (STM32_FIREWALL)
+	help
+	  Say y to deprivilege access to peripheral resources. This allows
+	  to read and write to memory mapped registers of peripherals.
+
 config SUN50I_DE2_BUS
 	bool "Allwinner A64 DE2 Bus Driver"
 	  default ARM64
