@@ -14,6 +14,7 @@
 #include <linux/of_address.h>
 #include <linux/of_irq.h>
 #include <linux/platform_device.h>
+#include <linux/pm_runtime.h>
 #include <linux/pm_wakeirq.h>
 
 #define CFGR_PSC_OFFSET		9
@@ -54,17 +55,8 @@ static int stm32mp25_clkevent_lp_set_evt(struct stm32_lp_private *priv, unsigned
 	int ret;
 	u32 val;
 
-	regmap_read(priv->reg, STM32_LPTIM_CR, &val);
-	if (!FIELD_GET(STM32_LPTIM_ENABLE, val)) {
-		/* Enable LPTIMER to be able to write into IER and ARR registers */
-		regmap_write(priv->reg, STM32_LPTIM_CR, STM32_LPTIM_ENABLE);
-		/*
-		 * After setting the ENABLE bit, a delay of two counter clock cycles is needed
-		 * before the LPTIM is actually enabled. For 32KHz rate, this makes approximately
-		 * 62.5 micro-seconds, round it up.
-		 */
-		udelay(63);
-	}
+	/* Enable LPTIMER to be able to write into IER and ARR registers */
+	regmap_write(priv->reg, STM32_LPTIM_CR, STM32_LPTIM_ENABLE);
 	/* set next event counter */
 	regmap_write(priv->reg, STM32_LPTIM_ARR, evt);
 	/* enable ARR interrupt */
@@ -105,6 +97,14 @@ static int stm32_clkevent_lp_set_timer(unsigned long evt,
 {
 	struct stm32_lp_private *priv = to_priv(clkevt);
 	int ret;
+
+	if (!pm_runtime_active(priv->dev)) {
+		ret = pm_runtime_resume_and_get(priv->dev);
+		if (ret) {
+			dev_err(priv->dev, "pm runtime get returned %d\n", ret);
+			return ret;
+		}
+	}
 
 	if (priv->version == STM32_LPTIM_VERR_23) {
 		ret = stm32mp25_clkevent_lp_set_evt(priv, evt);
@@ -182,6 +182,8 @@ static void stm32_clkevent_lp_suspend(struct clock_event_device *clkevt)
 	struct stm32_lp_private *priv = to_priv(clkevt);
 
 	stm32_clkevent_lp_shutdown(clkevt);
+
+	pm_runtime_put_sync_suspend(priv->dev);
 
 	/* balance clk_prepare_enable() from the probe */
 	clk_disable_unprepare(priv->clk);
@@ -261,6 +263,12 @@ static int stm32_clkevent_lp_probe(struct platform_device *pdev)
 		goto out_clk_disable;
 
 	stm32_clkevent_lp_set_prescaler(priv, &rate);
+
+	ret = devm_pm_runtime_enable(&pdev->dev);
+	if (ret)
+		return ret;
+
+	pm_runtime_irq_safe(&pdev->dev);
 
 	priv->dev = &pdev->dev;
 
