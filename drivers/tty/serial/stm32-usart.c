@@ -1179,7 +1179,7 @@ static void stm32_usart_flush_buffer(struct uart_port *port)
 {
 	struct stm32_port *stm32_port = to_stm32_port(port);
 
-	if (stm32_port->tx_ch)
+	if (stm32_port->tx_ch && stm32_usart_tx_dma_started(stm32_port))
 		stm32_usart_tx_dma_terminate(stm32_port);
 }
 
