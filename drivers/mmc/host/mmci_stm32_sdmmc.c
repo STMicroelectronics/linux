@@ -412,7 +412,8 @@ static void mmci_sdmmc_set_pwrreg(struct mmci_host *host, unsigned int pwr)
 	if (dlyb && dlyb->ops->set_input_ck)
 		dlyb->ops->set_input_ck(dlyb);
 
-	if (ios.power_mode == MMC_POWER_OFF) {
+	if (ios.power_mode == MMC_POWER_OFF ||
+	    ios.power_mode == MMC_POWER_UP) {
 		/* Only a reset could power-off sdmmc */
 		reset_control_assert(host->rst);
 		udelay(2);
