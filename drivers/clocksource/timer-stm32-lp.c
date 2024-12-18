@@ -262,9 +262,9 @@ static int stm32_clkevent_lp_probe(struct platform_device *pdev)
 
 	stm32_clkevent_lp_set_prescaler(priv, &rate);
 
-	stm32_clkevent_lp_init(priv, pdev->dev.parent->of_node, rate);
-
 	priv->dev = &pdev->dev;
+
+	stm32_clkevent_lp_init(priv, pdev->dev.parent->of_node, rate);
 
 	return 0;
 
