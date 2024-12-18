@@ -1741,7 +1741,7 @@
 				resets = <&rcc SDMMC1_R>;
 				cap-sd-highspeed;
 				cap-mmc-highspeed;
-				max-frequency = <120000000>;
+				max-frequency = <166000000>;
 				access-controllers = <&rifsc 76>;
 				power-domains = <&d1_pd>;
 				status = "disabled";
