@@ -525,6 +525,11 @@ static const struct regmap_config stm32_ltdc_regmap_cfg = {
 	.cache_type = REGCACHE_NONE,
 };
 
+/* Set by default the clock tolerance to 5‰ */
+static int clock_tolerance = 5;
+module_param_named(clock_tolerance, clock_tolerance, int, 0444);
+MODULE_PARM_DESC(clock_tolerance, "Clock tolerance ‰");
+
 static const u32 ltdc_ycbcr2rgb_coeffs[DRM_COLOR_ENCODING_MAX][DRM_COLOR_RANGE_MAX][2] = {
 	[DRM_COLOR_YCBCR_BT601][DRM_COLOR_YCBCR_LIMITED_RANGE] = {
 		0x02040199,	/* (b_cb = 516 / r_cr = 409) */
@@ -2012,8 +2017,6 @@ static int ltdc_crtc_init(struct drm_device *ddev, struct drm_crtc *crtc)
 	return 0;
 }
 
-#define CLK_TOLERANCE_HZ 50
-
 static enum drm_mode_status ltdc_encoder_mode_valid(struct drm_encoder *encoder,
 						    const struct drm_display_mode *mode)
 {
@@ -2021,8 +2024,8 @@ static enum drm_mode_status ltdc_encoder_mode_valid(struct drm_encoder *encoder,
 	struct ltdc_device *ldev =  ddev->dev_private;
 	struct device *dev = ddev->dev;
 	int target = mode->clock * 1000;
-	int target_min = (mode->clock * 1000) - CLK_TOLERANCE_HZ;
-	int target_max = (mode->clock * 1000) + CLK_TOLERANCE_HZ;
+	int target_min = mode->clock * (1000 - clock_tolerance);
+	int target_max = mode->clock * (1000 + clock_tolerance);
 	int result;
 
 	if (of_device_is_compatible(dev->of_node, "st,stm32mp255-ltdc")) {
