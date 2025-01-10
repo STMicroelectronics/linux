@@ -17,7 +17,7 @@
 #include <linux/pm_wakeirq.h>
 
 #define CFGR_PSC_OFFSET		9
-#define STM32_LP_RATING		1000
+#define STM32_LP_RATING		80
 #define STM32_TARGET_CLKRATE	(32000 * HZ)
 #define STM32_LP_MAX_PSC	7
 
