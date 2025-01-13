@@ -531,10 +531,10 @@ int optee_invoke_func_helper(struct tee_context *ctx,
 	struct optee_call_extra call_extra;
 	struct optee_shm_arg_entry *entry;
 	struct optee_session *sess;
-	struct tee_shm *shm;
+	struct tee_shm *shm = NULL;
 	bool system_thread;
 	u32 session_id;
-	u_int offs;
+	u_int offs = 0;
 	int rc;
 
 	if (tee_ocall_in_progress(ocall_arg))
