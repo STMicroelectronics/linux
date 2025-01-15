@@ -950,19 +950,26 @@ static int __maybe_unused dwc2_suspend(struct device *dev)
 	if (is_device_mode) {
 		/*
 		 * Handle the case when bus has been suspended prior to platform suspend.
-		 * As the lx_state is DWC2_L2, dwc2_hsotg_suspend() is then a no-op.
-		 * So need to exit clock gating first, so the gadget can be suspended and
-		 * resumed later on.
+		 * - When the lx_state is DWC2_L2, the HOST has suspended the bus. So the
+		 * device shouldn't disconnect: dwc2_hsotg_suspend() is then a no-op. It
+		 * could request to resume the bus, or the HOST may request a bus resume.
+		 * Still user could disable wakeup trough sysfs, so check also if it can
+		 * be powered OFF.
+		 * - In case the device has been disconnected, then it should be properly
+		 * suspended/disconnected. Then, temporarily exit the low power mode (clock
+		 * gating, ppd), so the gadget can be suspended and resumed later on.
 		 */
-		if (dwc2->in_ppd) {
-			ret = dwc2_exit_partial_power_down(dwc2, 0, true);
-			if (ret)
-				dev_err(dwc2->dev, "exit power_down failed\n");
-		}
+		if (!dwc2_is_device_connected(dwc2) || dwc2_gadget_can_poweroff_phy(dwc2)) {
+			if (dwc2->in_ppd) {
+				ret = dwc2_exit_partial_power_down(dwc2, 0, true);
+				if (ret)
+					dev_err(dwc2->dev, "exit power_down failed\n");
+			}
 
-		if (dwc2->params.power_down == DWC2_POWER_DOWN_PARAM_NONE &&
-		    dwc2->bus_suspended && !dwc2->params.no_clock_gating)
-			dwc2_gadget_exit_clock_gating(dwc2, 0);
+			if (dwc2->params.power_down == DWC2_POWER_DOWN_PARAM_NONE &&
+			    dwc2->bus_suspended && !dwc2->params.no_clock_gating)
+				dwc2_gadget_exit_clock_gating(dwc2, 0);
+		}
 
 		ret = dwc2_hsotg_suspend(dwc2);
 		if (ret)
@@ -972,12 +979,13 @@ static int __maybe_unused dwc2_suspend(struct device *dev)
 	dwc2_drd_suspend(dwc2);
 
 	if (dwc2->ll_hw_enabled &&
-	    (is_device_mode || dwc2_host_can_poweroff_phy(dwc2))) {
+	    (dwc2_gadget_can_poweroff_phy(dwc2) || dwc2_host_can_poweroff_phy(dwc2))) {
 		ret = __dwc2_lowlevel_hw_disable(dwc2);
 		dwc2->phy_off_for_suspend = true;
 	}
 
-	if (device_may_wakeup(dev) || device_wakeup_path(dev))
+	/* If HW has been kept enabled for wakeup, enable wake irq */
+	if (!dwc2->phy_off_for_suspend)
 		enable_irq_wake(dwc2->irq);
 
 	return ret;
@@ -991,7 +999,7 @@ static int __maybe_unused dwc2_resume(struct device *dev)
 	if (!dwc2->ll_hw_enabled)
 		return 0;
 
-	if (device_may_wakeup(dev) || device_wakeup_path(dev))
+	if (!dwc2->phy_off_for_suspend)
 		disable_irq_wake(dwc2->irq);
 
 	if (dwc2->phy_off_for_suspend && dwc2->ll_hw_enabled) {

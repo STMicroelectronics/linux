@@ -1437,6 +1437,7 @@ int stm32mp2_usb2phy_usb_chg_psy_register(struct dwc2_hsotg *hsotg);
 #if IS_ENABLED(CONFIG_USB_DWC2_PERIPHERAL) || \
 	IS_ENABLED(CONFIG_USB_DWC2_DUAL_ROLE)
 int dwc2_hsotg_remove(struct dwc2_hsotg *hsotg);
+bool dwc2_gadget_can_poweroff_phy(struct dwc2_hsotg *hsotg);
 int dwc2_hsotg_suspend(struct dwc2_hsotg *dwc2);
 int dwc2_hsotg_resume(struct dwc2_hsotg *dwc2);
 int dwc2_gadget_init(struct dwc2_hsotg *hsotg);
@@ -1472,6 +1473,8 @@ static inline void dwc2_clear_fifo_map(struct dwc2_hsotg *hsotg)
 #else
 static inline int dwc2_hsotg_remove(struct dwc2_hsotg *dwc2)
 { return 0; }
+static inline bool dwc2_gadget_can_poweroff_phy(struct dwc2_hsotg *hsotg)
+{ return false; }
 static inline int dwc2_hsotg_suspend(struct dwc2_hsotg *dwc2)
 { return 0; }
 static inline int dwc2_hsotg_resume(struct dwc2_hsotg *dwc2)

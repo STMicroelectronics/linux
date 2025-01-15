@@ -5238,6 +5238,18 @@ int dwc2_hsotg_remove(struct dwc2_hsotg *hsotg)
 	return 0;
 }
 
+bool dwc2_gadget_can_poweroff_phy(struct dwc2_hsotg *hsotg)
+{
+	if (!dwc2_is_device_mode(hsotg))
+		return false;
+
+	if (device_may_wakeup(&hsotg->gadget.dev))
+		return false;
+
+	/* In device mode, but not a wakeup source: can poweroff the PHY */
+	return true;
+}
+
 int dwc2_hsotg_suspend(struct dwc2_hsotg *hsotg)
 {
 	unsigned long flags;
