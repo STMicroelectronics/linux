@@ -4702,6 +4702,8 @@ static int dwc2_hsotg_udc_start(struct usb_gadget *gadget,
 	gadget->sg_supported = using_desc_dma(hsotg);
 	dev_info(hsotg->dev, "bound driver %s\n", driver->driver.name);
 
+	device_set_wakeup_capable(&gadget->dev, true);
+
 	return 0;
 
 err:
@@ -4723,6 +4725,8 @@ static int dwc2_hsotg_udc_stop(struct usb_gadget *gadget)
 
 	if (!hsotg)
 		return -ENODEV;
+
+	device_set_wakeup_capable(&gadget->dev, false);
 
 	/* Exit clock gating when driver is stopped. */
 	if (hsotg->params.power_down == DWC2_POWER_DOWN_PARAM_NONE &&
@@ -5238,13 +5242,32 @@ int dwc2_hsotg_suspend(struct dwc2_hsotg *hsotg)
 {
 	unsigned long flags;
 
-	if (hsotg->lx_state != DWC2_L0) {
+	if ((hsotg->remote_wakeup_allowed || device_may_wakeup(&hsotg->gadget.dev)) &&
+	    (hsotg->bus_suspended || hsotg->in_ppd || hsotg->hibernated)) {
+		/*
+		 * The bus has been suspended by the HOST, and the remote
+		 * wakeup has been enabled. So don't suspend gadget or it
+		 * will disconnect.
+		 */
 		hsotg->gadget_off_for_suspend = false;
 		return 0;
 	}
 
 	if (hsotg->driver) {
 		int ep;
+
+		/*
+		 * Bus isn't suspended, and the user has requested to be able
+		 * to wakeup from the gadget driver. So need to refuse to suspend
+		 * or the gadget will disconnect. A typical case is a self-powered
+		 * device, that needs to go to low power, upon suspend. But a fast
+		 * bus suspend/resume may have triggered the platform suspend sequence,
+		 * by the user application (to fulfill suspend current requirement).
+		 * We reach here, with a resumed bus: so need to refuse to suspend.
+		 * This may be hit with USBCV enumeration test.
+		 */
+		if (hsotg->remote_wakeup_allowed || device_may_wakeup(&hsotg->gadget.dev))
+			return -EBUSY;
 
 		dev_info(hsotg->dev, "suspending usb gadget %s\n",
 			 hsotg->driver->driver.name);

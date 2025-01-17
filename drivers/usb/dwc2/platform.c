@@ -964,7 +964,9 @@ static int __maybe_unused dwc2_suspend(struct device *dev)
 		    dwc2->bus_suspended && !dwc2->params.no_clock_gating)
 			dwc2_gadget_exit_clock_gating(dwc2, 0);
 
-		dwc2_hsotg_suspend(dwc2);
+		ret = dwc2_hsotg_suspend(dwc2);
+		if (ret)
+			return ret;
 	}
 
 	dwc2_drd_suspend(dwc2);
