@@ -394,6 +394,7 @@ void dwc2_wakeup_from_lpm_l1(struct dwc2_hsotg *hsotg, bool remotewakeup)
 		}
 
 		/* Inform gadget to exit from L1 */
+		usb_gadget_set_state(&hsotg->gadget, hsotg->suspended_from);
 		call_gadget(hsotg, resume);
 		/* Change to L0 state */
 		hsotg->lx_state = DWC2_L0;
@@ -453,6 +454,7 @@ static void dwc2_handle_wakeup_detected_intr(struct dwc2_hsotg *hsotg)
 
 		/* Change to L0 state, also when no_clock_gating == true */
 		hsotg->lx_state = DWC2_L0;
+		usb_gadget_set_state(&hsotg->gadget, hsotg->suspended_from);
 		call_gadget(hsotg, resume);
 	} else {
 		if (hsotg->lx_state == DWC2_L2) {
@@ -593,6 +595,9 @@ static void dwc2_handle_usb_suspend_intr(struct dwc2_hsotg *hsotg)
 			 */
 			hsotg->lx_state = DWC2_L2;
 
+			hsotg->suspended_from = hsotg->gadget.state;
+			usb_gadget_set_state(&hsotg->gadget, USB_STATE_SUSPENDED);
+
 			/* Call gadget suspend callback */
 			call_gadget(hsotg, suspend);
 		}
@@ -668,6 +673,9 @@ static void dwc2_handle_lpm_intr(struct dwc2_hsotg *hsotg)
 			hsotg->lx_state = DWC2_L1;
 			dev_dbg(hsotg->dev,
 				"Core is in L1 sleep glpmcfg=%08x\n", glpmcfg);
+
+			hsotg->suspended_from = hsotg->gadget.state;
+			usb_gadget_set_state(&hsotg->gadget, USB_STATE_SUSPENDED);
 
 			/* Inform gadget that we are in L1 state */
 			call_gadget(hsotg, suspend);
@@ -825,6 +833,8 @@ static int dwc2_handle_gpwrdn_intr(struct dwc2_hsotg *hsotg)
 				if (ret)
 					dev_err(hsotg->dev,
 						"exit hibernation failed.\n");
+
+				usb_gadget_set_state(&hsotg->gadget, hsotg->suspended_from);
 				call_gadget(hsotg, resume);
 			} else {
 				ret = dwc2_exit_hibernation(hsotg, 1, 0, 1);

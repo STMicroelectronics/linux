@@ -881,6 +881,7 @@ struct dwc2_hregs_backup {
  * @hibernated:		True if core is hibernated
  * @in_ppd:		True if core is partial power down mode.
  * @bus_suspended:	True if bus is suspended
+ * @suspended_from:	The device state before the host has suspended the bus.
  * @reset_phy_on_wake:	Quirk saying that we should assert PHY reset on a
  *			remote wakeup.
  * @phy_off_for_suspend: Status of whether we turned the PHY off at suspend.
@@ -1080,6 +1081,7 @@ struct dwc2_hsotg {
 	unsigned int hibernated:1;
 	unsigned int in_ppd:1;
 	bool bus_suspended;
+	enum usb_device_state suspended_from;
 	unsigned int reset_phy_on_wake:1;
 	unsigned int need_phy_for_wake:1;
 	unsigned int phy_off_for_suspend:1;

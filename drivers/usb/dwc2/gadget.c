@@ -3400,6 +3400,7 @@ void dwc2_hsotg_disconnect(struct dwc2_hsotg *hsotg)
 	hsotg->lx_state = DWC2_L3;
 
 	usb_gadget_set_state(&hsotg->gadget, USB_STATE_NOTATTACHED);
+	hsotg->suspended_from = USB_STATE_NOTATTACHED;
 }
 
 /**
