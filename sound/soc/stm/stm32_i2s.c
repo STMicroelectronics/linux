@@ -222,6 +222,7 @@ enum i2s_datlen {
  * @phys_addr: I2S registers physical base address
  * @lock_fd: lock to manage race conditions in full duplex mode
  * @irq_lock: prevent race condition with IRQ
+ * @lock_mclk: manage race conditions on mclk rate update
  * @mclk_rate: master clock frequency (Hz)
  * @fmt: DAI protocol
  * @divider: prescaler division ratio
@@ -250,6 +251,7 @@ struct stm32_i2s_data {
 	dma_addr_t phys_addr;
 	spinlock_t lock_fd; /* Manage race conditions for full duplex */
 	spinlock_t irq_lock; /* used to prevent race condition with IRQ */
+	spinlock_t lock_mclk; /* Manage race conditions on mclk rate update */
 	unsigned int mclk_rate;
 	unsigned int fmt;
 	unsigned int divider;
@@ -752,42 +754,52 @@ static int stm32_i2s_set_sysclk(struct snd_soc_dai *cpu_dai,
 		freq, STM32_I2S_IS_MASTER(i2s) ? "master" : "slave",
 		dir ? "output" : "input");
 
+	spin_lock(&i2s->lock_mclk);
+
 	/* MCLK generation is available only in master mode */
 	if (dir == SND_SOC_CLOCK_OUT && STM32_I2S_IS_MASTER(i2s)) {
 		if (!i2s->i2smclk) {
 			dev_dbg(cpu_dai->dev, "No MCLK registered\n");
-			return 0;
+			goto out;
 		}
+
+		/* Leave early if nothing to do */
+		if (freq == i2s->mclk_rate)
+			goto out;
 
 		/* Assume shutdown if requested frequency is 0Hz */
 		if (!freq) {
-			/* Release mclk rate only if rate was actually set */
-			if (i2s->mclk_rate) {
-				clk_rate_exclusive_put(i2s->i2smclk);
-				i2s->mclk_rate = 0;
-			}
+			clk_rate_exclusive_put(i2s->i2smclk);
 
 			if (i2s->put_i2s_clk_rate)
 				i2s->put_i2s_clk_rate(i2s);
 
-			return regmap_update_bits(i2s->regmap,
-						  STM32_I2S_CGFR_REG,
-						  I2S_CGFR_MCKOE, 0);
+			ret = regmap_update_bits(i2s->regmap, STM32_I2S_CGFR_REG,
+						 I2S_CGFR_MCKOE, 0);
+			if (!ret)
+				i2s->mclk_rate = 0;
+
+			goto out;
 		}
 		/* If master clock is used, set parent clock now */
 		ret = i2s->set_i2s_clk_rate(i2s, freq);
 		if (ret)
-			return ret;
+			goto out;
+
 		ret = clk_set_rate_exclusive(i2s->i2smclk, freq);
 		if (ret) {
 			dev_err(cpu_dai->dev, "Could not set mclk rate\n");
-			return ret;
+			goto out;
 		}
+
 		ret = regmap_update_bits(i2s->regmap, STM32_I2S_CGFR_REG,
 					 I2S_CGFR_MCKOE, I2S_CGFR_MCKOE);
 		if (!ret)
 			i2s->mclk_rate = freq;
 	}
+
+out:
+	spin_unlock(&i2s->lock_mclk);
 
 	return ret;
 }
@@ -1299,6 +1311,7 @@ static int stm32_i2s_probe(struct platform_device *pdev)
 	i2s->pdev = pdev;
 	i2s->ms_flg = I2S_MS_NOT_SET;
 	spin_lock_init(&i2s->lock_fd);
+	spin_lock_init(&i2s->lock_mclk);
 	spin_lock_init(&i2s->irq_lock);
 	platform_set_drvdata(pdev, i2s);
 
