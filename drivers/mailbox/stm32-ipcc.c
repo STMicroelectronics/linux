@@ -375,7 +375,8 @@ static int stm32_ipcc_probe(struct platform_device *pdev)
 		}
 
 		ret = devm_request_threaded_irq(dev, ipcc->irqs[i], NULL,
-						irq_thread[i], IRQF_ONESHOT,
+						irq_thread[i],
+						IRQF_ONESHOT | IRQF_NO_SUSPEND,
 						dev_name(dev), ipcc);
 		if (ret) {
 			dev_err(dev, "failed to request irq %lu (%d)\n", i, ret);
@@ -499,6 +500,9 @@ static int stm32_ipcc_suspend(struct device *dev)
 	ipcc->xmr = readl_relaxed(ipcc->reg_proc + IPCC_XMR);
 	ipcc->xcr = readl_relaxed(ipcc->reg_proc + IPCC_XCR);
 
+	if (device_may_wakeup(dev))
+		return enable_irq_wake(ipcc->irqs[IPCC_IRQ_RX]);
+
 	return 0;
 }
 
@@ -508,6 +512,9 @@ static int stm32_ipcc_resume(struct device *dev)
 
 	writel_relaxed(ipcc->xmr, ipcc->reg_proc + IPCC_XMR);
 	writel_relaxed(ipcc->xcr, ipcc->reg_proc + IPCC_XCR);
+
+	if (device_may_wakeup(dev))
+		return disable_irq_wake(ipcc->irqs[IPCC_IRQ_RX]);
 
 	return 0;
 }
