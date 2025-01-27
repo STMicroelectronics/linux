@@ -513,8 +513,9 @@ static int stm32_ipcc_resume(struct device *dev)
 }
 #endif
 
-static SIMPLE_DEV_PM_OPS(stm32_ipcc_pm_ops,
-			 stm32_ipcc_suspend, stm32_ipcc_resume);
+const struct dev_pm_ops stm32_ipcc_pm_ops = {
+	SET_NOIRQ_SYSTEM_SLEEP_PM_OPS(stm32_ipcc_suspend, stm32_ipcc_resume)
+};
 
 static const struct of_device_id stm32_ipcc_of_match[] = {
 	{ .compatible = "st,stm32mp1-ipcc" },
