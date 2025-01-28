@@ -1239,6 +1239,7 @@ struct dwc2_hsotg {
 	unsigned int connected:1;
 	unsigned int retry_connect:1;
 	unsigned int remote_wakeup_allowed:1;
+	unsigned int wakeup_configured:1;
 	struct dwc2_hsotg_ep *eps_in[MAX_EPS_CHANNELS];
 	struct dwc2_hsotg_ep *eps_out[MAX_EPS_CHANNELS];
 #endif /* CONFIG_USB_DWC2_PERIPHERAL || CONFIG_USB_DWC2_DUAL_ROLE */
