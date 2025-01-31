@@ -514,9 +514,9 @@ static const struct stm32_rng_data stm32mp25_rng_data = {
 	.max_clock_rate = 48000000,
 	.nb_clock = 2,
 	.cr_config1_mask = GENMASK(27, 20),
-	.cr = 0x00F00D00,
-	.nscr = 0x2B5BB,
-	.htcr = 0x969D,
+	.cr = 0x08F01E00,
+	.nscr = 0x2E649,
+	.htcr = 0x6688,
 };
 
 static const struct stm32_rng_data stm32mp21_rng_data = {
