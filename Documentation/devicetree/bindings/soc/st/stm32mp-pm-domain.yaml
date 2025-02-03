@@ -1,0 +1,46 @@
+# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/soc/st/stm32mp-pm-domain.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: STM32MP generic power domain
+
+maintainers:
+  - Patrick Delaunay <patrick.delaunay@foss.st.com>
+
+allOf:
+  - $ref: /schemas/power/power-domain.yaml#
+
+description: |
+  Some STM32MP SoCs contain a D1 domain which defined the devices
+  assigned to Cortex A35, these device are functionnal only when the cortex the
+  A35 cluster is not in low power modes with clock OFF.
+
+  This PM domain node represents the D1 dependency depndency for clock PM
+  framework with the parent power domain but without wake-up path support.
+
+properties:
+  compatible:
+    const: st,stm32mp-pm-domain
+
+  '#power-domain-cells':
+    const: 0
+
+  power-domains:
+    maxItems: 1
+
+additionalProperties: false
+
+required:
+  - compatible
+  - '#power-domain-cells'
+  - power-domains
+
+examples:
+  - |
+    power-domain-d1 {
+      compatible = "st,stm32mp-pm-domain";
+      #power-domain-cells = <0>;
+      power-domains = <&CLUSTER_PD>;
+    };
