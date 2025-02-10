@@ -19,10 +19,20 @@
 
 #define DCMIPP_PDEV_NAME "dcmipp"
 
-#define DCMIPP_FRAME_MAX_WIDTH 4096
-#define DCMIPP_FRAME_MAX_HEIGHT 2160
 #define DCMIPP_FRAME_MIN_WIDTH 16
-#define DCMIPP_FRAME_MIN_HEIGHT 16
+#define DCMIPP_FRAME_MIN_HEIGHT 2
+
+/*
+ * Maximum frame size for input & byte pipe
+ * This is aligned with TPG maximum frame size,
+ * aligned to word access for the width
+ */
+#define DCMIPP_FRAME_MAX_WIDTH	16376
+#define DCMIPP_FRAME_MAX_HEIGHT	16383
+
+/* Maximum frame size for pixel pipes */
+#define DCMIPP_PIXEL_FRAME_MAX_WIDTH 4094
+#define DCMIPP_PIXEL_FRAME_MAX_HEIGHT 4094
 
 #define DCMIPP_FMT_WIDTH_DEFAULT  640
 #define DCMIPP_FMT_HEIGHT_DEFAULT 480

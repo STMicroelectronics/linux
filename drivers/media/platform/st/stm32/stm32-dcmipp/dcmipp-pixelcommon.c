@@ -130,9 +130,9 @@ int dcmipp_pixelpipe_enum_frame_size(unsigned int id,
 		return -EINVAL;
 
 	fse->min_width = DCMIPP_FRAME_MIN_WIDTH;
-	fse->max_width = DCMIPP_FRAME_MAX_WIDTH;
+	fse->max_width = DCMIPP_PIXEL_FRAME_MAX_WIDTH;
 	fse->min_height = DCMIPP_FRAME_MIN_HEIGHT;
-	fse->max_height = DCMIPP_FRAME_MAX_HEIGHT;
+	fse->max_height = DCMIPP_PIXEL_FRAME_MAX_HEIGHT;
 
 	return 0;
 }
