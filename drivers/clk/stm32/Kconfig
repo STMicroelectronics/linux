@@ -41,3 +41,11 @@ config COMMON_CLK_STM32MP257
 
 endif
 
+config CLK_STM32MP2_CA35SS
+    tristate "Clock controller for stm32mp2xx Cortex-A35 subsystem"
+    depends on ARCH_STM32 || COMPILE_TEST
+    help
+      If you say yes here, you will get support for the Arm Cortex-A35 (CA35SS)
+      clock controller in STM32MP2 family provided by secure monitor
+      (TF-A BL31). This driver uses SMC calls to scale the frequency.
+      This driver can also be built as a module.
