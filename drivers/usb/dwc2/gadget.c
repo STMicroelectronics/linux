@@ -3680,6 +3680,21 @@ void dwc2_hsotg_core_init_disconnected(struct dwc2_hsotg *hsotg,
 
 void dwc2_hsotg_core_disconnect(struct dwc2_hsotg *hsotg)
 {
+	/*
+	 * If controller is in partial power down state or in clock gating mode, it must
+	 * exit from that state before being disconnected, and detached.
+	 */
+	if (hsotg->lx_state == DWC2_L2) {
+		/* No need to check the return value as registers are not being restored. */
+		if (hsotg->in_ppd)
+			dwc2_exit_partial_power_down(hsotg, 0, false);
+
+		if (hsotg->params.power_down ==
+		    DWC2_POWER_DOWN_PARAM_NONE && hsotg->bus_suspended &&
+		    !hsotg->params.no_clock_gating)
+			dwc2_gadget_exit_clock_gating(hsotg, 0);
+	}
+
 	/* set the soft-disconnect bit */
 	dwc2_set_bit(hsotg, DCTL, DCTL_SFTDISCON);
 }
