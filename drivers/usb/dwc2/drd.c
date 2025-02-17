@@ -215,7 +215,7 @@ static int dwc2_drd_role_sw_set(struct usb_role_switch *sw, enum usb_role role)
 	     dwc2_is_device_mode(hsotg) &&
 	     hsotg->lx_state == DWC2_L2) {
 		if (hsotg->in_ppd)
-			dwc2_gadget_exit_partial_power_down(hsotg, true);
+			dwc2_gadget_exit_partial_power_down(hsotg, 0, true);
 
 		if (hsotg->params.power_down == DWC2_POWER_DOWN_PARAM_NONE &&
 		    !hsotg->params.no_clock_gating)

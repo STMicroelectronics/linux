@@ -5794,6 +5794,7 @@ int dwc2_gadget_enter_partial_power_down(struct dwc2_hsotg *hsotg)
  * power down.
  *
  * @hsotg: Programming view of the DWC_otg controller
+ * @rem_wakeup: indicates device initiated remote wakeup signal
  * @restore: indicates whether need to restore the registers or not.
  *
  * Return: non-zero if failed to exit device partial power down.
@@ -5801,7 +5802,7 @@ int dwc2_gadget_enter_partial_power_down(struct dwc2_hsotg *hsotg)
  * This function is for exiting from device mode partial power down.
  */
 int dwc2_gadget_exit_partial_power_down(struct dwc2_hsotg *hsotg,
-					bool restore)
+					int rem_wakeup, bool restore)
 {
 	u32 pcgcctl;
 	u32 dctl;
@@ -5833,6 +5834,19 @@ int dwc2_gadget_exit_partial_power_down(struct dwc2_hsotg *hsotg,
 	dctl = dwc2_readl(hsotg, DCTL);
 	dctl |= DCTL_PWRONPRGDONE;
 	dwc2_writel(hsotg, dctl, DCTL);
+
+	if (rem_wakeup) {
+		u32 glpmcfg = dwc2_readl(hsotg, GLPMCFG);
+
+		if (glpmcfg & (GLPMCFG_ENBLSLPM | GLPMCFG_HIRD_THRES_MASK)) {
+			glpmcfg &= ~(GLPMCFG_ENBLSLPM | GLPMCFG_HIRD_THRES_MASK);
+			dwc2_writel(hsotg, glpmcfg, GLPMCFG);
+		}
+
+		dwc2_writel(hsotg, dctl | DCTL_RMTWKUPSIG, DCTL);
+		mdelay(1);
+		dwc2_writel(hsotg, dctl, DCTL);
+	}
 
 	/* Set in_ppd flag to 0 as here core exits from suspend. */
 	hsotg->in_ppd = 0;

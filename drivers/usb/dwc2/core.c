@@ -120,7 +120,7 @@ int dwc2_exit_partial_power_down(struct dwc2_hsotg *hsotg, int rem_wakeup,
 		return dwc2_host_exit_partial_power_down(hsotg, rem_wakeup,
 							 restore);
 	else
-		return dwc2_gadget_exit_partial_power_down(hsotg, restore);
+		return dwc2_gadget_exit_partial_power_down(hsotg, rem_wakeup, restore);
 }
 
 /**
