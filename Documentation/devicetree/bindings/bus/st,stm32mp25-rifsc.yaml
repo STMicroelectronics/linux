@@ -33,14 +33,18 @@ select:
   properties:
     compatible:
       contains:
-        const: st,stm32mp25-rifsc
+        enum:
+          - st,stm32mp21-rifsc
+          - st,stm32mp25-rifsc
   required:
     - compatible
 
 properties:
   compatible:
     items:
-      - const: st,stm32mp25-rifsc
+      - enum:
+          - st,stm32mp21-rifsc
+          - st,stm32mp25-rifsc
       - const: simple-bus
 
   reg:
@@ -50,7 +54,7 @@ properties:
     const: 1
 
   "#size-cells":
-    const: 1
+    enum: [1, 2]
 
   ranges: true
 
@@ -74,6 +78,21 @@ patternProperties:
     required:
       - access-controllers
 
+allOf:
+  - if:
+      properties:
+        compatible:
+          contains:
+            const: st,stm32mp21-rifsc
+    then:
+      properties:
+        "#size-cells":
+          const: 2
+    else:
+      properties:
+        "#size-cells":
+          const: 1
+
 required:
   - compatible
   - reg
@@ -92,7 +111,7 @@ examples:
 
     #include <dt-bindings/interrupt-controller/arm-gic.h>
 
-    rifsc: bus@42080000 {
+    rifsc0: bus@42080000 {
         compatible = "st,stm32mp25-rifsc", "simple-bus";
         reg = <0x42080000 0x1000>;
         #address-cells = <1>;
@@ -100,11 +119,32 @@ examples:
         #access-controller-cells = <1>;
         ranges;
 
-        usart2: serial@400e0000 {
+        serial@400e0000 {
               compatible = "st,stm32h7-uart";
               reg = <0x400e0000 0x400>;
               interrupts = <GIC_SPI 115 IRQ_TYPE_LEVEL_HIGH>;
               clocks = <&ck_flexgen_08>;
-              access-controllers = <&rifsc 32>;
+              access-controllers = <&rifsc0 32>;
+        };
+    };
+  - |
+    soc@0 {
+        ranges = <0x0 0x0 0x0 0x80000000>;
+        #address-cells = <1>;
+        #size-cells = <2>;
+        rifsc1: bus@42080000 {
+            compatible = "st,stm32mp21-rifsc", "simple-bus";
+            reg = <0x42080000 0x0 0x1000>;
+            #address-cells = <1>;
+            #size-cells = <2>;
+            #access-controller-cells = <1>;
+            ranges;
+            serial@400e0000 {
+                compatible = "st,stm32h7-uart";
+                reg = <0x400e0000 0x0 0x400>;
+                interrupts = <GIC_SPI 102 IRQ_TYPE_LEVEL_HIGH>;
+                clocks = <&ck_flexgen_08>;
+                access-controllers = <&rifsc1 32>;
+            };
         };
     };
