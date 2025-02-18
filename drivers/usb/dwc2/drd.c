@@ -130,11 +130,14 @@ static int dwc2_drd_role_sw_set(struct usb_role_switch *sw, enum usb_role role)
 	if ((IS_ENABLED(CONFIG_USB_DWC2_PERIPHERAL) ||
 	     IS_ENABLED(CONFIG_USB_DWC2_DUAL_ROLE)) &&
 	     dwc2_is_device_mode(hsotg) &&
-	     hsotg->lx_state == DWC2_L2 &&
-	     hsotg->params.power_down == DWC2_POWER_DOWN_PARAM_NONE &&
-	     hsotg->bus_suspended &&
-	     !hsotg->params.no_clock_gating)
-		dwc2_gadget_exit_clock_gating(hsotg, 0);
+	     hsotg->lx_state == DWC2_L2) {
+		if (hsotg->in_ppd)
+			dwc2_gadget_exit_partial_power_down(hsotg, true);
+
+		if (hsotg->params.power_down == DWC2_POWER_DOWN_PARAM_NONE &&
+		    !hsotg->params.no_clock_gating)
+			dwc2_gadget_exit_clock_gating(hsotg, 0);
+	}
 
 	if (role == USB_ROLE_HOST) {
 		already = dwc2_ovr_avalid(hsotg, true);
