@@ -410,7 +410,7 @@ static int dw_mipi_dsi_gen_pkt_hdr_write(struct dw_mipi_dsi *dsi, u32 hdr_val)
 				 val, !(val & GEN_CMD_FULL), 1000,
 				 CMD_PKT_STATUS_TIMEOUT_US);
 	if (ret) {
-		dev_err(dsi->dev, "failed to get available command FIFO\n");
+		dev_dbg(dsi->dev, "failed to get available command FIFO\n");
 		return ret;
 	}
 
@@ -421,7 +421,7 @@ static int dw_mipi_dsi_gen_pkt_hdr_write(struct dw_mipi_dsi *dsi, u32 hdr_val)
 				 val, (val & mask) == mask,
 				 1000, CMD_PKT_STATUS_TIMEOUT_US);
 	if (ret) {
-		dev_err(dsi->dev, "failed to write command FIFO\n");
+		dev_dbg(dsi->dev, "failed to write command FIFO\n");
 		return ret;
 	}
 
