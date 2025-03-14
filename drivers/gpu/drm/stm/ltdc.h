@@ -21,6 +21,7 @@ struct ltdc_caps {
 	u32 nb_layers;		/* number of supported layers */
 	u32 layer_ofs;		/* layer offset for applicable regs */
 	const u32 *layer_regs;	/* layer register offset */
+	const u32 *conf_regs;	/* display configuration register masks */
 	u32 bus_width;		/* bus width (32 or 64 bits) */
 	const u32 *pix_fmt_hw;	/* supported hw pixel formats */
 	const u32 *pix_fmt_drm;	/* supported drm pixel formats */

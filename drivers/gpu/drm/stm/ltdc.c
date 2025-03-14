@@ -124,17 +124,14 @@
 #define LTDC_L1FPF1R	(ldev->caps.layer_regs[30])	/* L1 Flexible Pixel Format 1 */
 
 /* Bit definitions */
-#define SSCR_VSH	GENMASK(10, 0)	/* Vertical Synchronization Height */
-#define SSCR_HSW	GENMASK(27, 16)	/* Horizontal Synchronization Width */
-
-#define BPCR_AVBP	GENMASK(10, 0)	/* Accumulated Vertical Back Porch */
-#define BPCR_AHBP	GENMASK(27, 16)	/* Accumulated Horizontal Back Porch */
-
-#define AWCR_AAH	GENMASK(10, 0)	/* Accumulated Active Height */
-#define AWCR_AAW	GENMASK(27, 16)	/* Accumulated Active Width */
-
-#define TWCR_TOTALH	GENMASK(10, 0)	/* TOTAL Height */
-#define TWCR_TOTALW	GENMASK(27, 16)	/* TOTAL Width */
+#define SSCR_VSH	(ldev->caps.conf_regs[0])	/* Vertical Synchronization Height */
+#define SSCR_HSW	(ldev->caps.conf_regs[1])	/* Horizontal Synchronization Width */
+#define BPCR_AVBP	(ldev->caps.conf_regs[2])	/* Accumulated Vertical Back Porch */
+#define BPCR_AHBP	(ldev->caps.conf_regs[3])	/* Accumulated Horizontal Back Porch */
+#define AWCR_AAH	(ldev->caps.conf_regs[4])	/* Accumulated Active Height */
+#define AWCR_AAW	(ldev->caps.conf_regs[5])	/* Accumulated Active Width */
+#define TWCR_TOTALH	(ldev->caps.conf_regs[6])	/* TOTAL Height */
+#define TWCR_TOTALW	(ldev->caps.conf_regs[7])	/* TOTAL Width */
 
 #define GCR_LTDCEN	BIT(0)		/* LTDC ENable */
 #define GCR_ROTEN	BIT(2)		/* ROTation ENable */
@@ -484,6 +481,28 @@ static const u32 ltdc_layer_regs_a2[] = {
 	0x170,	/* L1 Conversion YCbCr RGB 1 */
 	0x174,	/* L1 Flexible Pixel Format 0 */
 	0x178	/* L1 Flexible Pixel Format 1 */
+};
+
+static const u32 ltdc_conf_regs_a0[] = {
+	GENMASK(10, 0),		/* Vertical Synchronization Height */
+	GENMASK(27, 16),	/* Horizontal Synchronization Width */
+	GENMASK(10, 0),		/* Accumulated Vertical Back Porch */
+	GENMASK(27, 16),	/* Accumulated Horizontal Back Porch */
+	GENMASK(10, 0),		/* Accumulated Active Height */
+	GENMASK(27, 16),	/* Accumulated Active Width */
+	GENMASK(10, 0),		/* TOTAL Height */
+	GENMASK(27, 16)		/* TOTAL Width */
+};
+
+static const u32 ltdc_conf_regs_a1[] = {
+	GENMASK(11, 0),		/* Vertical Synchronization Height */
+	GENMASK(27, 16),	/* Horizontal Synchronization Width */
+	GENMASK(11, 0),		/* Accumulated Vertical Back Porch */
+	GENMASK(27, 16),	/* Accumulated Horizontal Back Porch */
+	GENMASK(11, 0),		/* Accumulated Active Height */
+	GENMASK(27, 16),	/* Accumulated Active Width */
+	GENMASK(11, 0),		/* TOTAL Height */
+	GENMASK(27, 16)		/* TOTAL Width */
 };
 
 static const u64 ltdc_format_modifiers[] = {
@@ -2146,9 +2165,9 @@ static int ltdc_get_caps(struct drm_device *ddev)
 
 	switch (ldev->caps.hw_version) {
 	case HWVER_10200:
-	case HWVER_10300:
 		ldev->caps.layer_ofs = LAY_OFS_0;
 		ldev->caps.layer_regs = ltdc_layer_regs_a0;
+		ldev->caps.conf_regs = ltdc_conf_regs_a0;
 		ldev->caps.pix_fmt_hw = ltdc_pix_fmt_a0;
 		ldev->caps.pix_fmt_drm = ltdc_drm_fmt_a0;
 		ldev->caps.pix_fmt_nb = ARRAY_SIZE(ltdc_drm_fmt_a0);
@@ -2161,8 +2180,33 @@ static int ltdc_get_caps(struct drm_device *ddev)
 		 * does not work on 2nd layer.
 		 */
 		ldev->caps.non_alpha_only_l1 = true;
-		if (ldev->caps.hw_version == HWVER_10200)
-			ldev->caps.pad_max_freq_hz = 65000000;
+		ldev->caps.pad_max_freq_hz = 65000000;
+		ldev->caps.nb_irq = 2;
+		ldev->caps.ycbcr_input = false;
+		ldev->caps.ycbcr_output = false;
+		ldev->caps.plane_reg_shadow = false;
+		ldev->caps.crc = false;
+		ldev->caps.dynamic_zorder = false;
+		ldev->caps.plane_rotation = false;
+		ldev->caps.crtc_rotation = false;
+		ldev->caps.fifo_threshold = false;
+		break;
+	case HWVER_10300:
+		ldev->caps.layer_ofs = LAY_OFS_0;
+		ldev->caps.layer_regs = ltdc_layer_regs_a0;
+		ldev->caps.conf_regs = ltdc_conf_regs_a1;
+		ldev->caps.pix_fmt_hw = ltdc_pix_fmt_a0;
+		ldev->caps.pix_fmt_drm = ltdc_drm_fmt_a0;
+		ldev->caps.pix_fmt_nb = ARRAY_SIZE(ltdc_drm_fmt_a0);
+		ldev->caps.pix_fmt_flex = false;
+		/*
+		 * Hw older versions support non-alpha color formats derived
+		 * from native alpha color formats only on the primary layer.
+		 * For instance, RG16 native format without alpha works fine
+		 * on 2nd layer but XR24 (derived color format from AR24)
+		 * does not work on 2nd layer.
+		 */
+		ldev->caps.non_alpha_only_l1 = true;
 		ldev->caps.nb_irq = 2;
 		ldev->caps.ycbcr_input = false;
 		ldev->caps.ycbcr_output = false;
@@ -2176,6 +2220,7 @@ static int ltdc_get_caps(struct drm_device *ddev)
 	case HWVER_20101:
 		ldev->caps.layer_ofs = LAY_OFS_0;
 		ldev->caps.layer_regs = ltdc_layer_regs_a1;
+		ldev->caps.conf_regs = ltdc_conf_regs_a1;
 		ldev->caps.pix_fmt_hw = ltdc_pix_fmt_a1;
 		ldev->caps.pix_fmt_drm = ltdc_drm_fmt_a1;
 		ldev->caps.pix_fmt_nb = ARRAY_SIZE(ltdc_drm_fmt_a1);
@@ -2196,6 +2241,7 @@ static int ltdc_get_caps(struct drm_device *ddev)
 	case HWVER_40101:
 		ldev->caps.layer_ofs = LAY_OFS_1;
 		ldev->caps.layer_regs = ltdc_layer_regs_a2;
+		ldev->caps.conf_regs = ltdc_conf_regs_a1;
 		ldev->caps.pix_fmt_hw = ltdc_pix_fmt_a2;
 		ldev->caps.pix_fmt_drm = ltdc_drm_fmt_a2;
 		ldev->caps.pix_fmt_nb = ARRAY_SIZE(ltdc_drm_fmt_a2);
