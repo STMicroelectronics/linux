@@ -197,7 +197,7 @@ static int stm32_pwm_lp_apply(struct pwm_chip *chip, struct pwm_device *pwm,
 
 	ret = regmap_read(priv->regmap, STM32_LPTIM_CFGR, &cfgr);
 	if (ret)
-		return ret;
+		goto err;
 
 	/*
 	 * When there are several channels, they share the same prescaler and reload value.
@@ -206,17 +206,12 @@ static int stm32_pwm_lp_apply(struct pwm_chip *chip, struct pwm_device *pwm,
 	if (!stm32_pwm_lp_update_allowed(priv, pwm->hwpwm)) {
 		ret = regmap_read(priv->regmap, STM32_LPTIM_ARR, &arr);
 		if (ret)
-			return ret;
+			goto err;
 
-		if ((FIELD_GET(STM32_LPTIM_PRESC, cfgr) != presc) || (arr != prd - 1))
-			return -EBUSY;
-	}
-
-	if (!cstate.enabled) {
-		/* enable clock to drive PWM counter */
-		ret = pm_runtime_resume_and_get(priv->dev);
-		if (ret)
-			return ret;
+		if ((FIELD_GET(STM32_LPTIM_PRESC, cfgr) != presc) || (arr != prd - 1)) {
+			ret = -EBUSY;
+			goto err;
+		}
 	}
 
 	if ((FIELD_GET(STM32_LPTIM_PRESC, cfgr) != presc) ||
