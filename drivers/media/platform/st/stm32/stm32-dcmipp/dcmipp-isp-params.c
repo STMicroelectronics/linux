@@ -37,6 +37,8 @@ struct dcmipp_isp_params_device {
 	spinlock_t irqlock;
 	/* mutex used as vdev and queue lock */
 	struct mutex lock;
+	struct v4l2_subdev *s_subdev;
+	struct v4l2_subdev_selection s_sel;
 	u32 sequence;
 
 	void __iomem *regs;
@@ -96,6 +98,38 @@ static const struct v4l2_ioctl_ops dcmipp_isp_params_ioctl_ops = {
 	.vidioc_streamoff = vb2_ioctl_streamoff,
 };
 
+static int dcmipp_isp_params_start_streaming(struct vb2_queue *vq,
+					     unsigned int count)
+{
+	struct dcmipp_isp_params_device *vout = vb2_get_drv_priv(vq);
+	struct media_entity *entity = &vout->vdev.entity;
+	struct media_pad *pad;
+	int ret;
+
+	/* Get pointer to the source subdev (if case of not yet set */
+	if (!vout->s_subdev) {
+		pad = media_pad_remote_pad_first(&entity->pads[0]);
+		if (!pad || !is_media_entity_v4l2_subdev(pad->entity)) {
+			dev_err(vout->dev, "%s: Failed to start streaming, can't find remote entity\n",
+				__func__);
+			return -EIO;
+		}
+		vout->s_subdev = media_entity_to_v4l2_subdev(pad->entity);
+	}
+
+	/* Get frame information */
+	vout->s_sel.which = V4L2_SUBDEV_FORMAT_ACTIVE;
+	vout->s_sel.pad = 0;
+	vout->s_sel.target = V4L2_SEL_TGT_COMPOSE;
+	ret = v4l2_subdev_call(vout->s_subdev, pad, get_selection, NULL, &vout->s_sel);
+	if (ret < 0) {
+		dev_err(vout->dev, "Failed to get frame size\n");
+		return ret;
+	}
+
+	return 0;
+}
+
 /*
  * Stop the stream engine. Any remaining buffers in the stream queue are
  * dequeued and passed on to the vb2 framework marked as STATE_ERROR.
@@ -117,9 +151,11 @@ static void dcmipp_isp_params_stop_streaming(struct vb2_queue *vq)
 	spin_unlock_irq(&vout->irqlock);
 }
 
-static int dcmipp_isp_params_validate(struct stm32_dcmipp_params_cfg *params);
+static int dcmipp_isp_params_validate(struct dcmipp_isp_params_device *vout,
+				      struct stm32_dcmipp_params_cfg *params);
 static int dcmipp_isp_params_buf_prepare(struct vb2_buffer *vb)
 {
+	struct dcmipp_isp_params_device *vout =  vb2_get_drv_priv(vb->vb2_queue);
 	unsigned long size = sizeof(struct stm32_dcmipp_params_cfg);
 	struct stm32_dcmipp_params_cfg *params;
 
@@ -127,7 +163,7 @@ static int dcmipp_isp_params_buf_prepare(struct vb2_buffer *vb)
 		return -EINVAL;
 
 	params = (struct stm32_dcmipp_params_cfg *)vb2_plane_vaddr(vb, 0);
-	if (dcmipp_isp_params_validate(params) < 0)
+	if (dcmipp_isp_params_validate(vout, params) < 0)
 		return -EINVAL;
 
 	vb2_set_plane_payload(vb, 0, size);
@@ -177,6 +213,7 @@ static int dcmipp_isp_params_buf_init(struct vb2_buffer *vb)
 }
 
 static const struct vb2_ops dcmipp_isp_params_qops = {
+	.start_streaming	= dcmipp_isp_params_start_streaming,
 	.stop_streaming		= dcmipp_isp_params_stop_streaming,
 	.buf_init		= dcmipp_isp_params_buf_init,
 	.buf_prepare		= dcmipp_isp_params_buf_prepare,
@@ -444,10 +481,147 @@ dcmipp_isp_params_apply_ce(struct dcmipp_isp_params_device *vout,
 		  cfg->lum[8] << DCMIPP_P1CTCR3_LUM8_SHIFT);
 }
 
+#define DCMIPP_P1HSCR			0x8b0
+#define DCMIPP_P1HSCR_ENABLE		BIT(0)
+#define DCMIPP_P1HSCR_SRC_SHIFT		1
+#define DCMIPP_P1HSCR_HREG_SHIFT	4
+#define DCMIPP_P1HSCR_VREG_SHIFT	8
+#define DCMIPP_P1HSCR_HDEC_SHIFT	12
+#define DCMIPP_P1HSCR_VDEC_SHIFT	16
+#define DCMIPP_P1HSCR_COMP_SHIFT	20
+#define DCMIPP_P1HSCR_DYN_SHIFT		24
+#define DCMIPP_P1HSCR_BIN_SHIFT		26
+
+#define DCMIPP_P1HSSTR			0x8b4
+#define DCMIPP_P1HSSTR_HSTART_SHIFT	0
+#define DCMIPP_P1HSSTR_VSTART_SHIFT	16
+
+#define DCMIPP_P1HSSZR			0x8b8
+#define DCMIPP_P1HSSZR_HSIZE_SHIFT	0
+#define DCMIPP_P1HSSZR_VSIZE_SHIFT	16
+
+#define DCMIPP_MAX_BINS_PER_LINE	320
+
+static inline int
+dcmipp_isp_params_get_bin_size(__u8 bin)
+{
+	if (bin == STM32_DCMIPP_ISP_HISTO_BIN_4)
+		return 4;
+	else if (bin == STM32_DCMIPP_ISP_HISTO_BIN_16)
+		return 16;
+	else if (bin == STM32_DCMIPP_ISP_HISTO_BIN_64)
+		return 64;
+	else if (bin == STM32_DCMIPP_ISP_HISTO_BIN_256)
+		return 256;
+
+	/* Unreached */
+	return 0;
+}
+
+static inline int
+dcmipp_isp_params_valid_histo(struct dcmipp_isp_params_device *vout,
+			      struct stm32_dcmipp_isp_histo_cfg *cfg)
+{
+	unsigned int bins_per_line;
+
+	if (cfg->bin > STM32_DCMIPP_ISP_HISTO_BIN_256)
+		return -EINVAL;
+
+	if (cfg->dyn > STM32_DCMIPP_ISP_HISTO_DYN_DARK)
+		return -EINVAL;
+
+	if (cfg->comp > STM32_DCMIPP_ISP_HISTO_COMP_ALL)
+		return -EINVAL;
+
+	if (cfg->vdec > STM32_DCMIPP_ISP_HISTO_VHDEC_16)
+		return -EINVAL;
+
+	if (cfg->hdec > STM32_DCMIPP_ISP_HISTO_VHDEC_16)
+		return -EINVAL;
+
+	if (!cfg->vreg || cfg->vreg > STM32_DCMIPP_ISP_HISTO_MAX_VHREG)
+		return -EINVAL;
+
+	if (!cfg->hreg || cfg->hreg > STM32_DCMIPP_ISP_HISTO_MAX_VHREG)
+		return -EINVAL;
+
+	if (cfg->src > STM32_DCMIPP_ISP_HISTO_SRC_POST_CE)
+		return -EINVAL;
+
+	if (cfg->top > DCMIPP_PIXEL_FRAME_MAX_HEIGHT ||
+	    cfg->left > DCMIPP_PIXEL_FRAME_MAX_WIDTH ||
+	    cfg->width > DCMIPP_PIXEL_FRAME_MAX_WIDTH ||
+	    cfg->height > DCMIPP_PIXEL_FRAME_MAX_HEIGHT) {
+		dev_err(vout->dev, "Invalid histogram top/left/width/height values\n");
+		return -EINVAL;
+	}
+
+	/* Region width/height should be a multiple of decimation */
+	if (cfg->width % (1 << cfg->hdec)) {
+		dev_err(vout->dev, "Histogram region width should be multiple of decimation\n");
+		return -EINVAL;
+	}
+	if (cfg->height % (1 << cfg->vdec)) {
+		dev_err(vout->dev, "Histogram region height should be multiple of decimation\n");
+		return -EINVAL;
+	}
+
+	/* Region width/height * nb of region should not exceed frame size */
+	if (cfg->left + cfg->width * cfg->hreg > vout->s_sel.r.width ||
+	    cfg->top + cfg->height * cfg->vreg > vout->s_sel.r.height) {
+		dev_err(vout->dev, "Histogram region size exceed frame size\n");
+		return -EINVAL;
+	}
+
+	/*
+	 * The DCMIPP as a maximum of 320 BINS per line so we need to ensure that
+	 * requested settings can be achieved
+	 */
+	bins_per_line = dcmipp_isp_params_get_bin_size(cfg->bin) * cfg->hreg;
+	bins_per_line *= (cfg->comp == STM32_DCMIPP_ISP_HISTO_COMP_ALL ? 4 : 1);
+	if (bins_per_line > DCMIPP_MAX_BINS_PER_LINE) {
+		dev_err(vout->dev, "Histogram config exceed maximum BINS caps: %d instead of 320\n",
+			bins_per_line);
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
+static inline void
+dcmipp_isp_params_apply_histo(struct dcmipp_isp_params_device *vout,
+			      struct stm32_dcmipp_isp_histo_cfg *cfg)
+{
+	bool is_enabled = reg_read(vout, DCMIPP_P1HSCR) & DCMIPP_P1HSCR_ENABLE;
+	u32 hscr = 0;
+
+	reg_write(vout, DCMIPP_P1HSSTR,
+		  (cfg->left << DCMIPP_P1HSSTR_HSTART_SHIFT) |
+		  (cfg->top << DCMIPP_P1HSSTR_VSTART_SHIFT));
+
+	reg_write(vout, DCMIPP_P1HSSZR,
+		  (cfg->width << DCMIPP_P1HSSZR_HSIZE_SHIFT) |
+		  (cfg->height << DCMIPP_P1HSSZR_VSIZE_SHIFT));
+
+	hscr = cfg->bin << DCMIPP_P1HSCR_BIN_SHIFT |
+	       cfg->dyn << DCMIPP_P1HSCR_DYN_SHIFT |
+	       cfg->comp << DCMIPP_P1HSCR_COMP_SHIFT |
+	       cfg->vdec << DCMIPP_P1HSCR_VDEC_SHIFT |
+	       cfg->hdec << DCMIPP_P1HSCR_HDEC_SHIFT |
+	       (cfg->vreg - 1) << DCMIPP_P1HSCR_VREG_SHIFT |
+	       (cfg->hreg - 1) << DCMIPP_P1HSCR_HREG_SHIFT |
+	       cfg->src << DCMIPP_P1HSCR_SRC_SHIFT |
+	       (is_enabled ? DCMIPP_P1HSCR_ENABLE : 0);
+
+	reg_write(vout, DCMIPP_P1HSCR, hscr);
+}
+
 #define DCMIPP_MODULE_CFG_MASK	(STM32_DCMIPP_ISP_BPR | STM32_DCMIPP_ISP_BLC | \
 				 STM32_DCMIPP_ISP_EX | STM32_DCMIPP_ISP_DM | \
-				 STM32_DCMIPP_ISP_CC | STM32_DCMIPP_ISP_CE)
-static int dcmipp_isp_params_validate(struct stm32_dcmipp_params_cfg *params)
+				 STM32_DCMIPP_ISP_CC | STM32_DCMIPP_ISP_CE | \
+				 STM32_DCMIPP_ISP_HISTO)
+static int dcmipp_isp_params_validate(struct dcmipp_isp_params_device *vout,
+				      struct stm32_dcmipp_params_cfg *params)
 {
 	int ret;
 
@@ -478,6 +652,16 @@ static int dcmipp_isp_params_validate(struct stm32_dcmipp_params_cfg *params)
 		if (ret)
 			return ret;
 	}
+	if (params->module_cfg_update & STM32_DCMIPP_ISP_HISTO) {
+		if (!vout->ved.dcmipp->pipe_cfg->has_histo) {
+			dev_err(vout->dev, "DCMIPP ISP Histogram not supported on this SOC\n");
+			return -EINVAL;
+		}
+
+		ret = dcmipp_isp_params_valid_histo(vout, &params->ctrls.histo_cfg);
+		if (ret)
+			return ret;
+	}
 
 	return 0;
 }
@@ -498,6 +682,8 @@ dcmipp_isp_params_apply(struct dcmipp_isp_params_device *vout,
 		dcmipp_isp_params_apply_cc(vout, &buf->ctrls.cc_cfg);
 	if (buf->module_cfg_update & STM32_DCMIPP_ISP_CE)
 		dcmipp_isp_params_apply_ce(vout, &buf->ctrls.ce_cfg);
+	if (buf->module_cfg_update & STM32_DCMIPP_ISP_HISTO)
+		dcmipp_isp_params_apply_histo(vout, &buf->ctrls.histo_cfg);
 }
 
 static irqreturn_t dcmipp_isp_params_irq_thread(int irq, void *arg)
@@ -568,6 +754,8 @@ dcmipp_isp_params_ent_init(const char *entity_name,
 		ret = PTR_ERR(vout->ved.pads);
 		goto err_free_vout;
 	}
+
+	vout->ved.dcmipp = dcmipp;
 
 	/* Initialize the media entity */
 	vout->vdev.entity.name = entity_name;
