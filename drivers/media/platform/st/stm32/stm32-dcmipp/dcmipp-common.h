@@ -130,6 +130,7 @@ struct dcmipp_pipeline_config {
 	bool has_csi2;
 	bool needs_mclk;
 	bool has_swapyuv;
+	bool has_histo;
 };
 
 /**

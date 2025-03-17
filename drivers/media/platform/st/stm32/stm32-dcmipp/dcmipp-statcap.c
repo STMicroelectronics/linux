@@ -15,13 +15,23 @@
 #include <media/v4l2-ioctl.h>
 #include <media/v4l2-mc.h>
 #include <media/videobuf2-core.h>
-#include <media/videobuf2-vmalloc.h>
+#include <media/videobuf2-dma-contig.h>
 
 #include <uapi/linux/stm32-dcmipp-config.h>
 
 #include "dcmipp-common.h"
 
+#define DCMIPP_CMIER		0x3f0
+#define DCMIPP_CMIER_HSFRAMEF	BIT(20)
+#define DCMIPP_CMIER_HSBCF	BIT(21)
+#define DCMIPP_CMIER_HSOVRF	BIT(22)
+
+#define DCMIPP_CMFCR		0x3fc
+
 #define DCMIPP_CMSR2_P1VSYNCF	BIT(18)
+#define DCMIPP_CMSR2_HSFRAMEF	BIT(20)
+#define DCMIPP_CMSR2_HSBCF	BIT(21)
+#define DCMIPP_CMSR2_HSOVRF	BIT(22)
 #define DCMIPP_CMSR2_P2VSYNCF	BIT(26)
 
 #define DCMIPP_P1BPRSR			0x828
@@ -53,6 +63,18 @@
 #define DCMIPP_P1STXSR(a)		(0x864 + ((a) * 0x4))
 
 #define DCMIPP_NB_STAT_REGION	1
+
+/* Histogram block - only available starting from stm32mp21 */
+#define DCMIPP_P1HSCR			0x8b0
+#define DCMIPP_P1HSCR_ENABLE		BIT(0)
+
+#define DCMIPP_P1HSSTR			0x8b4
+#define DCMIPP_P1HSSTR_START(x, y)	((x) | ((y) << 16))
+
+#define DCMIPP_P1HSSZR			0x8b8
+#define DCMIPP_P1HSSZR_SIZE(w, h)	((w) | ((h) << 16))
+
+#define DCMIPP_P1HSMAR1			0x8bc
 
 struct dcmipp_buf {
 	struct vb2_v4l2_buffer	vb;
@@ -90,7 +112,16 @@ struct dcmipp_statcap_device {
 	struct v4l2_ctrl_handler ctrls;
 	/* Protect ctrls */
 	struct vb2_queue queue;
+	/*
+	 * The buffers list contains buffers ready for local_buf copy.
+	 * This is the only list used when histogram are not used.
+	 */
 	struct list_head buffers;
+	/*
+	 * The queue_buffers list contains buffers which are empty of both histogram
+	 * and local_buf copy.  This list is only used when histogram are being used.
+	 */
+	struct list_head queued_buffers;
 	/* Protects the access of variables shared within the interrupt */
 	spinlock_t irqlock;
 	/* Protect this data structure */
@@ -105,6 +136,19 @@ struct dcmipp_statcap_device {
 	enum v4l2_isp_stat_profile stat_profile;
 	u32 stat_location;
 	bool stat_ready;
+
+	enum dcmipp_state state;
+
+	/*
+	 * DCMIPP driver is handling 2 buffers
+	 * active: buffer into which DCMIPP is currently writing into
+	 * next: buffer given to the DCMIPP and which will become
+	 *       automatically active on next VSYNC
+	 */
+	struct dcmipp_buf *active, *next;
+
+	u32 cmier;
+	u32 cmsr2;
 
 	/*
 	 * indicate the current state of the capture stat machine,
@@ -216,13 +260,20 @@ static int dcmipp_statcap_start_streaming(struct vb2_queue *vq,
 {
 	struct dcmipp_statcap_device *vcap = vb2_get_drv_priv(vq);
 	struct media_entity *entity = &vcap->vdev.entity;
+	struct list_head *buffer_list;
 	struct dcmipp_buf *buf, *node;
 	struct v4l2_subdev_format fmt;
+	struct v4l2_subdev_selection sel;
 	struct v4l2_subdev *s_subdev;
 	struct media_pad *s_pad;
 	int ret;
 
 	vcap->sequence = 0;
+
+	if (!vcap->ved.dcmipp->pipe_cfg->has_histo)
+		buffer_list = &vcap->buffers;
+	else
+		buffer_list = &vcap->queued_buffers;
 
 	ret = pm_runtime_resume_and_get(vcap->dev);
 	if (ret < 0) {
@@ -268,6 +319,43 @@ static int dcmipp_statcap_start_streaming(struct vb2_queue *vq,
 		goto err_media_pipeline_stop;
 	}
 
+	if (!vcap->ved.dcmipp->pipe_cfg->has_histo)
+		return 0;
+
+	/* Get compose size from the ISP sink pad */
+	sel.which = V4L2_SUBDEV_FORMAT_ACTIVE;
+	sel.pad = 0;
+	sel.target = V4L2_SEL_TGT_COMPOSE;
+	ret = v4l2_subdev_call(s_subdev, pad, get_selection, NULL, &sel);
+	if (ret < 0) {
+		dev_err(vcap->dev, "%s: Failed to start streaming, can't get compose (%d)\n",
+			__func__, ret);
+		goto err_media_pipeline_stop;
+	}
+
+	spin_lock_irq(&vcap->irqlock);
+
+	/*
+	 * vb2 framework guarantee that we have at least 'min_buffers_needed'
+	 * buffers in the list at this moment
+	 */
+	vcap->next = list_first_entry(buffer_list, typeof(*buf), list);
+	dev_dbg(vcap->dev, "Start with next [%d] %p phy=%pad\n",
+		vcap->next->vb.vb2_buf.index, vcap->next, &vcap->next->paddr);
+
+	reg_write(vcap, DCMIPP_P1HSMAR1, vcap->next->paddr);
+	reg_set(vcap, DCMIPP_P1HSCR, DCMIPP_P1HSCR_ENABLE);
+
+	/* Enable interruptions */
+	vcap->cmier |= DCMIPP_CMIER_HSFRAMEF | DCMIPP_CMIER_HSBCF | DCMIPP_CMIER_HSOVRF;
+	spin_lock(&vcap->vdev.v4l2_dev->lock);
+	reg_set(vcap, DCMIPP_CMIER, vcap->cmier);
+	spin_unlock(&vcap->vdev.v4l2_dev->lock);
+
+	vcap->state = DCMIPP_RUNNING;
+
+	spin_unlock_irq(&vcap->irqlock);
+
 	return 0;
 
 err_media_pipeline_stop:
@@ -280,10 +368,11 @@ err_buffer_done:
 	 * Return all buffers to vb2 in QUEUED state.
 	 * This will give ownership back to userspace
 	 */
-	list_for_each_entry_safe(buf, node, &vcap->buffers, list) {
+	list_for_each_entry_safe(buf, node, buffer_list, list) {
 		list_del_init(&buf->list);
 		vb2_buffer_done(&buf->vb.vb2_buf, VB2_BUF_STATE_QUEUED);
 	}
+	vcap->active = NULL;
 	spin_unlock_irq(&vcap->irqlock);
 
 	return ret;
@@ -317,6 +406,15 @@ static void dcmipp_statcap_stop_streaming(struct vb2_queue *vq)
 	/* Stop the media pipeline */
 	media_pipeline_stop(vcap->vdev.entity.pads);
 
+	/* Stop histogram capture */
+	reg_clear(vcap, DCMIPP_P1HSCR, DCMIPP_P1HSCR_ENABLE);
+
+	/* Disable interruptions */
+	spin_lock(&vcap->vdev.v4l2_dev->lock);
+	reg_clear(vcap, DCMIPP_CMIER, vcap->cmier);
+	vcap->cmier = 0;
+	spin_unlock(&vcap->vdev.v4l2_dev->lock);
+
 	spin_lock_irq(&vcap->irqlock);
 
 	/* Return all queued buffers to vb2 in ERROR state */
@@ -325,6 +423,16 @@ static void dcmipp_statcap_stop_streaming(struct vb2_queue *vq)
 		vb2_buffer_done(&buf->vb.vb2_buf, VB2_BUF_STATE_ERROR);
 	}
 	INIT_LIST_HEAD(&vcap->buffers);
+	if (vcap->ved.dcmipp->pipe_cfg->has_histo) {
+		list_for_each_entry_safe(buf, node, &vcap->queued_buffers, list) {
+			list_del_init(&buf->list);
+			vb2_buffer_done(&buf->vb.vb2_buf, VB2_BUF_STATE_ERROR);
+		}
+		INIT_LIST_HEAD(&vcap->queued_buffers);
+	}
+
+	vcap->active = NULL;
+	vcap->state = DCMIPP_STOPPED;
 
 	spin_unlock_irq(&vcap->irqlock);
 
@@ -334,7 +442,10 @@ static void dcmipp_statcap_stop_streaming(struct vb2_queue *vq)
 static int dcmipp_statcap_buf_prepare(struct vb2_buffer *vb)
 {
 	struct dcmipp_statcap_device *vcap =  vb2_get_drv_priv(vb->vb2_queue);
+	struct vb2_v4l2_buffer *vbuf = to_vb2_v4l2_buffer(vb);
+	struct dcmipp_buf *buf = container_of(vbuf, struct dcmipp_buf, vb);
 	unsigned long size = sizeof(struct stm32_dcmipp_stat_buf);
+	dma_addr_t buf_head;
 
 	if (vb2_plane_size(vb, 0) < size) {
 		dev_err(vcap->dev, "%s data will not fit into plane (%lu < %lu)\n",
@@ -343,6 +454,17 @@ static int dcmipp_statcap_buf_prepare(struct vb2_buffer *vb)
 	}
 
 	vb2_set_plane_payload(vb, 0, size);
+
+	if (!buf->prepared) {
+		buf_head = vb2_dma_contig_plane_dma_addr(&buf->vb.vb2_buf, 0);
+		buf->paddr = buf_head + offsetof(struct stm32_dcmipp_stat_buf, histograms);
+		buf->size = vb2_plane_size(&buf->vb.vb2_buf, 0);
+
+		buf->prepared = true;
+
+		dev_dbg(vcap->dev, "buffer[%d] buf_head=%pad, size=%zu, histo=%pad\n",
+			vb->index, &buf_head, buf->size, &buf->paddr);
+	}
 
 	return 0;
 }
@@ -353,8 +475,30 @@ static void dcmipp_statcap_buf_queue(struct vb2_buffer *vb2_buf)
 	struct vb2_v4l2_buffer *vbuf = to_vb2_v4l2_buffer(vb2_buf);
 	struct dcmipp_buf *buf = container_of(vbuf, struct dcmipp_buf, vb);
 
+	dev_dbg(vcap->dev, "Queue [%d] %p phy=%pad\n", buf->vb.vb2_buf.index,
+		buf, &buf->paddr);
+
 	spin_lock_irq(&vcap->irqlock);
-	list_add_tail(&buf->list, &vcap->buffers);
+
+	if (vcap->ved.dcmipp->pipe_cfg->has_histo)
+		list_add_tail(&buf->list, &vcap->queued_buffers);
+	else
+		list_add_tail(&buf->list, &vcap->buffers);
+
+	if (vcap->state == DCMIPP_WAIT_FOR_BUFFER) {
+		vcap->next = buf;
+		dev_dbg(vcap->dev, "Restart with next [%d] %p phy=%pad\n",
+			buf->vb.vb2_buf.index, buf, &buf->paddr);
+
+		reg_write(vcap, DCMIPP_P1HSMAR1, vcap->next->paddr);
+		reg_set(vcap, DCMIPP_P1HSCR, DCMIPP_P1HSCR_ENABLE);
+
+		vcap->state = DCMIPP_RUNNING;
+
+		spin_unlock_irq(&vcap->irqlock);
+		return;
+	}
+
 	spin_unlock_irq(&vcap->irqlock);
 }
 
@@ -477,6 +621,7 @@ static int dcmipp_statcap_s_ctrl(struct v4l2_ctrl *ctrl)
 			(region->width[0] << DCMIPP_P1STSZR_HSIZE_SHIFT) |
 			(region->height[0] << DCMIPP_P1STSZR_VSIZE_SHIFT) |
 			DCMIPP_P1STSZR_ENABLE);
+
 		vcap->capture_state = COLD_START;
 		spin_unlock_irq(&vcap->irqlock);
 		break;
@@ -567,6 +712,22 @@ void dcmipp_statcap_ent_release(struct dcmipp_ent_device *ved)
 
 	media_entity_cleanup(ved->ent);
 	vb2_video_unregister_device(&vcap->vdev);
+}
+
+static irqreturn_t dcmipp_statcap_irq_callback(int irq, void *arg)
+{
+	struct dcmipp_statcap_device *vcap =
+			container_of(arg, struct dcmipp_statcap_device, ved);
+	struct dcmipp_ent_device *ved = arg;
+
+	vcap->cmsr2 = ved->cmsr2 & (vcap->cmier | DCMIPP_CMSR2_P1VSYNCF | DCMIPP_CMSR2_P2VSYNCF);
+	if (!vcap->cmsr2)
+		return IRQ_HANDLED;
+
+	/* Clear interrupt */
+	reg_write(vcap, DCMIPP_CMFCR, ved->cmsr2 & vcap->cmier);
+
+	return IRQ_WAKE_THREAD;
 }
 
 static void dcmipp_statcap_buffer_done(struct dcmipp_statcap_device *vcap,
@@ -777,6 +938,38 @@ static void dcmipp_statcap_update_local_buf(struct dcmipp_statcap_device *vcap)
 	}
 }
 
+/* irqlock must be held */
+static void
+dcmipp_statcap_set_next_buf_or_stop(struct dcmipp_statcap_device *vcap)
+{
+	if (!vcap->next && list_is_singular(&vcap->queued_buffers)) {
+		/*
+		 * If there is no available buffer (none or a single one in the list while two
+		 * are expected), stop the capture (effective for next frame). On-going histo
+		 * capture will continue till FRAME END but no further capture will be done.
+		 */
+		reg_clear(vcap, DCMIPP_P1HSCR, DCMIPP_P1HSCR_ENABLE);
+
+		dev_dbg(vcap->dev,
+			"Histogram capture restart deferred to next buffer queueing\n");
+		vcap->state = DCMIPP_WAIT_FOR_BUFFER;
+		return;
+	}
+
+	/* If we don't have buffer yet, pick the one after active */
+	if (!vcap->next)
+		vcap->next = list_next_entry(vcap->active, list);
+
+	/*
+	 * Set histogram address
+	 * The register is shadowed and will be taken into
+	 * account on next VSYNC (start of next frame)
+	 */
+	reg_write(vcap, DCMIPP_P1HSMAR1, vcap->next->paddr);
+	dev_dbg(vcap->dev, "Write [%d] %p phy=%pad\n",
+		vcap->next->vb.vb2_buf.index, vcap->next, &vcap->next->paddr);
+}
+
 static irqreturn_t dcmipp_statcap_irq_thread(int irq, void *arg)
 {
 	struct dcmipp_statcap_device *vcap =
@@ -789,17 +982,57 @@ static irqreturn_t dcmipp_statcap_irq_thread(int irq, void *arg)
 
 	spin_lock_irq(&vcap->irqlock);
 
-	dcmipp_statcap_update_local_buf(vcap);
+	if (vcap->cmsr2 & (DCMIPP_CMSR2_P1VSYNCF | DCMIPP_CMSR2_P2VSYNCF)) {
+		dcmipp_statcap_update_local_buf(vcap);
 
-	/* If a full capture cycle has been done, output data to a buffer */
-	if (vcap->stat_ready) {
-		/* Get an available buffer */
-		if (!list_empty(&vcap->buffers)) {
-			cur_buf = list_first_entry(&vcap->buffers, struct dcmipp_buf, list);
-			list_del(&cur_buf->list);
+		/* If a full capture cycle has been done, output data to a buffer */
+		if (vcap->stat_ready) {
+			/* Get an available buffer */
+			if (!list_empty(&vcap->buffers)) {
+				cur_buf = list_first_entry(&vcap->buffers, struct dcmipp_buf, list);
+				list_del(&cur_buf->list);
+			}
+			if (cur_buf)
+				dcmipp_statcap_buffer_done(vcap, cur_buf);
 		}
-		if (cur_buf)
-			dcmipp_statcap_buffer_done(vcap, cur_buf);
+
+		if (vcap->state == DCMIPP_RUNNING) {
+			swap(vcap->active, vcap->next);
+			dcmipp_statcap_set_next_buf_or_stop(vcap);
+		}
+	}
+
+	if (vcap->cmsr2 & DCMIPP_CMIER_HSBCF) {
+		/* If bad config is received, skip the HSFRAMEF is existing */
+		dev_err(vcap->dev, "Received Histogram bad configuration error\n");
+		if (vcap->active) {
+			list_del(&vcap->active->list);
+			vb2_buffer_done(&vcap->active->vb.vb2_buf, VB2_BUF_STATE_ERROR);
+			vcap->active = NULL;
+		}
+		spin_unlock_irq(&vcap->irqlock);
+		return IRQ_HANDLED;
+	}
+
+	if (vcap->cmsr2 & DCMIPP_CMIER_HSOVRF) {
+		/* If bad config is received, skip the HSFRAMEF is existing */
+		dev_err(vcap->dev, "Received Histogram overrun error\n");
+		if (vcap->active) {
+			list_del(&vcap->active->list);
+			vb2_buffer_done(&vcap->active->vb.vb2_buf, VB2_BUF_STATE_ERROR);
+			vcap->active = NULL;
+		}
+		spin_unlock_irq(&vcap->irqlock);
+		return IRQ_HANDLED;
+	}
+
+	if (vcap->cmsr2 & DCMIPP_CMIER_HSFRAMEF) {
+		if (vcap->active) {
+			/* Remove from the queued_buffers and add into buffers */
+			list_del_init(&vcap->active->list);
+			list_add_tail(&vcap->active->list, &vcap->buffers);
+			vcap->active = NULL;
+		}
 	}
 
 	spin_unlock_irq(&vcap->irqlock);
@@ -849,7 +1082,7 @@ dcmipp_statcap_ent_init(const char *entity_name, struct dcmipp_device *dcmipp)
 	q->drv_priv = vcap;
 	q->buf_struct_size = sizeof(struct dcmipp_buf);
 	q->ops = &dcmipp_statcap_qops;
-	q->mem_ops = &vb2_vmalloc_memops;
+	q->mem_ops = &vb2_dma_contig_memops;
 	q->timestamp_flags = V4L2_BUF_FLAG_TIMESTAMP_MONOTONIC;
 	q->min_queued_buffers = 1;
 	q->dev = dev;
@@ -861,13 +1094,14 @@ dcmipp_statcap_ent_init(const char *entity_name, struct dcmipp_device *dcmipp)
 		goto err_clean_m_ent;
 	}
 
-	/* Initialize buffer list and its lock */
+	/* Initialize buffer lists and lock */
 	INIT_LIST_HEAD(&vcap->buffers);
+	INIT_LIST_HEAD(&vcap->queued_buffers);
 	spin_lock_init(&vcap->irqlock);
 
 	/* Fill the dcmipp_ent_device struct */
 	vcap->ved.ent = &vcap->vdev.entity;
-	vcap->ved.handler = NULL;
+	vcap->ved.handler = dcmipp_statcap_irq_callback;
 	vcap->ved.thread_fn = dcmipp_statcap_irq_thread;
 	vcap->dev = dev;
 	vcap->regs = dcmipp->regs;
