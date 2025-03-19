@@ -424,30 +424,8 @@ static int stm32_pwm_lp_resume(struct device *dev)
 	return pinctrl_pm_select_default_state(dev);
 }
 
-static int stm32_pwm_lp_runtime_suspend(struct device *dev)
-{
-	struct stm32_pwm_lp *priv = dev_get_drvdata(dev);
-
-	clk_disable(priv->clk);
-
-	return 0;
-}
-
-static int stm32_pwm_lp_runtime_resume(struct device *dev)
-{
-	struct stm32_pwm_lp *priv = dev_get_drvdata(dev);
-	int ret;
-
-	ret = clk_enable(priv->clk);
-	if (ret)
-		dev_err(dev, "failed to enable clock. Error [%d]\n", ret);
-
-	return ret;
-}
-
 static const struct dev_pm_ops stm32_pwm_lp_pm_ops = {
 	SYSTEM_SLEEP_PM_OPS(stm32_pwm_lp_suspend, stm32_pwm_lp_resume)
-	RUNTIME_PM_OPS(stm32_pwm_lp_runtime_suspend, stm32_pwm_lp_runtime_resume, NULL)
 };
 
 static const struct of_device_id stm32_pwm_lp_of_match[] = {
