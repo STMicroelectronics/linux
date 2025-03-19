@@ -95,18 +95,13 @@ static int stm32_lptimer_probe(struct platform_device *pdev)
 	if (IS_ERR(mmio))
 		return PTR_ERR(mmio);
 
-	ddata->regmap = devm_regmap_init_mmio_clk(dev, "mux", mmio,
-						  &stm32_lptimer_regmap_cfg);
+	ddata->regmap = devm_regmap_init_mmio(dev, mmio, &stm32_lptimer_regmap_cfg);
 	if (IS_ERR(ddata->regmap))
 		return PTR_ERR(ddata->regmap);
 
-	ddata->clk = devm_clk_get(dev, NULL);
+	ddata->clk = devm_clk_get_prepared(dev, NULL);
 	if (IS_ERR(ddata->clk))
 		return PTR_ERR(ddata->clk);
-
-	ret = stm32_lptimer_detect_hwcfgr(ddata);
-	if (ret)
-		return ret;
 
 	platform_set_drvdata(pdev, ddata);
 
@@ -114,8 +109,39 @@ static int stm32_lptimer_probe(struct platform_device *pdev)
 	if (ret)
 		return ret;
 
+	ret = pm_runtime_resume_and_get(dev);
+		if (ret)
+			return ret;
+
+	ret = stm32_lptimer_detect_hwcfgr(ddata);
+	if (ret)
+		return ret;
+
+	pm_runtime_put(dev);
+
 	return devm_of_platform_populate(&pdev->dev);
 }
+
+static int stm32_lptimer_runtime_suspend(struct device *dev)
+{
+	struct stm32_lptimer *priv = dev_get_drvdata(dev);
+
+	clk_disable(priv->clk);
+
+	return 0;
+}
+
+static int stm32_lptimer_runtime_resume(struct device *dev)
+{
+	struct stm32_lptimer *priv = dev_get_drvdata(dev);
+
+	return clk_enable(priv->clk);
+}
+
+static const struct dev_pm_ops stm32_lptim_pm_ops = {
+	SET_SYSTEM_SLEEP_PM_OPS(pm_runtime_force_suspend, pm_runtime_force_resume)
+	SET_RUNTIME_PM_OPS(stm32_lptimer_runtime_suspend, stm32_lptimer_runtime_resume, NULL)
+};
 
 static const struct of_device_id stm32_lptimer_of_match[] = {
 	{ .compatible = "st,stm32-lptimer", },
@@ -128,6 +154,7 @@ static struct platform_driver stm32_lptimer_driver = {
 	.driver = {
 		.name = "stm32-lptimer",
 		.of_match_table = stm32_lptimer_of_match,
+		.pm = pm_ptr(&stm32_lptim_pm_ops),
 	},
 };
 module_platform_driver(stm32_lptimer_driver);
