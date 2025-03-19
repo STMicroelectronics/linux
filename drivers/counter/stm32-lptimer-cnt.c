@@ -514,30 +514,8 @@ static int stm32_lptim_cnt_resume(struct device *dev)
 	return 0;
 }
 
-static int stm32_lptim_cnt_runtime_suspend(struct device *dev)
-{
-	struct stm32_lptim_cnt *priv = dev_get_drvdata(dev);
-
-	clk_disable(priv->clk);
-
-	return 0;
-}
-
-static int stm32_lptim_cnt_runtime_resume(struct device *dev)
-{
-	struct stm32_lptim_cnt *priv = dev_get_drvdata(dev);
-	int ret;
-
-	ret = clk_enable(priv->clk);
-	if (ret)
-		dev_err(dev, "failed to enable clock. Error [%d]\n", ret);
-
-	return ret;
-}
-
 static const struct dev_pm_ops stm32_lptim_cnt_pm_ops = {
 	SYSTEM_SLEEP_PM_OPS(stm32_lptim_cnt_suspend, stm32_lptim_cnt_resume)
-	RUNTIME_PM_OPS(stm32_lptim_cnt_runtime_suspend, stm32_lptim_cnt_runtime_resume, NULL)
 };
 
 static const struct of_device_id stm32_lptim_cnt_of_match[] = {
