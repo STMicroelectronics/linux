@@ -1617,8 +1617,10 @@ static void stm32_pconf_dbg_show(struct pinctrl_dev *pctldev,
 	bool val;
 
 	range = pinctrl_find_gpio_range_from_pin_nolock(pctldev, pin);
-	if (!range)
+	if (!range) {
+		seq_puts(s, "NO ACCESS");
 		return;
+	}
 
 	bank = gpiochip_get_data(range->gc);
 	offset = stm32_gpio_pin(pin);
