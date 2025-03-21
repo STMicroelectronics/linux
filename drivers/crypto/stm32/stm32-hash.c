@@ -696,7 +696,7 @@ static int stm32_hash_dma_send(struct stm32_hash_dev *hdev)
 				 */
 				sg->length = rctx->total - bufcnt;
 				if (hdev->dma_mode > 0) {
-					len = (ALIGN(sg->length, 16) - 16);
+					len = sg->length ? (ALIGN(sg->length, 16) - 16) : 0;
 
 					ncp = sg_pcopy_to_buffer(rctx->sg, rctx->nents,
 								 rctx->state.buffer,
