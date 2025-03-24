@@ -370,7 +370,7 @@ static __maybe_unused int mdio_bus_phy_suspend(struct device *dev)
 static __maybe_unused int mdio_bus_phy_resume(struct device *dev)
 {
 	struct phy_device *phydev = to_phy_device(dev);
-	int ret;
+	int ret = 0;
 
 	if (phydev->mac_managed_pm)
 		return 0;
@@ -379,6 +379,10 @@ static __maybe_unused int mdio_bus_phy_resume(struct device *dev)
 		goto no_resume;
 
 	phydev->suspended_by_mdio_bus = 0;
+
+	/* Already RUNNING no need to resume */
+	if (phydev->state == PHY_RUNNING)
+		return ret;
 
 	/* If we managed to get here with the PHY state machine in a state
 	 * neither PHY_HALTED, PHY_READY nor PHY_UP, this is an indication
