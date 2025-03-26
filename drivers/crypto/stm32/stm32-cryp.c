@@ -1970,7 +1970,8 @@ static int stm32_cryp_read_auth_tag(struct stm32_cryp *cryp)
 	cfg &= ~CR_DEC_NOT_ENC;
 	cfg |= CR_CRYPEN;
 
-	stm32_cryp_write(cryp, cryp->caps->cr, cfg);
+	/* Not relaxed: this ensures write completes before continuing */
+	writel(cfg, cryp->regs + cryp->caps->cr);
 
 	if (is_gcm(cryp)) {
 		/* GCM: write aad and payload size (in bits) */
