@@ -2053,19 +2053,23 @@ static int mmci_get_cd(struct mmc_host *mmc)
 static int mmci_sig_volt_switch(struct mmc_host *mmc, struct mmc_ios *ios)
 {
 	struct mmci_host *host = mmc_priv(mmc);
-	int ret;
 
-	ret = mmc_regulator_set_vqmmc(mmc, ios);
+	if (!IS_ERR(mmc->supply.vqmmc)) {
+		int ret;
 
-	if (!ret && host->ops && host->ops->post_sig_volt_switch)
-		ret = host->ops->post_sig_volt_switch(host, ios);
-	else if (ret)
-		ret = 0;
+		ret = mmc_regulator_set_vqmmc(mmc, ios);
 
-	if (ret < 0)
-		dev_warn(mmc_dev(mmc), "Voltage switch failed\n");
+		if (!ret && host->ops && host->ops->post_sig_volt_switch)
+			ret = host->ops->post_sig_volt_switch(host, ios);
 
-	return ret;
+		return min(ret, 0);
+	}
+
+	/* No vqmmc regulator, assume fixed regulator at 3.3V */
+	if (mmc->ios.signal_voltage == MMC_SIGNAL_VOLTAGE_330)
+		return 0;
+
+	return -EINVAL;
 }
 
 static void mmci_enable_sdio_irq(struct mmc_host *mmc, int enable)
