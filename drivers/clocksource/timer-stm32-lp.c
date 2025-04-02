@@ -64,8 +64,17 @@ static int stm32mp25_clkevent_lp_set_evt(struct stm32_lp_private *priv, unsigned
 	int ret;
 	u32 val;
 
-	/* Enable LPTIMER to be able to write into IER and ARR registers */
-	regmap_write(priv->reg, STM32_LPTIM_CR, STM32_LPTIM_ENABLE);
+	regmap_read(priv->reg, STM32_LPTIM_CR, &val);
+	if (!FIELD_GET(STM32_LPTIM_ENABLE, val)) {
+		/* Enable LPTIMER to be able to write into IER and ARR registers */
+		regmap_write(priv->reg, STM32_LPTIM_CR, STM32_LPTIM_ENABLE);
+		/*
+		 * After setting the ENABLE bit, a delay of two counter clock cycles is needed
+		 * before the LPTIM is actually enabled. For 32KHz rate, this makes approximately
+		 * 62.5 micro-seconds, round it up.
+		 */
+		udelay(63);
+	}
 	/* set next event counter */
 	regmap_write(priv->reg, STM32_LPTIM_ARR, evt);
 	/* enable ARR interrupt */
