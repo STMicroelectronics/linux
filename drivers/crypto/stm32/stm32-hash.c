@@ -733,8 +733,6 @@ static int stm32_hash_dma_send(struct stm32_hash_dev *hdev)
 			len += sizeof(u32);
 		}
 
-		rctx->total -= len;
-
 		bufcnt += sg[0].length;
 		dma_unmap_sg(hdev->dev, sg, 1, DMA_TO_DEVICE);
 
