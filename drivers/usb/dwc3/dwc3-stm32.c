@@ -190,18 +190,18 @@ static int stm32_dwc3_probe(struct platform_device *pdev)
 		device_set_wakeup_capable(dev, true);
 	}
 
-	/* Allocate and initialize the core */
-	ret = devm_of_platform_populate(dev);
+	ret = pm_runtime_set_active(dev);
 	if (ret)
-		return dev_err_probe(dev, ret, "failed to add dwc3 core\n");
+		return dev_err_probe(dev, ret, "Failed to activate pm runtime\n");
 
 	ret = devm_pm_runtime_enable(dev);
 	if (ret)
 		return dev_err_probe(dev, ret, "Failed to enable pm runtime\n");
 
-	ret = pm_runtime_resume_and_get(dev);
+	/* Allocate and initialize the core */
+	ret = devm_of_platform_populate(dev);
 	if (ret)
-		return dev_err_probe(dev, ret, "pm runtime resume failed\n");
+		return dev_err_probe(dev, ret, "failed to add dwc3 core\n");
 
 	platform_set_drvdata(pdev, dwc3_data);
 
