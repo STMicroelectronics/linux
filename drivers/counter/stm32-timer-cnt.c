@@ -146,6 +146,9 @@ static int stm32_count_function_write(struct counter_device *counter,
 
 	regmap_update_bits(priv->regmap, TIM_SMCR, TIM_SMCR_SMS, sms);
 
+	/* Configure polarity */
+	regmap_clear_bits(priv->regmap, TIM_CCER, TIM_CCER_MASK);
+
 	/* Make sure that registers are updated */
 	regmap_update_bits(priv->regmap, TIM_EGR, TIM_EGR_UG, TIM_EGR_UG);
 
