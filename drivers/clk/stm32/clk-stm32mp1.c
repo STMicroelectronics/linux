@@ -913,6 +913,8 @@ static const struct clk_ops clk_pll_frac_div_ops = {
 #define PLL_FRAC_SHIFT		3
 #define PLL_FRAC_WIDTH		13
 
+#define PLL_DIV_PQR_MASK	GENMASK(6, 4)
+
 #define TIMEOUT 5
 
 static int pll_enable(struct clk_hw *hw)
@@ -939,10 +941,14 @@ static int pll_enable(struct clk_hw *hw)
 
 static void pll_disable(struct clk_hw *hw)
 {
+	struct clk_gate *gate = to_clk_gate(hw);
+
 	if (!clk_gate_ops.is_enabled(hw))
 		return;
 
-	clk_gate_ops.disable(hw);
+	/* Disable only if DIV P/N/Q are not set to ON */
+	if (!(readl_relaxed(gate->reg) & PLL_DIV_PQR_MASK))
+		clk_gate_ops.disable(hw);
 }
 
 const struct clk_ops pll_gate_ops = {
