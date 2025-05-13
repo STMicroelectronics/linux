@@ -15,6 +15,7 @@
 #include <linux/platform_device.h>
 #include <linux/slab.h>
 #include <linux/uaccess.h>
+#include <linux/wait.h>
 
 #define MBOX_DEV_MAX (MINORMASK + 1)
 
@@ -49,6 +50,7 @@ struct mbox_cdev_mbox {
  * @resm: Pointer to the mapped memory region
  * @resm_size: Size of the mapped memory region
  * @req_state: request state
+ * @readq: wait object for incoming queue
  */
 struct mbox_cdev_ddata {
 	struct device dev;
@@ -57,6 +59,7 @@ struct mbox_cdev_ddata {
 	void __iomem *resm;
 	size_t resm_size;
 	unsigned int req_state;
+	wait_queue_head_t readq;
 };
 
 static void mbox_cdev_mb_callback(struct mbox_client *cl, void *data)
@@ -66,6 +69,9 @@ static void mbox_cdev_mb_callback(struct mbox_client *cl, void *data)
 
 	dev_dbg(&mbxdev->dev, "Answer received\n");
 	mbxdev->req_state = REQ_ANSWERED;
+
+	/* wake up any blocked readers */
+	wake_up_interruptible(&mbxdev->readq);
 }
 
 static const struct mbox_cdev_mbox rx_tx_mbox = {
@@ -83,14 +89,8 @@ static ssize_t mbox_cdev_read(struct file *filep, char *buffer, size_t len, loff
 {
 	struct mbox_cdev_ddata *mbxdev = cdev_to_mbxdev(filep->f_inode->i_cdev);
 
-	if (len > mbxdev->resm_size)
-		return -EINVAL;
-
-	if (mbxdev->req_state == NO_REQ)
-		return -EPERM;
-
-	if (mbxdev->req_state == REQ_SENT)
-		return -EBUSY;
+	if (wait_event_interruptible(mbxdev->readq, !(mbxdev->req_state != REQ_ANSWERED)))
+		return -ERESTARTSYS;
 
 	if (copy_to_user(buffer, mbxdev->resm, min(len, mbxdev->resm_size)))
 		return -EFAULT;
@@ -240,6 +240,8 @@ static int mbox_cdev_driver_probe(struct platform_device *pdev)
 	ret = mbxdev_char_device_add(pdev, mbxdev);
 	if (ret)
 		goto free_mbx;
+
+	init_waitqueue_head(&mbxdev->readq);
 
 	platform_set_drvdata(pdev, mbxdev);
 
