@@ -14,6 +14,7 @@
 #include <linux/of.h>
 #include <linux/platform_device.h>
 #include <linux/pm_wakeirq.h>
+#include <linux/suspend.h>
 #include <linux/workqueue.h>
 
 #include "mailbox.h"
@@ -85,6 +86,7 @@ struct stm32_ipcc {
 	u32 xcr;
 	u32 xmr;
 	u32 sec_mode;
+	bool sys_wkup;
 };
 
 static inline void stm32_ipcc_set_bits(spinlock_t *lock, void __iomem *reg,
@@ -139,6 +141,11 @@ static irqreturn_t stm32_ipcc_rx_irq(int irq, void *data)
 			continue;
 
 		dev_dbg(dev, "%s: chan:%d rx\n", __func__, chan);
+
+		if (ipcc->sys_wkup) {
+			pm_system_wakeup();
+			ipcc->sys_wkup = false;
+		}
 
 		chnl = &ipcc->chnl[chan];
 
@@ -496,12 +503,17 @@ static void stm32_ipcc_remove(struct platform_device *pdev)
 static int stm32_ipcc_suspend(struct device *dev)
 {
 	struct stm32_ipcc *ipcc = dev_get_drvdata(dev);
+	int ret;
 
 	ipcc->xmr = readl_relaxed(ipcc->reg_proc + IPCC_XMR);
 	ipcc->xcr = readl_relaxed(ipcc->reg_proc + IPCC_XCR);
 
-	if (device_may_wakeup(dev))
-		return enable_irq_wake(ipcc->irqs[IPCC_IRQ_RX]);
+	if (device_may_wakeup(dev)) {
+		ret = enable_irq_wake(ipcc->irqs[IPCC_IRQ_RX]);
+		if (ret)
+			return ret;
+		ipcc->sys_wkup = true;
+	}
 
 	return 0;
 }
@@ -509,12 +521,17 @@ static int stm32_ipcc_suspend(struct device *dev)
 static int stm32_ipcc_resume(struct device *dev)
 {
 	struct stm32_ipcc *ipcc = dev_get_drvdata(dev);
+	int ret;
 
 	writel_relaxed(ipcc->xmr, ipcc->reg_proc + IPCC_XMR);
 	writel_relaxed(ipcc->xcr, ipcc->reg_proc + IPCC_XCR);
 
-	if (device_may_wakeup(dev))
-		return disable_irq_wake(ipcc->irqs[IPCC_IRQ_RX]);
+	if (device_may_wakeup(dev)) {
+		ret = disable_irq_wake(ipcc->irqs[IPCC_IRQ_RX]);
+		if (ret)
+			return ret;
+		ipcc->sys_wkup = false;
+	}
 
 	return 0;
 }
