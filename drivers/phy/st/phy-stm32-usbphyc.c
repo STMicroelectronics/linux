@@ -153,6 +153,7 @@ struct stm32_usbphyc {
 	int nphys;
 	struct regulator *vdda1v1;
 	struct regulator *vdda1v8;
+	struct regulator *vdd3v3;
 	atomic_t n_pll_cons;
 	struct clk_hw clk48_hw;
 	int switch_setup;
@@ -180,8 +181,14 @@ static int stm32_usbphyc_regulators_enable(struct stm32_usbphyc *usbphyc)
 	if (ret)
 		goto vdda1v1_disable;
 
+	ret = regulator_enable(usbphyc->vdd3v3);
+	if (ret)
+		goto vdda1v8_disable;
+
 	return 0;
 
+vdda1v8_disable:
+	regulator_disable(usbphyc->vdda1v8);
 vdda1v1_disable:
 	regulator_disable(usbphyc->vdda1v1);
 
@@ -191,6 +198,10 @@ vdda1v1_disable:
 static int stm32_usbphyc_regulators_disable(struct stm32_usbphyc *usbphyc)
 {
 	int ret;
+
+	ret = regulator_disable(usbphyc->vdd3v3);
+	if (ret)
+		return ret;
 
 	ret = regulator_disable(usbphyc->vdda1v8);
 	if (ret)
@@ -701,6 +712,13 @@ static int stm32_usbphyc_probe(struct platform_device *pdev)
 	if (IS_ERR(usbphyc->vdda1v8)) {
 		ret = dev_err_probe(dev, PTR_ERR(usbphyc->vdda1v8),
 				    "failed to get vdda1v8 supply\n");
+		goto clk_disable;
+	}
+
+	usbphyc->vdd3v3 = devm_regulator_get(dev, "phy");
+	if (IS_ERR(usbphyc->vdd3v3)) {
+		ret = dev_err_probe(dev, PTR_ERR(usbphyc->vdd3v3),
+				    "failed to get phy supply\n");
 		goto clk_disable;
 	}
 
