@@ -41,7 +41,9 @@ to_priv(struct clock_event_device *clkevt)
 static int stm32_clkevent_lp_shutdown(struct clock_event_device *clkevt)
 {
 	struct stm32_lp_private *priv = to_priv(clkevt);
-	int ret;
+	int ret = 0;
+	int loop_limit = 500;
+	u32 val;
 
 	if (clockevent_state_oneshot(clkevt) || clockevent_state_periodic(clkevt)) {
 		ret = pm_runtime_put(priv->dev);
@@ -51,12 +53,42 @@ static int stm32_clkevent_lp_shutdown(struct clock_event_device *clkevt)
 		}
 	}
 
-	regmap_write(priv->reg, STM32_LPTIM_CR, 0);
-	regmap_write(priv->reg, STM32_LPTIM_IER, 0);
+	/* Check if LPTIMER is already disabled */
+	regmap_read(priv->reg, STM32_LPTIM_CR, &val);
+	if (!FIELD_GET(STM32_LPTIM_ENABLE, val))
+		return 0;
+
+	if (priv->version == STM32_LPTIM_VERR_23) {
+		regmap_write(priv->reg, STM32_LPTIM_IER, 0);
+		/*
+		 * Poll DIEROK to ensure register access has completed
+		 * the clkevent shutdown ops can be called with tick disabled,
+		 * so timeout and poll function can't be used here
+		 */
+		do {
+			regmap_read(priv->reg, STM32_LPTIM_ISR, &val);
+			if ((val & STM32_LPTIM_DIEROK) == STM32_LPTIM_DIEROK)
+				break;
+			udelay(10);
+		} while (--loop_limit);
+		if (!loop_limit) {
+			ret = -ETIMEDOUT;
+			dev_err(priv->dev, "access to LPTIM timed out\n");
+		} else {
+			regmap_write(priv->reg, STM32_LPTIM_ICR, STM32_LPTIM_DIEROKCF);
+		}
+		/* disable LPTIMER */
+		regmap_write(priv->reg, STM32_LPTIM_CR, 0);
+	} else {
+		/* disable LPTIMER to be able to write into IER register*/
+		regmap_write(priv->reg, STM32_LPTIM_CR, 0);
+		regmap_write(priv->reg, STM32_LPTIM_IER, 0);
+	}
+
 	/* clear pending flags */
 	regmap_write(priv->reg, STM32_LPTIM_ICR, STM32_LPTIM_ARRMCF);
 
-	return 0;
+	return ret;
 }
 
 static int stm32mp25_clkevent_lp_set_evt(struct stm32_lp_private *priv, unsigned long evt)
