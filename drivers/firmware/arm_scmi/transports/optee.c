@@ -211,6 +211,22 @@ enum scmi_optee_ocall_reply {
 	 * and issue Ocall command PTA_SCMI_OCALL_CMD_THREAD_READY again.
 	 */
 	PTA_SCMI_OCALL_PROCESS_MSG = 3,
+	/*
+	 * On return of Ocall, SCMI PTA shall enter PM_NOIRQ state
+	 * that is keeping non-secure interrupts masked for processing
+	 * the next SCMI messages (until PTA_SCMI_OCALL_DISABLE_NOIRQ
+	 * is received) and issuesOcall command PTA_SCMI_OCALL_CMD_THREAD_READY
+	 * again.
+	 */
+	PTA_SCMI_OCALL_ENABLE_NOIRQ = 4,
+	/*
+	 * On return of Ocall, SCMI PTA shall exit PM_NOIRQ state
+	 * that is unmasking back non-secure interrupts masked for processing
+	 * the next SCMI messages (until PTA_SCMI_OCALL_ENABLE_NOIRQ
+	 * is received) and issuesOcall command PTA_SCMI_OCALL_CMD_THREAD_READY
+	 * again.
+	 */
+	PTA_SCMI_OCALL_DISABLE_NOIRQ = 5,
 };
 
 /*
@@ -220,11 +236,13 @@ enum scmi_optee_ocall_reply {
  * @arg: TEE invoke command arguments
  * @param: TEE invoke command parameters
  * @ocall_arg: TEE Ocall2 arguments
+ * @pm_noirq_enabled: True when in PM_NOIRQ state, false otherwise
  */
 struct ocall_ctx {
 	struct tee_ioctl_invoke_arg args;
 	struct tee_param param[4];
 	struct tee_ocall2_arg ocall_arg;
+	bool pm_noirq_enabled;
 };
 
 /**
@@ -1005,6 +1023,51 @@ static int scmi_optee_service_remove(struct device *dev)
 	return 0;
 }
 
+static int scmi_optee_suspend_noirq(struct device *dev)
+{
+	struct scmi_optee_channel *channel;
+
+	list_for_each_entry(channel, &scmi_optee_private->channel_list, link) {
+		struct ocall_ctx *ocall_ctx = channel->ocall_ctx;
+
+		if (!ocall_ctx)
+			continue;
+
+		ocall_ctx->ocall_arg.out_param1 = PTA_SCMI_OCALL_ENABLE_NOIRQ;
+		ocall_ctx->ocall_arg.out_param2 = 0;
+
+		if (invoke_ocall_thread(channel) == 0)
+			ocall_ctx->pm_noirq_enabled = true;
+	}
+
+	return 0;
+}
+
+static int scmi_optee_resume_noirq(struct device *dev)
+{
+	struct scmi_optee_channel *channel;
+
+	list_for_each_entry(channel, &scmi_optee_private->channel_list, link) {
+		struct ocall_ctx *ocall_ctx = channel->ocall_ctx;
+
+		if (!ocall_ctx || !ocall_ctx->pm_noirq_enabled)
+			continue;
+
+		ocall_ctx->ocall_arg.out_param1 = PTA_SCMI_OCALL_DISABLE_NOIRQ;
+		ocall_ctx->ocall_arg.out_param2 = 0;
+
+		if (invoke_ocall_thread(channel) == 0)
+			ocall_ctx->pm_noirq_enabled = true;
+	}
+
+	return 0;
+}
+
+/* Late PM suspend/resume to support handling PM_NOIRQ for SCMI request */
+static const struct dev_pm_ops scmi_optee_pm_ops = {
+	NOIRQ_SYSTEM_SLEEP_PM_OPS(scmi_optee_suspend_noirq, scmi_optee_resume_noirq)
+};
+
 static const struct tee_client_device_id scmi_optee_service_id[] = {
 	{
 		UUID_INIT(0xa8cfe406, 0xd4f5, 0x4a2e,
@@ -1022,6 +1085,7 @@ static struct tee_client_driver scmi_optee_service_driver = {
 		.bus = &tee_bus_type,
 		.probe = scmi_optee_service_probe,
 		.remove = scmi_optee_service_remove,
+		.pm = pm_ptr(&scmi_optee_pm_ops),
 	},
 };
 
