@@ -1869,8 +1869,8 @@
 				#address-cells = <1>;
 				#size-cells = <0>;
 				interrupts = <GIC_SPI 91 IRQ_TYPE_LEVEL_HIGH>;
-				dmas = <&mdma 26 0x2 0x10100002 0x0 0x0>,
-				       <&mdma 26 0x2 0x10100008 0x0 0x0>;
+				dmas = <&mdma 26 0x2 0x12000002 0x0 0x0>,
+				       <&mdma 26 0x2 0x12000008 0x0 0x0>;
 				dma-names = "tx", "rx";
 				clocks = <&rcc QSPI_K>;
 				resets = <&rcc QSPI_R>;
