@@ -140,8 +140,35 @@ static int stm32_lptimer_runtime_resume(struct device *dev)
 	return clk_enable(priv->clk);
 }
 
+static int stm32_lptimer_suspend(struct device *dev)
+{
+	struct stm32_lptimer *priv = dev_get_drvdata(dev);
+	int ret;
+
+	ret = pm_runtime_force_suspend(dev);
+	if (ret < 0)
+		return ret;
+
+	/* balance devm_clk_get_prepared() from the probe */
+	clk_unprepare(priv->clk);
+
+	return 0;
+}
+
+static int stm32_lptimer_resume(struct device *dev)
+{
+	struct stm32_lptimer *priv = dev_get_drvdata(dev);
+	int ret;
+
+	ret = clk_prepare(priv->clk);
+	if (ret)
+		dev_err(dev, "failed to prep clock. Error [%d]\n", ret);
+
+	return pm_runtime_force_resume(dev);
+}
+
 static const struct dev_pm_ops stm32_lptim_pm_ops = {
-	SET_SYSTEM_SLEEP_PM_OPS(pm_runtime_force_suspend, pm_runtime_force_resume)
+	SET_SYSTEM_SLEEP_PM_OPS(stm32_lptimer_suspend, stm32_lptimer_resume)
 	SET_RUNTIME_PM_OPS(stm32_lptimer_runtime_suspend, stm32_lptimer_runtime_resume, NULL)
 };
 
