@@ -7745,6 +7745,9 @@ void stmmac_dvr_remove(struct device *dev)
 	mutex_destroy(&priv->lock);
 	bitmap_free(priv->af_xdp_zc_qps);
 
+	/* Select sleep pin state */
+	pinctrl_pm_select_sleep_state(dev);
+
 	pm_runtime_disable(dev);
 	pm_runtime_put_noidle(dev);
 }
