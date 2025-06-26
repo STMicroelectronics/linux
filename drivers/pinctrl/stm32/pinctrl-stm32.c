@@ -2246,7 +2246,8 @@ static int __maybe_unused stm32_pinctrl_restore_gpio_regs(
 	return 0;
 }
 
-int __maybe_unused stm32_pinctrl_suspend(struct device *dev)
+#ifdef CONFIG_PM_SLEEP
+int stm32_pinctrl_suspend(struct device *dev)
 {
 	struct stm32_pinctrl *pctl = dev_get_drvdata(dev);
 
@@ -2256,7 +2257,7 @@ int __maybe_unused stm32_pinctrl_suspend(struct device *dev)
 }
 EXPORT_SYMBOL(stm32_pinctrl_suspend);
 
-int __maybe_unused stm32_pinctrl_resume(struct device *dev)
+int stm32_pinctrl_resume(struct device *dev)
 {
 	struct stm32_pinctrl *pctl = dev_get_drvdata(dev);
 	struct stm32_pinctrl_group *g = pctl->groups;
@@ -2272,6 +2273,7 @@ int __maybe_unused stm32_pinctrl_resume(struct device *dev)
 	return 0;
 }
 EXPORT_SYMBOL(stm32_pinctrl_resume);
+#endif /* CONFIG_PM_SLEEP */
 
 MODULE_AUTHOR("Alexandre Torgue <alexandre.torgue@foss.st.com>");
 MODULE_DESCRIPTION("STM32 core pinctrl driver");
