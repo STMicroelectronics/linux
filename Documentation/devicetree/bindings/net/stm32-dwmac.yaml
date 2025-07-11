@@ -124,6 +124,12 @@ properties:
     minItems: 1
     maxItems: 2
 
+  st,phy-wol:
+    description:
+      set this property to use the wakeup capability from the PHY, if supported, instead of the
+      MAC.
+    type: boolean
+
 required:
   - compatible
   - clocks
