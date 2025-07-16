@@ -668,7 +668,7 @@ static int stm32_rproc_set_hold_boot(struct rproc *rproc, bool hold)
 	struct stm32_rproc *ddata = rproc->priv;
 	struct stm32_syscon hold_boot = ddata->hold_boot;
 	struct arm_smccc_res smc_res;
-	int val, err;
+	int val, err = 0;
 
 	/*
 	 * Three ways to manage the hold boot
@@ -690,7 +690,7 @@ static int stm32_rproc_set_hold_boot(struct rproc *rproc, bool hold)
 		arm_smccc_smc(STM32_SMC_RCC, STM32_SMC_REG_WRITE,
 			      hold_boot.reg, val, 0, 0, 0, 0, &smc_res);
 		err = smc_res.a0;
-	} else {
+	} else if (hold_boot.map) {
 		/* Use syscon */
 		err = regmap_update_bits(hold_boot.map, hold_boot.reg,
 					 hold_boot.mask, val);
@@ -1070,7 +1070,7 @@ static int stm32_rproc_parse_dt(struct platform_device *pdev,
 		/* Try legacy fallback method: get it by index */
 		ddata->rst = devm_reset_control_get_by_index(dev, 0);
 	}
-	if (IS_ERR(ddata->rst))
+	if (IS_ERR(ddata->rst) && PTR_ERR(ddata->rst) != -ENOENT)
 		return dev_err_probe(dev, PTR_ERR(ddata->rst),
 				     "failed to get mcu_reset\n");
 
@@ -1105,12 +1105,7 @@ static int stm32_rproc_parse_dt(struct platform_device *pdev,
 
 	if (!ddata->hold_boot_rst && !ddata->hold_boot_smc) {
 		/* Default: hold boot manage it through the syscon controller */
-		err = stm32_rproc_get_syscon(np, "st,syscfg-holdboot",
-					     &ddata->hold_boot);
-		if (err) {
-			dev_err(dev, "failed to get hold boot\n");
-			return err;
-		}
+		stm32_rproc_get_syscon(np, "st,syscfg-holdboot",  &ddata->hold_boot);
 	}
 
 	err = stm32_rproc_get_syscon(np, "st,syscfg-pdds", &ddata->pdds);
