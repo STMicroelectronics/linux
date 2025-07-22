@@ -110,6 +110,28 @@ irqreturn_t smsc_phy_handle_interrupt(struct phy_device *phydev)
 		return IRQ_NONE;
 	}
 
+	/* Handle WoL events */
+	if (irq_status & MII_LAN874X_ISF_INT8) {
+		int rc = phy_read_mmd(phydev, MDIO_MMD_PCS, MII_LAN874X_PHY_MMD_WOL_WUCSR);
+
+		if (rc < 0) {
+			phy_error(phydev);
+			return IRQ_NONE;
+		}
+
+		if (!(rc & MII_LAN874X_PHY_WOL_STATUS_MASK)) {
+			phy_error(phydev);
+			return IRQ_NONE;
+		}
+
+		rc = phy_write_mmd(phydev, MDIO_MMD_PCS, MII_LAN874X_PHY_MMD_WOL_WUCSR,
+				   rc | MII_LAN874X_PHY_WOL_STATUS_MASK);
+		if (rc < 0) {
+			phy_error(phydev);
+			return IRQ_NONE;
+		}
+	}
+
 	if (!(irq_status & MII_LAN83C185_ISF_INT_PHYLIB_EVENTS))
 		return IRQ_NONE;
 

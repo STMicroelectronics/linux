@@ -74,4 +74,6 @@ int smsc_phy_probe(struct phy_device *phydev);
 
 #define MII_LAN874X_PHY_PME_SELF_CLEAR_DELAY	0x1000 /* 81 milliseconds */
 
+#define MII_LAN874X_ISF_INT8 (1<<8)		/* WoL event */
+
 #endif /* __LINUX_SMSCPHY_H__ */
