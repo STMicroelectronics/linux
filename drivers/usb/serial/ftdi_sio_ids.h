@@ -1368,7 +1368,7 @@
 #define WHT_PID			0x0004 /* Wireless Handheld Terminal */
 
 /*
- * STMicroelectonics
+ * STMicroelectronics
  */
 #define ST_VID			0x0483
 #define ST_STMCLT_2232_PID	0x3746
