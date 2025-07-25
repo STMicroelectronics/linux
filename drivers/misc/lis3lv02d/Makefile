@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-2.0-only
 #
-# STMicroelectonics LIS3LV02D and similar accelerometers
+# STMicroelectronics LIS3LV02D and similar accelerometers
 #
 
 obj-$(CONFIG_SENSORS_LIS3LV02D) += lis3lv02d.o
