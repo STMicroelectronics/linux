@@ -2,7 +2,7 @@
 /*
  * STMicroelectronics Key Scanning driver
  *
- * Copyright (c) 2014 STMicroelectonics Ltd.
+ * Copyright (c) 2014 STMicroelectronics Ltd.
  * Author: Stuart Menefy <stuart.menefy@st.com>
  *
  * Based on sh_keysc.c, copyright 2008 Magnus Damm
