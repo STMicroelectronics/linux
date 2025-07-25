@@ -4,7 +4,7 @@
 $id: http://devicetree.org/schemas/gpio/st,stmpe-gpio.yaml#
 $schema: http://devicetree.org/meta-schemas/core.yaml#
 
-title: STMicroelectonics Port Expander (STMPE) GPIO Block
+title: STMicroelectronics Port Expander (STMPE) GPIO Block
 
 description:
   STMicroelectronics Port Expander (STMPE) is a series of slow
