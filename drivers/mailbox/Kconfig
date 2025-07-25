@@ -152,7 +152,7 @@ config STI_MBOX
 	tristate "STI Mailbox framework support"
 	depends on ARCH_STI && OF
 	help
-	  Mailbox implementation for STMicroelectonics family chips with
+	  Mailbox implementation for STMicroelectronics family chips with
 	  hardware for interprocessor communication.
 
 config TI_MESSAGE_MANAGER
@@ -271,7 +271,7 @@ config STM32_IPCC
 	tristate "STM32 IPCC Mailbox"
 	depends on MACH_STM32MP157 || COMPILE_TEST
 	help
-	  Mailbox implementation for STMicroelectonics STM32 family chips
+	  Mailbox implementation for STMicroelectronics STM32 family chips
 	  with hardware for Inter-Processor Communication Controller (IPCC)
 	  between processors. Say Y here if you want to have this support.
 
