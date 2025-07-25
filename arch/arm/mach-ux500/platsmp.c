@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (C) 2002 ARM Ltd.
- * Copyright (C) 2008 STMicroelctronics.
+ * Copyright (C) 2008 STMicroelectronics.
  * Copyright (C) 2009 ST-Ericsson.
  * Author: Srinidhi Kasagar <srinidhi.kasagar@stericsson.com>
  *
