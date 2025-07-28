@@ -868,7 +868,7 @@ static void lvds_config_mode(struct stm_lvds *lvds)
 	}
 
 	/* Write config to registers */
-	lvds_set(lvds, LVDS_CR, lvds_cr);
+	lvds_write(lvds, LVDS_CR, lvds_cr);
 	lvds_write(lvds, LVDS_CDL1CR, lvds_cdl1cr);
 	lvds_write(lvds, LVDS_CDL2CR, lvds_cdl2cr);
 }
