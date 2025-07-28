@@ -661,55 +661,49 @@ static unsigned long lvds_pixel_clk_recalc_rate(struct clk_hw *hw,
 	drm_dbg(drm, "ndiv %d , bdiv %d, mdiv %d, pll_out_khz %d\n",
 		ndiv, bdiv, mdiv, pll_out_khz);
 
+	clk_disable_unprepare(lvds->pclk);
+
 	/*
 	 * 1/7 because for each pixel in 1 lane there is 7 bits
 	 * We want pixclk, not bitclk
 	 */
-	lvds->pixel_clock_rate = pll_out_khz * 1000 * multiplier / 7;
-
-	clk_disable_unprepare(lvds->pclk);
-
-	return (unsigned long)lvds->pixel_clock_rate;
+	return (unsigned long)pll_out_khz * 1000 * multiplier / 7;
 }
 
 static long lvds_pixel_clk_round_rate(struct clk_hw *hw, unsigned long rate,
 				      unsigned long *parent_rate)
 {
 	struct stm_lvds *lvds = container_of(hw, struct stm_lvds, lvds_ck_px);
-	unsigned int pll_in_khz, bdiv = 0, mdiv = 0, ndiv = 0;
-	const struct drm_connector *connector;
-	const struct drm_display_mode *mode;
+	unsigned int pll_in_khz, pll_out_khz, bdiv = 0, mdiv = 0, ndiv = 0;
 	int multiplier;
-
-	connector = &lvds->connector;
-	if (!connector)
-		return -EINVAL;
-
-	if (list_empty(&connector->modes)) {
-		drm_dbg(connector->dev, "connector: empty modes list\n");
-		return -EINVAL;
-	}
-
-	mode = list_first_entry(&connector->modes,
-				struct drm_display_mode, head);
-
-	pll_in_khz = (unsigned int)(*parent_rate / 1000);
 
 	if (lvds_is_dual_link(lvds->link_type))
 		multiplier = 2;
 	else
 		multiplier = 1;
 
-	lvds_pll_get_params(lvds, pll_in_khz, mode->clock * 7 / multiplier, &bdiv, &mdiv, &ndiv);
+	pll_in_khz = (unsigned int)(*parent_rate / 1000);
+	pll_out_khz = rate * 7 / (1000 * multiplier),
+
+	lvds_pll_get_params(lvds, pll_in_khz, pll_out_khz, &bdiv, &mdiv, &ndiv);
 
 	/*
 	 * 1/7 because for each pixel in 1 lane there is 7 bits
 	 * We want pixclk, not bitclk
 	 */
-	lvds->pixel_clock_rate = (unsigned long)pll_get_clkout_khz(pll_in_khz, bdiv, mdiv, ndiv)
-					 * 1000 * multiplier / 7;
+	return (unsigned long)pll_get_clkout_khz(pll_in_khz, bdiv, mdiv, ndiv)
+	       * 1000 * multiplier / 7;
+}
 
-	return lvds->pixel_clock_rate;
+static int lvds_pixel_clk_set_rate(struct clk_hw *hw, unsigned long rate,
+				   unsigned long parent_rate)
+{
+	struct stm_lvds *lvds = container_of(hw, struct stm_lvds, lvds_ck_px);
+
+	/* Save pixel clock rate */
+	lvds->pixel_clock_rate = lvds_pixel_clk_round_rate(hw, rate, &parent_rate);
+
+	return 0;
 }
 
 static const struct clk_ops lvds_pixel_clk_ops = {
@@ -717,6 +711,7 @@ static const struct clk_ops lvds_pixel_clk_ops = {
 	.disable = lvds_pixel_clk_disable,
 	.recalc_rate = lvds_pixel_clk_recalc_rate,
 	.round_rate = lvds_pixel_clk_round_rate,
+	.set_rate = lvds_pixel_clk_set_rate,
 };
 
 static const struct clk_init_data clk_data = {
@@ -738,12 +733,39 @@ static void lvds_pixel_clk_unregister(void *data)
 static int lvds_pixel_clk_register(struct stm_lvds *lvds)
 {
 	struct device_node *node = lvds->dev->of_node;
-	int ret;
+	unsigned int pll_in_khz, bdiv, mdiv, ndiv;
+	int ret, multiplier, pll_out_khz;
+	struct clk_hw *hwclk;
+	u32 val;
 
 	lvds->lvds_ck_px.init = &clk_data;
 
-	/* set the rate by default at 148500000 */
-	lvds->pixel_clock_rate = 148500000;
+	if (lvds_is_dual_link(lvds->link_type))
+		multiplier = 2;
+	else
+		multiplier = 1;
+
+	val = lvds_read(lvds, lvds->primary->base + lvds->primary->ofs.PLLCR2);
+
+	ndiv = (val & PHY_PLLCR2_NDIV) >> 16;
+	bdiv = (val & PHY_PLLCR2_BDIV) >> 0;
+	mdiv = (unsigned int)lvds_read(lvds,
+				       lvds->primary->base + lvds->primary->ofs.PLLSDCR1);
+
+	hwclk = __clk_get_hw(lvds->pllref_clk);
+	if (hwclk) {
+		pll_in_khz = clk_hw_get_rate(hwclk) / 1000;
+		pll_out_khz = pll_get_clkout_khz(pll_in_khz, bdiv, mdiv, ndiv);
+
+		/*
+		 * 1/7 because for each pixel in 1 lane there is 7 bits
+		 * We want pixclk, not bitclk
+		 */
+		lvds->pixel_clock_rate = (unsigned long)pll_out_khz * 1000 * multiplier / 7;
+	} else {
+		/* set the rate by default at 148500000 */
+		lvds->pixel_clock_rate = 148500000;
+	}
 
 	ret = clk_hw_register(lvds->dev, &lvds->lvds_ck_px);
 	if (ret)
@@ -1176,16 +1198,15 @@ static int lvds_probe(struct platform_device *pdev)
 		return ret;
 	}
 
-	ret = lvds_pixel_clk_register(lvds);
+	ret = clk_prepare_enable(lvds->pclk);
 	if (ret) {
-		dev_err(dev, "Failed to register LVDS pixel clock: %d\n", ret);
+		dev_err(dev, "%s: Failed to enable peripheral clk\n", __func__);
 		return ret;
 	}
 
-	ret = clk_prepare_enable(lvds->pclk);
+	ret = lvds_pixel_clk_register(lvds);
 	if (ret) {
-		lvds_pixel_clk_unregister(lvds);
-		dev_err(dev, "%s: Failed to enable peripheral clk\n", __func__);
+		dev_err(dev, "Failed to register LVDS pixel clock: %d\n", ret);
 		return ret;
 	}
 
