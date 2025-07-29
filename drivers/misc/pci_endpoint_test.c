@@ -100,6 +100,8 @@
 
 #define PCI_DEVICE_ID_ROCKCHIP_RK3588		0x3588
 
+#define PCI_DEVICE_ID_STMICRO_TEST              0xCCFF
+
 static DEFINE_IDA(pci_endpoint_test_ida);
 
 #define to_endpoint_test(priv) container_of((priv), struct pci_endpoint_test, \
@@ -1173,6 +1175,11 @@ static const struct pci_endpoint_test_data rk3588_data = {
 	.alignment = SZ_64K,
 };
 
+static const struct pci_endpoint_test_data stm32mp2_data = {
+	.test_reg_bar = BAR_0,
+	.alignment = SZ_64K,
+};
+
 /*
  * If the controller's Vendor/Device ID are programmable, you may be able to
  * use one of the existing entries for testing instead of adding a new one.
@@ -1216,6 +1223,9 @@ static const struct pci_device_id pci_endpoint_test_tbl[] = {
 	},
 	{ PCI_DEVICE(PCI_VENDOR_ID_ROCKCHIP, PCI_DEVICE_ID_ROCKCHIP_RK3588),
 	  .driver_data = (kernel_ulong_t)&rk3588_data,
+	},
+	{ PCI_DEVICE(PCI_VENDOR_ID_STMICRO, PCI_DEVICE_ID_STMICRO_TEST),
+	  .driver_data = (kernel_ulong_t)&stm32mp2_data,
 	},
 	{ }
 };
