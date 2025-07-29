@@ -400,6 +400,23 @@
 	/delete-property/dma-names;
 };
 
+&i3c4 {
+	/*
+	 *  Connector | pins_a  | pins_b |
+	 * -----------+---------+--------|
+	 *  GPIO Exp. | I2C8+PU |   X    |
+	 * -----------+---------+--------|
+	 *  mikroBus  | I2C8+PU | SPI8   |
+	 *
+	 * X = not wired ; PU = External Pull-Up
+	 */
+	pinctrl-names = "default", "init", "sleep";
+	pinctrl-0 = <&i3c4_pins_b>;
+	pinctrl-1 = <&i3c4_init_pins_b>;
+	pinctrl-2 = <&i3c4_sleep_pins_b>;
+	status = "disabled";
+};
+
 &ipcc1 {
 	status = "okay";
 };
