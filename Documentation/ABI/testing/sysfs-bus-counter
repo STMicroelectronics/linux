@@ -152,6 +152,32 @@ Description:
 			go high again. A trigger results in loading the counter
 			to the preset value.
 
+		hardware triggered reset:
+			Rising edge of the selected trigger input resets the
+			counter and generates an update of the registers.
+
+		hardware triggered gated:
+			The counter clock is enabled when the trigger input is
+			high. The counter stops (but is not reset) as soon as
+			the trigger becomes low. Both start and stop of the
+			counter are controlled.
+
+		hardware triggered start:
+			The counter starts at a rising edge of the trigger input
+			(but it is not reset). Only the start of the counter is
+			controlled.
+
+		hardware triggered reset start:
+			Combined reset and start: rising edge of the trigger
+			input reinitializes the counter, generates an update
+			of the registers and starts the counter.
+
+		hardware triggered gated reset:
+			Combined gated and reset: The counter clock is enabled
+			when the trigger input is high. The counter stops and
+			is reset as soon as the trigger becomes low. Both start
+			and stop of the counter are controlled.
+
 What:		/sys/bus/counter/devices/counterX/countY/count_mode_available
 What:		/sys/bus/counter/devices/counterX/countY/error_noise_available
 What:		/sys/bus/counter/devices/counterX/countY/function_available

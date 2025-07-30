@@ -98,6 +98,11 @@ static const char *const counter_count_mode_str[] = {
 	[COUNTER_COUNT_MODE_SQUARE_WAVE_MODE] = "square wave mode",
 	[COUNTER_COUNT_MODE_SOFTWARE_TRIGGERED_STROBE] = "software triggered strobe",
 	[COUNTER_COUNT_MODE_HARDWARE_TRIGGERED_STROBE] = "hardware triggered strobe",
+	[COUNTER_COUNT_MODE_HARDWARE_TRIGGERED_RESET] = "hardware triggered reset",
+	[COUNTER_COUNT_MODE_HARDWARE_TRIGGERED_GATED] = "hardware triggered gated",
+	[COUNTER_COUNT_MODE_HARDWARE_TRIGGERED_START] = "hardware triggered start",
+	[COUNTER_COUNT_MODE_HARDWARE_TRIGGERED_RESET_START] = "hardware triggered reset start",
+	[COUNTER_COUNT_MODE_HARDWARE_TRIGGERED_GATED_RESET] = "hardware triggered gated reset",
 };
 
 static const char *const counter_signal_polarity_str[] = {
