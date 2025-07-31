@@ -198,12 +198,20 @@ static int panel_lvds_probe(struct platform_device *pdev)
 
 	/* Get GPIOs and backlight controller. */
 	lvds->enable_gpio = devm_gpiod_get_optional(lvds->dev, "enable",
-						     GPIOD_OUT_LOW);
+						    GPIOD_ASIS);
 	if (IS_ERR(lvds->enable_gpio)) {
 		ret = PTR_ERR(lvds->enable_gpio);
 		dev_err(lvds->dev, "failed to request %s GPIO: %d\n",
 			"enable", ret);
 		return ret;
+	}
+
+	if (lvds->enable_gpio) {
+		ret = gpiod_get_direction(lvds->enable_gpio);
+		if (ret != 0)
+			gpiod_direction_output(lvds->enable_gpio, 0);
+		else
+			gpiod_direction_output(lvds->enable_gpio, 1);
 	}
 
 	lvds->reset_gpio = devm_gpiod_get_optional(lvds->dev, "reset",
