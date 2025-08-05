@@ -371,6 +371,18 @@ static int ehci_platform_probe(struct platform_device *dev)
 
 	hcd->tpl_support = of_usb_host_tpl_support(dev->dev.of_node);
 
+	err = pm_runtime_set_active(&dev->dev);
+	if (err) {
+		dev_err_probe(&dev->dev, err, "Failed to activate pm runtime\n");
+		goto err_power;
+	}
+
+	err = devm_pm_runtime_enable(&dev->dev);
+	if (err) {
+		dev_err_probe(&dev->dev, err, "Failed to enable pm runtime\n");
+		goto err_power;
+	}
+
 	err = usb_add_hcd(hcd, irq, IRQF_SHARED);
 	if (err)
 		goto err_power;
