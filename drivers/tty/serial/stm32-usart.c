@@ -2436,7 +2436,11 @@ static int __maybe_unused stm32_usart_serial_en_wakeup(struct uart_port *port,
 		}
 
 		/* Poll data from RX FIFO if any */
-		stm32_usart_receive_chars(port, false);
+		spin_lock_irqsave(&port->lock, flags);
+		size = stm32_usart_receive_chars(port, false);
+		if (size)
+			tty_flip_buffer_push(tport);
+		uart_unlock_and_check_sysrq_irqrestore(port, flags);
 	} else {
 		if (stm32_port->tx_ch)
 			stm32_usart_set_bits(port, ofs->cr3, USART_CR3_DMAT);
