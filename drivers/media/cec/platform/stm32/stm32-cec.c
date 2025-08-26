@@ -346,10 +346,10 @@ static void stm32_cec_remove(struct platform_device *pdev)
 {
 	struct stm32_cec *cec = platform_get_drvdata(pdev);
 
+	cec_unregister_adapter(cec->adap);
+
 	clk_unprepare(cec->clk_cec);
 	clk_unprepare(cec->clk_hdmi_cec);
-
-	cec_unregister_adapter(cec->adap);
 }
 
 static const struct of_device_id stm32_cec_of_match[] = {
