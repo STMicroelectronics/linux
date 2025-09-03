@@ -356,6 +356,7 @@ enum enum_gate_cfg {
 	GATE_USART6,
 	GATE_USBH,
 	GATE_USB2PHY1,
+	GATE_USB2PHY1STP,
 	GATE_USB2PHY2,
 	GATE_USB3DR,
 	GATE_USB3PCIEPHY,
@@ -506,6 +507,7 @@ static const struct stm32_gate_cfg stm32mp25_gates[GATE_NB] = {
 	GATE_CFG(GATE_USART6,		RCC_USART6CFGR,		1,	0),
 	GATE_CFG(GATE_USBH,		RCC_USBHCFGR,		1,	0),
 	GATE_CFG(GATE_USB2PHY1,		RCC_USB2PHY1CFGR,	1,	0),
+	GATE_CFG(GATE_USB2PHY1STP,	RCC_USB2PHY1CFGR,	4,	0),
 	GATE_CFG(GATE_USB2PHY2,		RCC_USB2PHY2CFGR,	1,	0),
 	GATE_CFG(GATE_USB3DR,		RCC_USB3DRCFGR,		1,	0),
 	GATE_CFG(GATE_USB3PCIEPHY,	RCC_USB3PCIEPHYCFGR,	1,	0),
@@ -1636,6 +1638,42 @@ static struct clk_stm32_composite ck_ker_usb2phy1 = {
 					    &clk_stm32_composite_ops, 0),
 };
 
+static int clk_stm32_usb2phy1_stp_enable(struct clk_hw *hw)
+{
+	return clk_stm32_gate_ops.enable(hw);
+}
+
+static void clk_stm32_usb2phy1_stp_disable(struct clk_hw *hw)
+{
+	clk_stm32_gate_ops.disable(hw);
+}
+
+static int clk_stm32_usb2phy1_stp_is_enabled(struct clk_hw *hw)
+{
+	return clk_stm32_gate_ops.is_enabled(hw);
+}
+
+static unsigned long clk_stm32_usb2phy1_stp_recalc_rate(struct clk_hw *hw,
+							unsigned long parent_rate)
+{
+	/* The rate of ck_ker_usb2phy1_stp is the same as ck_ker_usb2phy1 */
+	return clk_hw_get_rate(&ck_ker_usb2phy1.hw);
+}
+
+static const struct clk_ops clk_stm32_usb2phy1_stp_ops = {
+	.enable		= clk_stm32_usb2phy1_stp_enable,
+	.disable	= clk_stm32_usb2phy1_stp_disable,
+	.is_enabled	= clk_stm32_usb2phy1_stp_is_enabled,
+	.recalc_rate	= clk_stm32_usb2phy1_stp_recalc_rate,
+};
+
+/* Parent clock of ck_ker_usb2phy1_stp is HSE_KER to ensure it remains active during low power */
+static struct clk_stm32_gate ck_ker_usb2phy1_stp = {
+	.gate_id = GATE_USB2PHY1STP,
+	.hw.init = CLK_HW_INIT_INDEX("ck_ker_usb2phy1_stp", HSE_KER,
+				     &clk_stm32_usb2phy1_stp_ops, 0),
+};
+
 /* USB2H */
 static struct clk_stm32_gate ck_icn_m_usb2ehci = {
 	.gate_id = GATE_USBH,
@@ -1994,6 +2032,7 @@ static const struct clock_config stm32mp25_clock_cfg[] = {
 	STM32_COMPOSITE_CFG(CK_KER_ADC12,	ck_ker_adc12,		SEC_RIFSC(58)),
 	STM32_COMPOSITE_CFG(CK_KER_ADC3,	ck_ker_adc3,		SEC_RIFSC(59)),
 	STM32_COMPOSITE_CFG(CK_KER_USB2PHY1,	ck_ker_usb2phy1,	SEC_RIFSC(63)),
+	STM32_GATE_CFG(CK_KER_USB2PHY1STP,	ck_ker_usb2phy1_stp,	SEC_RIFSC(63)),
 	STM32_GATE_CFG(CK_KER_USB2PHY2,		ck_ker_usb2phy2,	SEC_RIFSC(63)),
 	STM32_COMPOSITE_CFG(CK_KER_USB2PHY2EN,	ck_ker_usb2phy2_en,	SEC_RIFSC(63)),
 	STM32_COMPOSITE_CFG(CK_KER_USB3PCIEPHY,	ck_ker_usb3pciephy,	SEC_RIFSC(67)),
