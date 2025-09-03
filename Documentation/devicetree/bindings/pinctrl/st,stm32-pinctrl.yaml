@@ -46,8 +46,7 @@ properties:
 
   hwlocks: true
 
-  interrupts:
-    maxItems: 1
+  interrupts: true
 
   st,syscfg:
     description: Phandle+args to the syscon node which includes IRQ mux selection.
