@@ -3118,6 +3118,8 @@ static void dwc2_hsotg_epint(struct dwc2_hsotg *hsotg, unsigned int idx,
 	if (ints & DXEPINT_SETUP) {  /* Setup or Timeout */
 		dev_dbg(hsotg->dev, "%s: Setup/Timeout\n",  __func__);
 
+		hsotg->retry_connect = false;
+
 		if (using_dma(hsotg) && idx == 0) {
 			/*
 			 * this is the notification we've received a
@@ -3164,6 +3166,17 @@ static void dwc2_hsotg_epint(struct dwc2_hsotg *hsotg, unsigned int idx,
 		dev_dbg(hsotg->dev, "%s: BNA interrupt\n", __func__);
 		if (hs_ep->isochronous)
 			dwc2_gadget_handle_isoc_bna(hs_ep);
+
+		/*
+		 * In case BNA IRQ fires during setup phase, we may fall into
+		 * an endless BNA IRQ loop. So mask it here, and wait for the
+		 * next USBRSt event, to recover, using retry_connect flag.
+		 */
+		if (using_desc_dma(hsotg) && idx == 0 && !hs_ep->dir_in &&
+		    hsotg->ep0_state == DWC2_EP0_SETUP) {
+			dwc2_clear_bit(hsotg, DOEPMSK, DOEPMSK_BNAMSK);
+			hsotg->retry_connect = true;
+		}
 	}
 
 	if (dir_in && !hs_ep->isochronous) {
@@ -3766,13 +3779,20 @@ irq_retry:
 
 		dwc2_writel(hsotg, GINTSTS_USBRST, GINTSTS);
 
+		/*
+		 * Setup Phase may later fail, resulting in a non-functional state. So
+		 * keep track of previous attempt, up to the Setup completion.
+		 */
+		if (connected)
+			hsotg->retry_connect = true;
+
 		/* Report disconnection if it is not already done. */
 		dwc2_hsotg_disconnect(hsotg);
 
 		/* Reset device address to zero */
 		dwc2_clear_bit(hsotg, DCFG, DCFG_DEVADDR_MASK);
 
-		if (usb_status & GOTGCTL_BSESVLD && connected)
+		if (usb_status & GOTGCTL_BSESVLD && hsotg->retry_connect)
 			dwc2_hsotg_core_init_disconnected(hsotg, true);
 	}
 

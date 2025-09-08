@@ -1223,6 +1223,7 @@ struct dwc2_hsotg {
 	struct usb_gadget gadget;
 	unsigned int enabled:1;
 	unsigned int connected:1;
+	unsigned int retry_connect:1;
 	unsigned int remote_wakeup_allowed:1;
 	struct dwc2_hsotg_ep *eps_in[MAX_EPS_CHANNELS];
 	struct dwc2_hsotg_ep *eps_out[MAX_EPS_CHANNELS];
