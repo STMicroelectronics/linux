@@ -356,6 +356,11 @@
 	};
 };
 
+&ddrperfm {
+	memory-channel = <&lpddr_channel>;
+	status = "disabled";
+};
+
 &dsi {
 	vdd-supply =  <&scmi_vddcore>;
 	vdda18-supply = <&scmi_v1v8>;
