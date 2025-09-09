@@ -3086,6 +3086,13 @@
 			status = "disabled";
 		};
 
+		ddrperfm: perf@48041000 {
+			compatible = "st,stm32mp251-ddr-pmu";
+			reg = <0x48041000 0x400>;
+			access-controllers = <&rcc 104>;
+			status = "disabled";
+		};
+
 		fmc: memory-controller@48200000 {
 			compatible = "st,stm32mp25-fmc2-ebi";
 			reg = <0x48200000 0x400>;
