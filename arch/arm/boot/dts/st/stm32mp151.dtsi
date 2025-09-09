@@ -755,6 +755,13 @@
 			};
 		};
 
+		ddrperfm: perf@5a007000 {
+			compatible = "st,stm32mp151-ddr-pmu", "st,stm32mp131-ddr-pmu";
+			reg = <0x5a007000 0x400>;
+			clocks = <&rcc DDRPERFM>;
+			resets = <&rcc DDRPERFM_R>;
+		};
+
 		iwdg1: watchdog@5c003000 {
 			compatible = "st,stm32mp1-iwdg";
 			reg = <0x5c003000 0x400>;
