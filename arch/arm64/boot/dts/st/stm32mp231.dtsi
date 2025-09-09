@@ -2707,6 +2707,13 @@
 				<&intc GIC_SPI 213 IRQ_TYPE_LEVEL_HIGH>;	/* EXTI_70 */
 		};
 
+		ddrperfm: perf@48041000 {
+			compatible = "st,stm32mp231-ddr-pmu", "st,stm32mp251-ddr-pmu";
+			reg = <0x48041000 0x400>;
+			access-controllers = <&dbg_bus 2>;
+			status = "disabled";
+		};
+
 		fmc: memory-controller@48200000 {
 			compatible = "st,stm32mp25-fmc2-ebi";
 			reg = <0x48200000 0x400>;
