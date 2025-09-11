@@ -53,6 +53,9 @@ properties:
       override default rtc_ck parent clock phandle of the new parent clock of rtc_ck
     maxItems: 1
 
+  "#clock-cells":
+    const: 0
+
 patternProperties:
   "^rtc-[a-z]+-[0-9]+$":
     type: object
@@ -89,6 +92,7 @@ allOf:
           maxItems: 1
 
         clock-names: false
+        "#clock-cells": false
 
       patternProperties:
         "^rtc-[a-z]+-[0-9]+$": false
@@ -107,6 +111,8 @@ allOf:
         clocks:
           minItems: 2
           maxItems: 2
+
+        "#clock-cells": false
 
       patternProperties:
         "^rtc-[a-z]+-[0-9]+$": false
@@ -166,7 +172,13 @@ examples:
       reg = <0x5c004000 0x400>;
       clocks = <&rcc RTCAPB>, <&rcc RTC>;
       clock-names = "pclk", "rtc_ck";
+      #clock-cells = <0>;
       interrupts = <GIC_SPI 3 IRQ_TYPE_LEVEL_HIGH>;
+
+      rtc-lsco-0 {
+        pins = "out2_rmp";
+        function = "lsco";
+      };
     };
 
 ...
