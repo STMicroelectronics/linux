@@ -1102,9 +1102,9 @@ static irqreturn_t stm32_usart_interrupt(int irq, void *ptr)
 			    ((sr & USART_SR_ERR_MASK) && stm32_usart_rx_dma_started(stm32_port))) {
 				uart_port_lock(port);
 				size = stm32_usart_receive_chars(port, false);
-				uart_unlock_and_check_sysrq(port);
 				if (size)
 					tty_flip_buffer_push(tport);
+				uart_unlock_and_check_sysrq(port);
 				ret = IRQ_HANDLED;
 			}
 		}
