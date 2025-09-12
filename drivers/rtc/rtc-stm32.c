@@ -326,6 +326,7 @@ static int stm32_rtc_pinmux_action_lsco(struct pinctrl_dev *pctldev, unsigned in
 	struct stm32_rtc *rtc = pinctrl_dev_get_drvdata(pctldev);
 	struct stm32_rtc_registers regs = rtc->data->regs;
 	struct device *dev = rtc->rtc_dev->dev.parent;
+	unsigned long flags = 0;
 	u8 lscoen;
 	int ret;
 
@@ -338,8 +339,14 @@ static int stm32_rtc_pinmux_action_lsco(struct pinctrl_dev *pctldev, unsigned in
 
 	lscoen = (pin == OUT1) ? STM32_RTC_CFGR_LSCOEN_OUT1 : STM32_RTC_CFGR_LSCOEN_OUT2_RMP;
 
-	rtc->clk_lsco = clk_register_gate(dev, "rtc_lsco", __clk_get_name(rtc->rtc_ck),
-					  CLK_IGNORE_UNUSED | CLK_IS_CRITICAL,
+	/*
+	 * For backward compatibility with old DT without #clock-cells
+	 * and with no clock clients, keep the clock always enabled.
+	 */
+	if (!of_property_present(dev->of_node, "#clock-cells"))
+		flags = CLK_IGNORE_UNUSED | CLK_IS_CRITICAL;
+
+	rtc->clk_lsco = clk_register_gate(dev, "rtc_lsco", __clk_get_name(rtc->rtc_ck), flags,
 					  rtc->base + regs.cfgr, lscoen, 0, NULL);
 	if (IS_ERR(rtc->clk_lsco))
 		return PTR_ERR(rtc->clk_lsco);
