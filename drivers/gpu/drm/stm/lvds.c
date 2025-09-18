@@ -762,10 +762,11 @@ static int lvds_pixel_clk_register(struct stm_lvds *lvds)
 		 * We want pixclk, not bitclk
 		 */
 		lvds->pixel_clock_rate = (unsigned long)pll_out_khz * 1000 * multiplier / 7;
-	} else {
-		/* set the rate by default at 148500000 */
-		lvds->pixel_clock_rate = 148500000;
 	}
+
+	/* Check the pixel clock rate (null value forbidden) */
+	if (!lvds->pixel_clock_rate)
+		lvds->pixel_clock_rate = 148500000;
 
 	ret = clk_hw_register(lvds->dev, &lvds->lvds_ck_px);
 	if (ret)
