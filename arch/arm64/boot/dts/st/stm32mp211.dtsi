@@ -396,6 +396,114 @@
 			reg = <0x44230000 0x0 0x10000>;
 		};
 
+		pinctrl: pinctrl@44240000 {
+			compatible = "st,stm32mp215-pinctrl";
+			ranges = <0 0x44240000 0x80400>;
+			#address-cells = <1>;
+			#size-cells = <1>;
+			interrupt-parent = <&exti1>;
+			st,syscfg = <&exti1 0x60 0xff>;
+
+			gpioa: gpio@44240000 {
+				reg = <0x0 0x400>;
+				gpio-controller;
+				#gpio-cells = <2>;
+				interrupt-controller;
+				#interrupt-cells = <2>;
+				clocks = <&scmi_clk CK_SCMI_GPIOA>;
+				st,bank-name = "GPIOA";
+				status = "disabled";
+			};
+
+			gpiob: gpio@44250000 {
+				reg = <0x10000 0x400>;
+				gpio-controller;
+				#gpio-cells = <2>;
+				interrupt-controller;
+				#interrupt-cells = <2>;
+				clocks = <&scmi_clk CK_SCMI_GPIOB>;
+				st,bank-name = "GPIOB";
+				status = "disabled";
+			};
+
+			gpioc: gpio@44260000 {
+				reg = <0x20000 0x400>;
+				gpio-controller;
+				#gpio-cells = <2>;
+				interrupt-controller;
+				#interrupt-cells = <2>;
+				clocks = <&scmi_clk CK_SCMI_GPIOC>;
+				st,bank-name = "GPIOC";
+				status = "disabled";
+			};
+
+			gpiod: gpio@44270000 {
+				reg = <0x30000 0x400>;
+				gpio-controller;
+				#gpio-cells = <2>;
+				interrupt-controller;
+				#interrupt-cells = <2>;
+				clocks = <&scmi_clk CK_SCMI_GPIOD>;
+				st,bank-name = "GPIOD";
+				status = "disabled";
+			};
+
+			gpioe: gpio@44280000 {
+				reg = <0x40000 0x400>;
+				gpio-controller;
+				#gpio-cells = <2>;
+				interrupt-controller;
+				#interrupt-cells = <2>;
+				clocks = <&scmi_clk CK_SCMI_GPIOE>;
+				st,bank-name = "GPIOE";
+				status = "disabled";
+			};
+
+			gpiof: gpio@44290000 {
+				reg = <0x50000 0x400>;
+				gpio-controller;
+				#gpio-cells = <2>;
+				interrupt-controller;
+				#interrupt-cells = <2>;
+				clocks = <&scmi_clk CK_SCMI_GPIOF>;
+				st,bank-name = "GPIOF";
+				status = "disabled";
+			};
+
+			gpiog: gpio@442a0000 {
+				reg = <0x60000 0x400>;
+				gpio-controller;
+				#gpio-cells = <2>;
+				interrupt-controller;
+				#interrupt-cells = <2>;
+				clocks = <&scmi_clk CK_SCMI_GPIOG>;
+				st,bank-name = "GPIOG";
+				status = "disabled";
+			};
+
+			gpioh: gpio@442b0000 {
+				reg = <0x70000 0x400>;
+				gpio-controller;
+				#gpio-cells = <2>;
+				interrupt-controller;
+				#interrupt-cells = <2>;
+				clocks = <&scmi_clk CK_SCMI_GPIOH>;
+				st,bank-name = "GPIOH";
+				status = "disabled";
+			};
+
+			gpioi: gpio@442c0000 {
+				reg = <0x80000 0x400>;
+				gpio-controller;
+				#gpio-cells = <2>;
+				interrupt-controller;
+				#interrupt-cells = <2>;
+				clocks = <&scmi_clk CK_SCMI_GPIOI>;
+				st,bank-name = "GPIOI";
+				status = "disabled";
+			};
+		};
+
 		exti2: interrupt-controller@442d0000 {
 			compatible = "st,stm32mp1-exti", "syscon";
 			reg = <0x442d0000 0x0 0x400>;
@@ -456,6 +564,27 @@
 				<&intc GIC_SPI 202 IRQ_TYPE_LEVEL_HIGH>,
 				<&intc GIC_SPI 203 IRQ_TYPE_LEVEL_HIGH>,
 				<&intc GIC_SPI 204 IRQ_TYPE_LEVEL_HIGH>;
+		};
+
+		pinctrl_z: pinctrl@46200000 {
+			compatible = "st,stm32mp215-z-pinctrl";
+			ranges = <0 0x46200000 0x400>;
+			#address-cells = <1>;
+			#size-cells = <1>;
+			interrupt-parent = <&exti1>;
+			st,syscfg = <&exti1 0x60 0xff>;
+
+			gpioz: gpio@46200000 {
+				reg = <0 0x400>;
+				gpio-controller;
+				#gpio-cells = <2>;
+				interrupt-controller;
+				#interrupt-cells = <2>;
+				clocks = <&scmi_clk CK_SCMI_GPIOZ>;
+				st,bank-name = "GPIOZ";
+				st,bank-ioport = <11>;
+				status = "disabled";
+			};
 		};
 
 		intc: interrupt-controller@4ac10000 {
