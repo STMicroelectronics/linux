@@ -142,6 +142,9 @@ static unsigned int stm32_usart_tx_empty(struct uart_port *port)
 	struct stm32_port *stm32_port = to_stm32_port(port);
 	const struct stm32_usart_offsets *ofs = &stm32_port->info->ofs;
 
+	if (stm32_port->tx_dma_busy)
+		return 0;
+
 	if (readl_relaxed(port->membase + ofs->isr) & USART_SR_TC)
 		return TIOCSER_TEMT;
 
