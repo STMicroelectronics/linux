@@ -1370,8 +1370,18 @@ static void stm32_usart_shutdown(struct uart_port *port)
 
 	pm_runtime_get(port->dev);
 
-	if (stm32_usart_tx_dma_started(stm32_port))
+	ret = readl_relaxed_poll_timeout(port->membase + ofs->isr,
+					 isr, (isr & USART_SR_TC),
+					 10, 100000);
+
+	/* Send the TC error message only when ISR_TC is not set */
+	if (ret)
+		dev_err(port->dev, "Disabling port: transmission is not complete\n");
+
+	if (stm32_usart_tx_dma_started(stm32_port)) {
 		stm32_usart_tx_dma_terminate(stm32_port);
+		dmaengine_synchronize(stm32_port->tx_ch);
+	}
 
 	if (stm32_port->tx_ch)
 		stm32_usart_clr_bits(port, ofs->cr3, USART_CR3_DMAT);
@@ -1384,14 +1394,6 @@ static void stm32_usart_shutdown(struct uart_port *port)
 	val |= BIT(cfg->uart_enable_bit);
 	if (stm32_port->fifoen)
 		val |= USART_CR1_FIFOEN;
-
-	ret = readl_relaxed_poll_timeout(port->membase + ofs->isr,
-					 isr, (isr & USART_SR_TC),
-					 10, 100000);
-
-	/* Send the TC error message only when ISR_TC is not set */
-	if (ret)
-		dev_err(port->dev, "Transmission is not complete\n");
 
 	/* Disable RX DMA. */
 	if (stm32_port->rx_ch) {
