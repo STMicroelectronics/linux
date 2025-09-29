@@ -401,7 +401,6 @@
 			ranges = <0 0x44240000 0x80400>;
 			#address-cells = <1>;
 			#size-cells = <1>;
-			interrupt-parent = <&exti1>;
 			interrupts-extended =
 				<&exti1  0 0>, <&exti1  1 0>, <&exti1  2 0>, <&exti1  3 0>,
 				<&exti1  4 0>, <&exti1  5 0>, <&exti1  6 0>, <&exti1  7 0>,
@@ -579,7 +578,6 @@
 			ranges = <0 0x46200000 0x400>;
 			#address-cells = <1>;
 			#size-cells = <1>;
-			interrupt-parent = <&exti1>;
 			interrupts-extended =
 				<&exti1  0 0>, <&exti1  1 0>, <&exti1  2 0>, <&exti1  3 0>,
 				<&exti1  4 0>, <&exti1  5 0>, <&exti1  6 0>, <&exti1  7 0>,
