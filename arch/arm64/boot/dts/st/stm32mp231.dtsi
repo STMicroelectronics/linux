@@ -1081,7 +1081,6 @@
 			#size-cells = <1>;
 			interrupt-parent = <&exti1>;
 			st,syscfg = <&exti1 0x60 0xff>;
-			pins-are-numbered;
 
 			gpioa: gpio@44240000 {
 				reg = <0x0 0x400>;
@@ -1200,7 +1199,6 @@
 			#size-cells = <1>;
 			interrupt-parent = <&exti1>;
 			st,syscfg = <&exti1 0x60 0xff>;
-			pins-are-numbered;
 
 			gpioz: gpio@46200000 {
 				reg = <0 0x400>;
