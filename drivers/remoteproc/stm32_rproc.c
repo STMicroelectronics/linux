@@ -729,6 +729,11 @@ static int stm32_rproc_start(struct rproc *rproc)
 	struct stm32_rproc *ddata = rproc->priv;
 	int err;
 
+	if (!ddata->rst) {
+		dev_err(&rproc->dev, "Start of the firmware not supported\n");
+		return -EPERM;
+	}
+
 	stm32_rproc_add_coredump_trace(rproc);
 
 	/* clear remote proc Deep Sleep */
@@ -805,6 +810,11 @@ static int stm32_rproc_stop(struct rproc *rproc)
 {
 	struct stm32_rproc *ddata = rproc->priv;
 	int err;
+
+	if (!ddata->rst) {
+		dev_err(&rproc->dev, "Stop of the firmware not supported\n");
+		return -EPERM;
+	}
 
 	stm32_rproc_request_shutdown(rproc);
 
@@ -1070,9 +1080,12 @@ static int stm32_rproc_parse_dt(struct platform_device *pdev,
 		/* Try legacy fallback method: get it by index */
 		ddata->rst = devm_reset_control_get_by_index(dev, 0);
 	}
-	if (IS_ERR(ddata->rst) && PTR_ERR(ddata->rst) != -ENOENT)
-		return dev_err_probe(dev, PTR_ERR(ddata->rst),
-				     "failed to get mcu_reset\n");
+	if (IS_ERR(ddata->rst)) {
+		if (PTR_ERR(ddata->rst) != -ENOENT)
+			return dev_err_probe(dev, PTR_ERR(ddata->rst),
+					     "failed to get mcu_reset\n");
+		ddata->rst = NULL;
+	}
 
 	/*
 	 * Three ways to manage the hold boot
