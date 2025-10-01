@@ -633,7 +633,7 @@ static int stm32_rifsc_register_debugfs(struct rifsc_private *priv)
 	return 0;
 }
 #else /* CONFIG_DEBUG_FS */
-static int stm32_rifsc_register_debugfs(struct rifsc_private *priv __unused)
+static int stm32_rifsc_register_debugfs(struct rifsc_private *__unused)
 {
 	return 0;
 }
