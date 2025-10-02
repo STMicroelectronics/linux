@@ -279,7 +279,7 @@ static int stm32mp_exti_convert_type(struct irq_data *d, unsigned int type, u32 
 	return 0;
 }
 
-static void stm32mp_chip_suspend(struct stm32mp_exti_chip_data *chip_data, u32 wake_active)
+static void stm32mp_chip_suspend(struct stm32mp_exti_chip_data *chip_data)
 {
 	const struct stm32mp_exti_bank *bank = chip_data->reg_bank;
 	void __iomem *base = chip_data->host_data->base;
@@ -288,14 +288,14 @@ static void stm32mp_chip_suspend(struct stm32mp_exti_chip_data *chip_data, u32 w
 	chip_data->rtsr_cache = readl_relaxed(base + bank->rtsr_ofst);
 	chip_data->ftsr_cache = readl_relaxed(base + bank->ftsr_ofst);
 
-	writel_relaxed(wake_active, base + bank->imr_ofst);
+	writel_relaxed(chip_data->wake_active, base + bank->imr_ofst);
 
 	/* wakeup for IRQ power domain for S2IDLE */
-	if (wake_active)
+	if (chip_data->wake_active)
 		device_set_wakeup_path(chip_data->host_data->dev);
 }
 
-static void stm32mp_chip_resume(struct stm32mp_exti_chip_data *chip_data, u32 mask_cache)
+static void stm32mp_chip_resume(struct stm32mp_exti_chip_data *chip_data)
 {
 	const struct stm32mp_exti_bank *bank = chip_data->reg_bank;
 	void __iomem *base = chip_data->host_data->base;
@@ -304,7 +304,7 @@ static void stm32mp_chip_resume(struct stm32mp_exti_chip_data *chip_data, u32 ma
 	writel_relaxed(chip_data->rtsr_cache, base + bank->rtsr_ofst);
 	writel_relaxed(chip_data->ftsr_cache, base + bank->ftsr_ofst);
 
-	writel_relaxed(mask_cache, base + bank->imr_ofst);
+	writel_relaxed(chip_data->mask_cache, base + bank->imr_ofst);
 }
 
 /* directly set the target bit without reading first. */
@@ -444,13 +444,10 @@ static int stm32mp_exti_set_wake(struct irq_data *d, unsigned int on)
 static int stm32mp_exti_suspend(struct device *dev)
 {
 	struct stm32mp_exti_host_data *host_data = dev_get_drvdata(dev);
-	struct stm32mp_exti_chip_data *chip_data;
 	int i;
 
-	for (i = 0; i < host_data->drv_data->bank_nr; i++) {
-		chip_data = &host_data->chips_data[i];
-		stm32mp_chip_suspend(chip_data, chip_data->wake_active);
-	}
+	for (i = 0; i < host_data->drv_data->bank_nr; i++)
+		stm32mp_chip_suspend(&host_data->chips_data[i]);
 
 	return 0;
 }
@@ -478,14 +475,11 @@ static void stm32mp_exti_resume_gpio_mux(struct stm32mp_exti_host_data *host_dat
 static int stm32mp_exti_resume(struct device *dev)
 {
 	struct stm32mp_exti_host_data *host_data = dev_get_drvdata(dev);
-	struct stm32mp_exti_chip_data *chip_data;
 	int i;
 
 	stm32mp_exti_resume_gpio_mux(host_data);
-	for (i = 0; i < host_data->drv_data->bank_nr; i++) {
-		chip_data = &host_data->chips_data[i];
-		stm32mp_chip_resume(chip_data, chip_data->mask_cache);
-	}
+	for (i = 0; i < host_data->drv_data->bank_nr; i++)
+		stm32mp_chip_resume(&host_data->chips_data[i]);
 
 	return 0;
 }
