@@ -19,6 +19,7 @@
 #include <drm/drm_mipi_dsi.h>
 #include <linux/irq.h>
 #include <linux/interrupt.h>
+#include <linux/pinctrl/consumer.h>
 #include <linux/platform_data/x86/soc.h>
 #include <linux/slab.h>
 #include <linux/acpi.h>
@@ -1465,6 +1466,10 @@ static int goodix_suspend(struct device *dev)
 	/* We need gpio pins to suspend/resume */
 	if (ts->irq_pin_access_method == IRQ_PIN_ACCESS_NONE) {
 		goodix_disable_irq(ts);
+
+		/* Set to sleep state the pinctrl */
+		pinctrl_pm_select_sleep_state(dev);
+
 		return 0;
 	}
 
@@ -1509,6 +1514,10 @@ static int goodix_resume(struct device *dev)
 
 	if (ts->irq_pin_access_method == IRQ_PIN_ACCESS_NONE) {
 		goodix_enable_irq(ts);
+
+		/* Set to default state the pinctrl */
+		pinctrl_pm_select_default_state(dev);
+
 		return 0;
 	}
 
