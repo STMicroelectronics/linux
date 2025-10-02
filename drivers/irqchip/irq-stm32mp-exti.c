@@ -279,21 +279,45 @@ static int stm32mp_exti_convert_type(struct irq_data *d, unsigned int type, u32 
 	return 0;
 }
 
+static inline void stm32mp_exti_clr_reg(u32 clr, void __iomem *addr)
+{
+	u32 val;
+
+	val = readl_relaxed(addr);
+	val &= ~clr;
+	writel_relaxed(val, addr);
+}
+
+static inline void stm32mp_exti_set_reg(u32 set, void __iomem *addr)
+{
+	u32 val;
+
+	val = readl_relaxed(addr);
+	val |= set;
+	writel_relaxed(val, addr);
+}
+
+static inline void stm32mp_exti_clr_set_reg(u32 clr, u32 set, void __iomem *addr)
+{
+	u32 val;
+
+	val = readl_relaxed(addr);
+	val &= ~clr;
+	val |= set;
+	writel_relaxed(val, addr);
+}
+
 static void stm32mp_chip_suspend(struct stm32mp_exti_chip_data *chip_data)
 {
 	const struct stm32mp_exti_bank *bank = chip_data->reg_bank;
 	void __iomem *base = chip_data->host_data->base;
-	u32 val;
 
 	/* save rtsr, ftsr registers */
 	chip_data->rtsr_cache = readl_relaxed(base + bank->rtsr_ofst);
 	chip_data->ftsr_cache = readl_relaxed(base + bank->ftsr_ofst);
 
 	/* mask active and set wakeup, preserve bits set by secure world */
-	val = readl_relaxed(base + bank->imr_ofst);
-	val &= ~chip_data->mask_cache;
-	val |= chip_data->wake_active;
-	writel_relaxed(val, base + bank->imr_ofst);
+	stm32mp_exti_clr_set_reg(chip_data->mask_cache, chip_data->wake_active, base + bank->imr_ofst);
 
 	/* wakeup for IRQ power domain for S2IDLE */
 	if (chip_data->wake_active)
@@ -304,68 +328,29 @@ static void stm32mp_chip_resume(struct stm32mp_exti_chip_data *chip_data)
 {
 	const struct stm32mp_exti_bank *bank = chip_data->reg_bank;
 	void __iomem *base = chip_data->host_data->base;
-	u32 val;
 
 	/* restore rtsr, ftsr, registers */
 	writel_relaxed(chip_data->rtsr_cache, base + bank->rtsr_ofst);
 	writel_relaxed(chip_data->ftsr_cache, base + bank->ftsr_ofst);
 
 	/* mask wakeup and set active, preserve bits set by secure world */
-	val = readl_relaxed(base + bank->imr_ofst);
-	val &= ~chip_data->wake_active;
-	val |= chip_data->mask_cache;
-	writel_relaxed(val, base + bank->imr_ofst);
-}
-
-/* directly set the target bit without reading first. */
-static inline void stm32mp_exti_write_bit(struct irq_data *d, u32 reg)
-{
-	struct stm32mp_exti_chip_data *chip_data = irq_data_get_irq_chip_data(d);
-	void __iomem *base = chip_data->host_data->base;
-	u32 val = BIT(d->hwirq % IRQS_PER_BANK);
-
-	writel_relaxed(val, base + reg);
-}
-
-static inline u32 stm32mp_exti_set_bit(struct irq_data *d, u32 reg)
-{
-	struct stm32mp_exti_chip_data *chip_data = irq_data_get_irq_chip_data(d);
-	void __iomem *base = chip_data->host_data->base;
-	u32 val, mask;
-
-	mask = BIT(d->hwirq % IRQS_PER_BANK);
-	val = readl_relaxed(base + reg);
-	val |= mask;
-	writel_relaxed(val, base + reg);
-
-	return mask;
-}
-
-static inline u32 stm32mp_exti_clr_bit(struct irq_data *d, u32 reg)
-{
-	struct stm32mp_exti_chip_data *chip_data = irq_data_get_irq_chip_data(d);
-	void __iomem *base = chip_data->host_data->base;
-	u32 val, mask;
-
-	mask = BIT(d->hwirq % IRQS_PER_BANK);
-	val = readl_relaxed(base + reg);
-	val &= ~mask;
-	writel_relaxed(val, base + reg);
-
-	return mask;
+	stm32mp_exti_clr_set_reg(chip_data->wake_active, chip_data->mask_cache, base + bank->imr_ofst);
 }
 
 static void stm32mp_exti_eoi(struct irq_data *d)
 {
 	struct stm32mp_exti_chip_data *chip_data = irq_data_get_irq_chip_data(d);
 	const struct stm32mp_exti_bank *bank = chip_data->reg_bank;
+	void __iomem *base = chip_data->host_data->base;
+	u32 mask = BIT(d->hwirq % IRQS_PER_BANK);
 
 	raw_spin_lock(&chip_data->rlock);
 
-	stm32mp_exti_write_bit(d, bank->rpr_ofst);
-	stm32mp_exti_write_bit(d, bank->fpr_ofst);
+	writel_relaxed(mask, base + bank->rpr_ofst);
+	writel_relaxed(mask, base + bank->fpr_ofst);
 
-	chip_data->mask_cache |= stm32mp_exti_set_bit(d, bank->imr_ofst);
+	stm32mp_exti_set_reg(mask, base + bank->imr_ofst);
+	chip_data->mask_cache |= mask;
 
 	raw_spin_unlock(&chip_data->rlock);
 
@@ -376,9 +361,14 @@ static void stm32mp_exti_mask(struct irq_data *d)
 {
 	struct stm32mp_exti_chip_data *chip_data = irq_data_get_irq_chip_data(d);
 	const struct stm32mp_exti_bank *bank = chip_data->reg_bank;
+	void __iomem *base = chip_data->host_data->base;
+	u32 mask = BIT(d->hwirq % IRQS_PER_BANK);
 
 	raw_spin_lock(&chip_data->rlock);
-	chip_data->mask_cache &= ~stm32mp_exti_clr_bit(d, bank->imr_ofst);
+
+	stm32mp_exti_clr_reg(mask, base + bank->imr_ofst);
+	chip_data->mask_cache &= ~mask;
+
 	raw_spin_unlock(&chip_data->rlock);
 
 	irq_chip_mask_parent(d);
@@ -388,9 +378,14 @@ static void stm32mp_exti_unmask(struct irq_data *d)
 {
 	struct stm32mp_exti_chip_data *chip_data = irq_data_get_irq_chip_data(d);
 	const struct stm32mp_exti_bank *bank = chip_data->reg_bank;
+	void __iomem *base = chip_data->host_data->base;
+	u32 mask = BIT(d->hwirq % IRQS_PER_BANK);
 
 	raw_spin_lock(&chip_data->rlock);
-	chip_data->mask_cache |= stm32mp_exti_set_bit(d, bank->imr_ofst);
+
+	stm32mp_exti_set_reg(mask, base + bank->imr_ofst);
+	chip_data->mask_cache |= mask;
+
 	raw_spin_unlock(&chip_data->rlock);
 
 	irq_chip_unmask_parent(d);
