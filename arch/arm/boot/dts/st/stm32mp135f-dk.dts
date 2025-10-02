@@ -447,8 +447,9 @@
 	goodix: goodix-ts@5d {
 		compatible = "goodix,gt911";
 		reg = <0x5d>;
-		pinctrl-names = "default";
+		pinctrl-names = "default", "sleep";
 		pinctrl-0 = <&goodix_pins_a>;
+		pinctrl-1 = <&goodix_sleep_pins_a>;
 		interrupt-parent = <&gpiof>;
 		interrupts = <5 IRQ_TYPE_EDGE_FALLING>;
 		AVDD28-supply = <&scmi_v3v3_sw>;
