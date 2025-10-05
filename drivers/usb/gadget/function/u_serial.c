@@ -814,6 +814,9 @@ static unsigned int gs_write_room(struct tty_struct *tty)
 	unsigned long	flags;
 	unsigned int room = 0;
 
+	if (require_dtr && !READ_ONCE(port->host_dtr))
+		return 0;
+
 	spin_lock_irqsave(&port->port_lock, flags);
 	if (port->port_usb)
 		room = kfifo_avail(&port->port_write_buf);
@@ -830,6 +833,9 @@ static unsigned int gs_chars_in_buffer(struct tty_struct *tty)
 	struct gs_port	*port = tty->driver_data;
 	unsigned long	flags;
 	unsigned int	chars;
+
+	if (require_dtr && !READ_ONCE(port->host_dtr))
+		return WRITE_BUF_SIZE;
 
 	spin_lock_irqsave(&port->port_lock, flags);
 	chars = kfifo_len(&port->port_write_buf);
