@@ -28,15 +28,28 @@
 #include <linux/kthread.h>
 #include <linux/workqueue.h>
 #include <linux/kfifo.h>
+#include <linux/moduleparam.h>
+#include <linux/wait.h>
 #include <linux/tty.h>
+#include <linux/tty_port.h>
 #include <linux/termios.h>
 
 #include "u_serial.h"
 
-/* Optional: Host-DTR zusätzlich als Carrier (TIOCM_CAR) spiegeln */
-static bool map_dtr_to_car;
+/* Optional: gate TX until host asserts DTR */
+static bool require_dtr;
+module_param(require_dtr, bool, 0644);
+MODULE_PARM_DESC(require_dtr, "Block TX until host asserts DTR");
+
+/* Default: map Host DTR to Carrier so open() (!CLOCAL) blocks until DTR=1 */
+static bool map_dtr_to_car = true;
 module_param(map_dtr_to_car, bool, 0644);
 MODULE_PARM_DESC(map_dtr_to_car, "Map host DTR to TIOCM_CAR (Carrier Detect)");
+
+/* Optional: send SIGHUP on DTR 1->0 if !CLOCAL */
+static bool hup_on_dtr_drop;
+module_param(hup_on_dtr_drop, bool, 0644);
+MODULE_PARM_DESC(hup_on_dtr_drop, "Send SIGHUP on host DTR drop if !CLOCAL");
 
 /*
  * This component encapsulates the TTY layer glue needed to provide basic
@@ -91,10 +104,6 @@ MODULE_PARM_DESC(map_dtr_to_car, "Map host DTR to TIOCM_CAR (Carrier Detect)");
 /* Prevents race conditions while accessing gser->ioport */
 static DEFINE_SPINLOCK(serial_port_lock);
 
-static bool require_dtr;
-module_param(require_dtr, bool, 0644);
-MODULE_PARM_DESC(require_dtr, "Block TX until host asserts DTR");
-
 /* console info */
 struct gs_console {
 	struct console		console;
@@ -138,9 +147,8 @@ struct gs_port {
 	bool			start_delayed;	/* delay start when suspended */
 	bool			host_dtr;
 	bool			host_rts;
-	wait_queue_head_t	dtr_wait;
-	unsigned int		modem_status;	/* aktuelle TIOCM_* Bits */
-	unsigned int		modem_delta;	/* geänderte TIOCM_* Bits (seit letztem Wait) */
+	unsigned int		modem_status;	/* current TIOCM_* bits */
+	unsigned int		modem_delta;	/* changed TIOCM_* since last wait */
 
 	/* REVISIT this state ... */
 	struct usb_cdc_line_coding port_line_coding;	/* 8-N-1 etc */
@@ -756,35 +764,31 @@ static ssize_t gs_write(struct tty_struct *tty, const u8 *buf, size_t count)
 {
 	struct gs_port	*port = tty->driver_data;
 	unsigned long	flags;
-	int		ret;
+	int		written = 0;
 
-	pr_vdebug("gs_write: ttyGS%d (%p) writing %zu bytes\n",
-			port->port_num, tty, count);
-
-	if (require_dtr && !READ_ONCE(port->host_dtr)) {
-		if (tty->flags & (1 << TTY_NONBLOCK))
-			return -EAGAIN;
-
-		ret = wait_event_interruptible(port->dtr_wait,
-				!require_dtr || READ_ONCE(port->host_dtr) ||
-				!port->port.count);
-		if (ret)
-			return ret;
-
-		/* if we woke up and DTR is still not set, port was closed */
-		if (require_dtr && !READ_ONCE(port->host_dtr))
-			return -EIO;
+	/* Optional gating: if require_dtr, block until host has DTR=1 */
+	if (require_dtr) {
+		if (!READ_ONCE(port->host_dtr)) {
+			int ret = wait_event_interruptible(
+				port->port.delta_msr_wait,
+				READ_ONCE(port->host_dtr) ||
+				!tty_port_initialized(&port->port));
+			if (ret)
+				return ret;
+			if (!READ_ONCE(port->host_dtr))
+				return -EIO;
+		}
 	}
 
 	spin_lock_irqsave(&port->port_lock, flags);
 	if (count)
-		count = kfifo_in(&port->port_write_buf, buf, count);
+		written = kfifo_in(&port->port_write_buf, buf, count);
 	/* treat count == 0 as flush_chars() */
 	if (port->port_usb)
 		gs_start_tx(port);
 	spin_unlock_irqrestore(&port->port_lock, flags);
 
-	return count;
+	return written;
 }
 
 static int gs_put_char(struct tty_struct *tty, u8 ch)
@@ -822,6 +826,7 @@ static unsigned int gs_write_room(struct tty_struct *tty)
 	unsigned long	flags;
 	unsigned int room = 0;
 
+	/* Make n_tty respect non-blocking writes: report no room if DTR=0 */
 	if (require_dtr && !READ_ONCE(port->host_dtr))
 		return 0;
 
@@ -842,6 +847,7 @@ static unsigned int gs_chars_in_buffer(struct tty_struct *tty)
 	unsigned long	flags;
 	unsigned int	chars;
 
+	/* When DTR=0 and require_dtr, pretend buffers are full so writers back off */
 	if (require_dtr && !READ_ONCE(port->host_dtr))
 		return WRITE_BUF_SIZE;
 
@@ -891,10 +897,10 @@ static int gs_break_ctl(struct tty_struct *tty, int duration)
 	return status;
 }
 
+/* ----------------- Modem status ops (TIOCMGET / TIOCMIWAIT) ----------------- */
 static int gs_tiocmget(struct tty_struct *tty)
 {
 	struct gs_port *port = tty->driver_data;
-
 	return READ_ONCE(port->modem_status);
 }
 
@@ -909,19 +915,20 @@ static int gs_ioctl(struct tty_struct *tty, unsigned int cmd, unsigned long arg)
 
 		for (;;) {
 			unsigned int delta = READ_ONCE(port->modem_delta) & mask;
-
 			if (delta) {
-				spin_lock_irq(&port->port_lock);
+				unsigned long flags;
+				spin_lock_irqsave(&port->port_lock, flags);
 				port->modem_delta &= ~delta;
-				spin_unlock_irq(&port->port_lock);
+				spin_unlock_irqrestore(&port->port_lock, flags);
 				return 0;
 			}
 			if (!tty_port_initialized(&port->port))
 				return -EIO;
 
-			ret = wait_event_interruptible(port->port.delta_msr_wait,
-					(READ_ONCE(port->modem_delta) & mask) ||
-					!tty_port_initialized(&port->port));
+			ret = wait_event_interruptible(
+				port->port.delta_msr_wait,
+				((READ_ONCE(port->modem_delta) & mask) != 0) ||
+				!tty_port_initialized(&port->port));
 			if (ret)
 				return ret;
 		}
@@ -941,8 +948,8 @@ static const struct tty_operations gs_tty_ops = {
 	.chars_in_buffer =	gs_chars_in_buffer,
 	.unthrottle =		gs_unthrottle,
 	.break_ctl =		gs_break_ctl,
-	.tiocmget =		gs_tiocmget,
-	.ioctl =		gs_ioctl,
+	.tiocmget		= gs_tiocmget,
+	.ioctl			= gs_ioctl,
 };
 
 /*-------------------------------------------------------------------------*/
@@ -1249,7 +1256,6 @@ gs_port_alloc(unsigned port_num, struct usb_cdc_line_coding *coding)
 	spin_lock_init(&port->port_lock);
 	init_waitqueue_head(&port->drain_wait);
 	init_waitqueue_head(&port->close_wait);
-	init_waitqueue_head(&port->dtr_wait);
 
 	INIT_DELAYED_WORK(&port->push, gs_rx_push);
 
@@ -1508,15 +1514,22 @@ void gserial_disconnect(struct gserial *gser)
 }
 EXPORT_SYMBOL_GPL(gserial_disconnect);
 
+/*
+ * Report host control line state (DTR/RTS) from function drivers (e.g. f_acm).
+ * Mirrors state into gs_port, updates modem bits and wakes waiters.
+ */
 void gserial_set_dtr_rts(struct gserial *gser, bool dtr, bool rts)
 {
 	struct gs_port *port;
 	unsigned int old, new, changed;
+	bool dtr_dropped;
+	struct tty_struct *tty;
 
 	if (!gser)
 		return;
 
-	port = gser->ioport;
+	/* Upstream uses gser->ioport; some vendor trees may use ->port */
+	port = READ_ONCE(gser->ioport);
 	if (!port)
 		return;
 
@@ -1534,16 +1547,36 @@ void gserial_set_dtr_rts(struct gserial *gser, bool dtr, bool rts)
 		new |= TIOCM_CTS;
 
 	changed = old ^ new;
+	dtr_dropped = (old & TIOCM_DSR) && !(new & TIOCM_DSR);
+
 	if (changed) {
 		unsigned long flags;
-
-		WRITE_ONCE(port->modem_status, new);
 		spin_lock_irqsave(&port->port_lock, flags);
+		port->modem_status = new;
 		port->modem_delta |= changed;
 		spin_unlock_irqrestore(&port->port_lock, flags);
 
-		wake_up_interruptible(&port->dtr_wait);
+		/* Wake up waiters (TIOCMIWAIT) and potentially writers */
 		wake_up_interruptible(&port->port.delta_msr_wait);
+		tty_port_tty_wakeup(&port->port);
+	}
+
+	/* Maintain carrier for open() semantics when requested */
+	if (map_dtr_to_car) {
+		if (dtr)
+			tty_port_set_carrier_raised(&port->port);
+		else
+			tty_port_set_carrier_drop(&port->port);
+	}
+
+	/* Optional: HUP on DTR drop if application honors modem lines (!CLOCAL) */
+	if (hup_on_dtr_drop && dtr_dropped) {
+		tty = tty_port_tty_get(&port->port);
+		if (tty) {
+			if (!(tty->termios.c_cflag & CLOCAL))
+				tty_vhangup(tty);
+			tty_kref_put(tty);
+		}
 	}
 }
 EXPORT_SYMBOL_GPL(gserial_set_dtr_rts);
