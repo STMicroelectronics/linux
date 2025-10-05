@@ -28,9 +28,15 @@
 #include <linux/kthread.h>
 #include <linux/workqueue.h>
 #include <linux/kfifo.h>
+#include <linux/tty.h>
+#include <linux/termios.h>
 
 #include "u_serial.h"
 
+/* Optional: Host-DTR zusätzlich als Carrier (TIOCM_CAR) spiegeln */
+static bool map_dtr_to_car;
+module_param(map_dtr_to_car, bool, 0644);
+MODULE_PARM_DESC(map_dtr_to_car, "Map host DTR to TIOCM_CAR (Carrier Detect)");
 
 /*
  * This component encapsulates the TTY layer glue needed to provide basic
@@ -133,6 +139,8 @@ struct gs_port {
 	bool			host_dtr;
 	bool			host_rts;
 	wait_queue_head_t	dtr_wait;
+	unsigned int		modem_status;	/* aktuelle TIOCM_* Bits */
+	unsigned int		modem_delta;	/* geänderte TIOCM_* Bits (seit letztem Wait) */
 
 	/* REVISIT this state ... */
 	struct usb_cdc_line_coding port_line_coding;	/* 8-N-1 etc */
@@ -886,14 +894,41 @@ static int gs_break_ctl(struct tty_struct *tty, int duration)
 static int gs_tiocmget(struct tty_struct *tty)
 {
 	struct gs_port *port = tty->driver_data;
-	unsigned int m = 0;
 
-	if (READ_ONCE(port->host_dtr))
-		m |= TIOCM_DSR;
-	if (READ_ONCE(port->host_rts))
-		m |= TIOCM_CTS;
+	return READ_ONCE(port->modem_status);
+}
 
-	return m;
+static int gs_ioctl(struct tty_struct *tty, unsigned int cmd, unsigned long arg)
+{
+	struct gs_port *port = tty->driver_data;
+
+	switch (cmd) {
+	case TIOCMIWAIT: {
+		unsigned long mask = arg;
+		int ret;
+
+		for (;;) {
+			unsigned int delta = READ_ONCE(port->modem_delta) & mask;
+
+			if (delta) {
+				spin_lock_irq(&port->port_lock);
+				port->modem_delta &= ~delta;
+				spin_unlock_irq(&port->port_lock);
+				return 0;
+			}
+			if (!tty_port_initialized(&port->port))
+				return -EIO;
+
+			ret = wait_event_interruptible(port->port.delta_msr_wait,
+					(READ_ONCE(port->modem_delta) & mask) ||
+					!tty_port_initialized(&port->port));
+			if (ret)
+				return ret;
+		}
+	}
+	default:
+		return -ENOIOCTLCMD;
+	}
 }
 
 static const struct tty_operations gs_tty_ops = {
@@ -907,6 +942,7 @@ static const struct tty_operations gs_tty_ops = {
 	.unthrottle =		gs_unthrottle,
 	.break_ctl =		gs_break_ctl,
 	.tiocmget =		gs_tiocmget,
+	.ioctl =		gs_ioctl,
 };
 
 /*-------------------------------------------------------------------------*/
@@ -1474,8 +1510,8 @@ EXPORT_SYMBOL_GPL(gserial_disconnect);
 
 void gserial_set_dtr_rts(struct gserial *gser, bool dtr, bool rts)
 {
-	unsigned long flags;
 	struct gs_port *port;
+	unsigned int old, new, changed;
 
 	if (!gser)
 		return;
@@ -1484,13 +1520,31 @@ void gserial_set_dtr_rts(struct gserial *gser, bool dtr, bool rts)
 	if (!port)
 		return;
 
-	spin_lock_irqsave(&port->port_lock, flags);
 	WRITE_ONCE(port->host_dtr, dtr);
 	WRITE_ONCE(port->host_rts, rts);
-	spin_unlock_irqrestore(&port->port_lock, flags);
 
-	wake_up_interruptible(&port->dtr_wait);
-	wake_up_interruptible(&port->port.delta_msr_wait);
+	old = READ_ONCE(port->modem_status);
+	new = 0;
+	if (dtr) {
+		new |= TIOCM_DSR;
+		if (map_dtr_to_car)
+			new |= TIOCM_CAR;
+	}
+	if (rts)
+		new |= TIOCM_CTS;
+
+	changed = old ^ new;
+	if (changed) {
+		unsigned long flags;
+
+		WRITE_ONCE(port->modem_status, new);
+		spin_lock_irqsave(&port->port_lock, flags);
+		port->modem_delta |= changed;
+		spin_unlock_irqrestore(&port->port_lock, flags);
+
+		wake_up_interruptible(&port->dtr_wait);
+		wake_up_interruptible(&port->port.delta_msr_wait);
+	}
 }
 EXPORT_SYMBOL_GPL(gserial_set_dtr_rts);
 
