@@ -85,6 +85,10 @@
 /* Prevents race conditions while accessing gser->ioport */
 static DEFINE_SPINLOCK(serial_port_lock);
 
+static bool require_dtr;
+module_param(require_dtr, bool, 0644);
+MODULE_PARM_DESC(require_dtr, "Block TX until host asserts DTR");
+
 /* console info */
 struct gs_console {
 	struct console		console;
@@ -126,6 +130,9 @@ struct gs_port {
 	wait_queue_head_t	close_wait;
 	bool			suspended;	/* port suspended */
 	bool			start_delayed;	/* delay start when suspended */
+	bool			host_dtr;
+	bool			host_rts;
+	wait_queue_head_t	dtr_wait;
 
 	/* REVISIT this state ... */
 	struct usb_cdc_line_coding port_line_coding;	/* 8-N-1 etc */
@@ -741,9 +748,25 @@ static ssize_t gs_write(struct tty_struct *tty, const u8 *buf, size_t count)
 {
 	struct gs_port	*port = tty->driver_data;
 	unsigned long	flags;
+	int		ret;
 
 	pr_vdebug("gs_write: ttyGS%d (%p) writing %zu bytes\n",
 			port->port_num, tty, count);
+
+	if (require_dtr && !READ_ONCE(port->host_dtr)) {
+		if (tty->flags & (1 << TTY_NONBLOCK))
+			return -EAGAIN;
+
+		ret = wait_event_interruptible(port->dtr_wait,
+				!require_dtr || READ_ONCE(port->host_dtr) ||
+				!port->port.count);
+		if (ret)
+			return ret;
+
+		/* if we woke up and DTR is still not set, port was closed */
+		if (require_dtr && !READ_ONCE(port->host_dtr))
+			return -EIO;
+	}
 
 	spin_lock_irqsave(&port->port_lock, flags);
 	if (count)
@@ -854,6 +877,19 @@ static int gs_break_ctl(struct tty_struct *tty, int duration)
 	return status;
 }
 
+static int gs_tiocmget(struct tty_struct *tty)
+{
+	struct gs_port *port = tty->driver_data;
+	unsigned int m = 0;
+
+	if (READ_ONCE(port->host_dtr))
+		m |= TIOCM_DSR;
+	if (READ_ONCE(port->host_rts))
+		m |= TIOCM_CTS;
+
+	return m;
+}
+
 static const struct tty_operations gs_tty_ops = {
 	.open =			gs_open,
 	.close =		gs_close,
@@ -864,6 +900,7 @@ static const struct tty_operations gs_tty_ops = {
 	.chars_in_buffer =	gs_chars_in_buffer,
 	.unthrottle =		gs_unthrottle,
 	.break_ctl =		gs_break_ctl,
+	.tiocmget =		gs_tiocmget,
 };
 
 /*-------------------------------------------------------------------------*/
@@ -1170,6 +1207,7 @@ gs_port_alloc(unsigned port_num, struct usb_cdc_line_coding *coding)
 	spin_lock_init(&port->port_lock);
 	init_waitqueue_head(&port->drain_wait);
 	init_waitqueue_head(&port->close_wait);
+	init_waitqueue_head(&port->dtr_wait);
 
 	INIT_DELAYED_WORK(&port->push, gs_rx_push);
 
@@ -1427,6 +1465,28 @@ void gserial_disconnect(struct gserial *gser)
 	spin_unlock_irqrestore(&port->port_lock, flags);
 }
 EXPORT_SYMBOL_GPL(gserial_disconnect);
+
+void gserial_set_dtr_rts(struct gserial *gser, bool dtr, bool rts)
+{
+	unsigned long flags;
+	struct gs_port *port;
+
+	if (!gser)
+		return;
+
+	port = gser->ioport;
+	if (!port)
+		return;
+
+	spin_lock_irqsave(&port->port_lock, flags);
+	WRITE_ONCE(port->host_dtr, dtr);
+	WRITE_ONCE(port->host_rts, rts);
+	spin_unlock_irqrestore(&port->port_lock, flags);
+
+	wake_up_interruptible(&port->dtr_wait);
+	wake_up_interruptible(&port->port.delta_msr_wait);
+}
+EXPORT_SYMBOL_GPL(gserial_set_dtr_rts);
 
 void gserial_suspend(struct gserial *gser)
 {

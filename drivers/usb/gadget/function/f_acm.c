@@ -17,7 +17,10 @@
 #include <linux/device.h>
 #include <linux/err.h>
 
+#include <linux/usb/cdc.h>
 #include "u_serial.h"
+
+void gserial_set_dtr_rts(struct gserial *gser, bool dtr, bool rts);
 
 
 /*
@@ -375,11 +378,8 @@ static int acm_setup(struct usb_function *f, const struct usb_ctrlrequest *ctrl)
 			goto invalid;
 
 		value = 0;
-
-		/* FIXME we should not allow data to flow until the
-		 * host sets the USB_CDC_CTRL_DTR bit; and when it clears
-		 * that bit, we should return to that no-flow state.
-		 */
+		gserial_set_dtr_rts(&acm->port, !!(w_value & ACM_CTRL_DTR),
+				    !!(w_value & ACM_CTRL_RTS));
 		acm->port_handshake_bits = w_value;
 		break;
 
