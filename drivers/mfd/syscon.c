@@ -10,6 +10,7 @@
 
 #include <linux/cleanup.h>
 #include <linux/clk.h>
+#include <linux/device.h>
 #include <linux/err.h>
 #include <linux/hwspinlock.h>
 #include <linux/list.h>
@@ -240,6 +241,49 @@ err_unlock:
 	return ret;
 }
 EXPORT_SYMBOL_GPL(of_syscon_register_regmap);
+
+static void of_syscon_unregister_regmap(void *data)
+{
+	struct device_node *np = data;
+	struct syscon *entry, *tmp;
+
+	/* check if syscon entry exists */
+	mutex_lock(&syscon_list_lock);
+
+	list_for_each_entry_safe(entry, tmp, &syscon_list, list)
+		if (entry->np == np) {
+			list_del(&entry->list);
+			kfree(entry);
+			break;
+		}
+
+	mutex_unlock(&syscon_list_lock);
+}
+
+/**
+ * devm_of_syscon_register_regmap() - Register managed regmap for specified device node
+ * @dev: Device
+ * @np: Device tree node
+ * @regmap: Pointer to regmap object
+ *
+ * Return: 0 on success, negative error code on failure.
+ * The registered regmap will be automatically unregistered on driver detach.
+ */
+int devm_of_syscon_register_regmap(struct device *dev, struct device_node *np,
+				   struct regmap *regmap)
+{
+	int ret;
+
+	if (!dev)
+		return -EINVAL;
+
+	ret = of_syscon_register_regmap(np, regmap);
+	if (ret)
+		return ret;
+
+	return devm_add_action_or_reset(dev, &of_syscon_unregister_regmap, np);
+}
+EXPORT_SYMBOL_GPL(devm_of_syscon_register_regmap);
 
 /**
  * device_node_to_regmap() - Get or create a regmap for specified device node
