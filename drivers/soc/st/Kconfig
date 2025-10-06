@@ -54,4 +54,13 @@ config STM32_RISAF
 	  topology. It implicitly requires that the RISAF is clocked by a
 	  capable software component.
 
+config STM32_SYSCON
+	tristate "STM32 System Controller Register R/W Based on Regmap"
+	select MFD_SYSCON
+	select REGMAP_MMIO
+	default y
+	help
+	  Select this option to enable accessing STM32 system control
+	  registers via regmap.
+
 endif # ARCH_STM32 || COMPILE_TEST
