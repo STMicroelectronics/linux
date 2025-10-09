@@ -339,6 +339,108 @@ static int stm32_count_nb_ovf_write(struct counter_device *counter,
 	return 0;
 }
 
+struct stm32_count_cc_regs {
+	u32 ccmr_reg;
+	u32 ccmr_mask;
+	u32 ccmr_bits;
+	u32 ccer_bits;
+};
+
+static const struct stm32_count_cc_regs stm32_cc[] = {
+	{ TIM_CCMR1, TIM_CCMR_CC1S, TIM_CCMR_CC1S_TI1,
+		TIM_CCER_CC1E | TIM_CCER_CC1P | TIM_CCER_CC1NP },
+	{ TIM_CCMR1, TIM_CCMR_CC2S, TIM_CCMR_CC2S_TI2,
+		TIM_CCER_CC2E | TIM_CCER_CC2P | TIM_CCER_CC2NP },
+	{ TIM_CCMR2, TIM_CCMR_CC3S, TIM_CCMR_CC3S_TI3,
+		TIM_CCER_CC3E | TIM_CCER_CC3P | TIM_CCER_CC3NP },
+	{ TIM_CCMR2, TIM_CCMR_CC4S, TIM_CCMR_CC4S_TI4,
+		TIM_CCER_CC4E | TIM_CCER_CC4P | TIM_CCER_CC4NP },
+};
+
+static int stm32_capture_source_read(struct counter_device *counter,
+				     struct counter_count *count,
+				     size_t idx, u64 *source)
+{
+	struct stm32_timer_cnt *const priv = counter_priv(counter);
+	int ret;
+	u32 val;
+
+	ret = regmap_read(priv->regmap, stm32_cc[idx].ccmr_reg, &val);
+	if (ret)
+		return ret;
+
+	switch (idx) {
+	case 0:
+		*source = FIELD_GET(TIM_CCMR_CC1S, val);
+		break;
+	case 1:
+		*source = FIELD_GET(TIM_CCMR_CC2S, val);
+		break;
+	case 2:
+		*source = FIELD_GET(TIM_CCMR_CC3S, val);
+		break;
+	case 3:
+		*source = FIELD_GET(TIM_CCMR_CC4S, val);
+		break;
+	default:
+		return -EINVAL;
+	}
+
+	/*
+	 * If *source is zero that means that the source is not yet configured.
+	 * Just return default source index in this case, as it will be used by default if not
+	 * explicitly configured.
+	 */
+	if (*source)
+		(*source)--;
+
+	if (*source > TIM_CCMR_CC1S_TI2 - 1)
+		return -EINVAL;
+
+	return 0;
+}
+
+static int stm32_capture_source_write(struct counter_device *counter,
+				      struct counter_count *count,
+				      size_t idx, u64 source)
+{
+	struct stm32_timer_cnt *const priv = counter_priv(counter);
+	u32 reg, mask, val;
+
+	if (source > TIM_CCMR_CC1S_TI2 - 1)
+		return -EINVAL;
+
+	switch (idx) {
+	case 0:
+		val = FIELD_PREP(TIM_CCMR_CC1S, source + 1);
+		reg = TIM_CCMR1;
+		mask = TIM_CCMR_CC1S;
+		break;
+	case 1:
+		val = FIELD_PREP(TIM_CCMR_CC2S, source + 1);
+		reg = TIM_CCMR1;
+		mask = TIM_CCMR_CC2S;
+		break;
+	case 2:
+		val = FIELD_PREP(TIM_CCMR_CC3S, source + 1);
+		reg = TIM_CCMR2;
+		mask = TIM_CCMR_CC3S;
+		break;
+	case 3:
+		val = FIELD_PREP(TIM_CCMR_CC4S, source + 1);
+		reg = TIM_CCMR2;
+		mask = TIM_CCMR_CC4S;
+		break;
+	default:
+		return -EINVAL;
+	}
+
+	regmap_update_bits(priv->regmap, reg, mask, val);
+
+	return 0;
+}
+
+static DEFINE_COUNTER_ARRAY_U64(stm32_count_capture_sources, 4);
 static DEFINE_COUNTER_ARRAY_CAPTURE(stm32_count_cap_array, 4);
 
 static struct counter_comp stm32_count_ext[] = {
@@ -349,6 +451,8 @@ static struct counter_comp stm32_count_ext[] = {
 	COUNTER_COMP_COUNT_U64("prescaler", stm32_count_prescaler_read,
 			       stm32_count_prescaler_write),
 	COUNTER_COMP_ARRAY_CAPTURE(stm32_count_cap_read, NULL, stm32_count_cap_array),
+	COUNTER_COMP_COUNT_ARRAY_U64("capture_source", stm32_capture_source_read,
+				     stm32_capture_source_write, stm32_count_capture_sources),
 	COUNTER_COMP_COUNT_U64("num_overflows", stm32_count_nb_ovf_read, stm32_count_nb_ovf_write),
 };
 
@@ -406,24 +510,6 @@ static int stm32_action_read(struct counter_device *counter,
 		return -EINVAL;
 	}
 }
-
-struct stm32_count_cc_regs {
-	u32 ccmr_reg;
-	u32 ccmr_mask;
-	u32 ccmr_bits;
-	u32 ccer_bits;
-};
-
-static const struct stm32_count_cc_regs stm32_cc[] = {
-	{ TIM_CCMR1, TIM_CCMR_CC1S, TIM_CCMR_CC1S_TI1,
-		TIM_CCER_CC1E | TIM_CCER_CC1P | TIM_CCER_CC1NP },
-	{ TIM_CCMR1, TIM_CCMR_CC2S, TIM_CCMR_CC2S_TI2,
-		TIM_CCER_CC2E | TIM_CCER_CC2P | TIM_CCER_CC2NP },
-	{ TIM_CCMR2, TIM_CCMR_CC3S, TIM_CCMR_CC3S_TI3,
-		TIM_CCER_CC3E | TIM_CCER_CC3P | TIM_CCER_CC3NP },
-	{ TIM_CCMR2, TIM_CCMR_CC4S, TIM_CCMR_CC4S_TI4,
-		TIM_CCER_CC4E | TIM_CCER_CC4P | TIM_CCER_CC4NP },
-};
 
 static int stm32_count_capture_configure(struct counter_device *counter, unsigned int ch,
 					 bool enable)
