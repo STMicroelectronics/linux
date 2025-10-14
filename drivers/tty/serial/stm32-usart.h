@@ -236,6 +236,7 @@ struct stm32_port {
 	u32 cr1_irq;		 /* USART_CR1_RXNEIE or RTOIE */
 	u32 cr3_irq;		 /* USART_CR3_RXFTIE */
 	int last_res;
+	unsigned int tx_dma_bytes;
 	bool tx_dma_busy;	 /* dma tx transaction in progress */
 	bool rx_dma_busy;	 /* dma rx transaction in progress */
 	bool throttled;		 /* port throttled            */

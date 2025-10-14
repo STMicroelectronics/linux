@@ -818,15 +818,24 @@ static void stm32_usart_tx_dma_complete(void *arg)
 {
 	struct uart_port *port = arg;
 	struct stm32_port *stm32port = to_stm32_port(port);
+	struct tty_port *tport = &port->state->port;
 	unsigned long flags;
 
 	stm32_usart_tx_dma_terminate(stm32port);
 
 	pm_runtime_get(port->dev);
 
-	/* Let's see if we have pending data to send */
 	uart_port_lock_irqsave(port, &flags);
+
+	/* Update TX status */
+	uart_xmit_advance(port, stm32port->tx_dma_bytes);
+	stm32port->tx_dma_bytes = 0;
+	if (kfifo_len(&tport->xmit_fifo) < WAKEUP_CHARS)
+		uart_write_wakeup(port);
+
+	/* Let's see if we have pending data to send */
 	stm32_usart_transmit_chars(port);
+
 	uart_port_unlock_irqrestore(port, flags);
 
 	pm_runtime_put_autosuspend(port->dev);
@@ -940,6 +949,7 @@ static void stm32_usart_transmit_chars_dma(struct uart_port *port)
 	 * if the callback of the previous is not yet called.
 	 */
 	stm32port->tx_dma_busy = true;
+	stm32port->tx_dma_bytes = count;
 
 	desc->callback = stm32_usart_tx_dma_complete;
 	desc->callback_param = port;
@@ -955,8 +965,6 @@ static void stm32_usart_transmit_chars_dma(struct uart_port *port)
 
 	/* Issue pending DMA TX requests */
 	dma_async_issue_pending(stm32port->tx_ch);
-
-	uart_xmit_advance(port, count);
 
 	return;
 
