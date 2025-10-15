@@ -76,7 +76,10 @@ static const char *const counter_synapse_action_str[] = {
 	[COUNTER_SYNAPSE_ACTION_NONE] = "none",
 	[COUNTER_SYNAPSE_ACTION_RISING_EDGE] = "rising edge",
 	[COUNTER_SYNAPSE_ACTION_FALLING_EDGE] = "falling edge",
-	[COUNTER_SYNAPSE_ACTION_BOTH_EDGES] = "both edges"
+	[COUNTER_SYNAPSE_ACTION_BOTH_EDGES] = "both edges",
+	[COUNTER_SYNAPSE_CAPTURE_RISING_EDGE] = "capture rising edge",
+	[COUNTER_SYNAPSE_CAPTURE_FALLING_EDGE] = "capture falling edge",
+	[COUNTER_SYNAPSE_CAPTURE_BOTH_EDGES] = "capture both edges"
 };
 
 static const char *const counter_count_direction_str[] = {
