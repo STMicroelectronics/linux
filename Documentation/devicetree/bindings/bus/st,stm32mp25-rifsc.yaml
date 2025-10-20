@@ -71,7 +71,7 @@ properties:
       Defines the memory address ranges covered by the RISAL instances.
 
 patternProperties:
-  "^.*@[0-9a-f]+$":
+  "@[0-9a-f]+$":
     description: Peripherals
     type: object
 
