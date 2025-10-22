@@ -29,6 +29,7 @@
 #define STM32_CLOCK_SIG		2
 #define STM32_CH3_SIG		3
 #define STM32_CH4_SIG		4
+#define STM32_ETR_SIG		5
 
 struct stm32_timer_regs {
 	u32 cr1;
@@ -479,7 +480,7 @@ static struct counter_comp stm32_count_ext[] = {
 	COUNTER_COMP_COUNT_U64("num_overflows", stm32_count_nb_ovf_read, stm32_count_nb_ovf_write),
 };
 
-static const enum counter_synapse_action stm32_clock_synapse_actions[] = {
+static const enum counter_synapse_action stm32_synapse_actions_none_rising[] = {
 	COUNTER_SYNAPSE_ACTION_NONE,
 	COUNTER_SYNAPSE_ACTION_RISING_EDGE,
 };
@@ -537,6 +538,18 @@ static int stm32_action_read(struct counter_device *counter,
 		case STM32_CLOCK_SIG:
 			/* counts on internal clock when CEN=1 */
 			if (sms == TIM_SMCR_SMS_SLAVE_MODE_DISABLED && ts == 0)
+				*action = COUNTER_SYNAPSE_ACTION_RISING_EDGE;
+
+			return 0;
+		case STM32_ETR_SIG:
+			/*
+			 * rising edge on etrf clocks the counter in external clock mode
+			 * In other trigger modes (reset, gated, triggered and combined)
+			 * It influences the counter start/stop/reset, either on edges or
+			 * level. For now, report action "none" for these case, as not
+			 * directly used as clock for counting.
+			 */
+			if (sms == TIM_SMCR_SMS_EXTERNAL_CLOCK_MODE_1 && ts == 7)
 				*action = COUNTER_SYNAPSE_ACTION_RISING_EDGE;
 
 			return 0;
@@ -642,6 +655,11 @@ static int stm32_action_write(struct counter_device *counter,
 			/* rising edge on ti2fp2 clocks the counter */
 			sms = TIM_SMCR_SMS_EXTERNAL_CLOCK_MODE_1;
 			ts = 6;
+			break;
+		case STM32_ETR_SIG:
+			/* rising edge on etrf clocks the counter */
+			sms = TIM_SMCR_SMS_EXTERNAL_CLOCK_MODE_1;
+			ts = 7;
 			break;
 		default:
 			dev_err(counter->parent, "Action [%d] not supported for signal [%d]\n",
@@ -967,6 +985,10 @@ static struct counter_signal stm32_signals[] = {
 		.ext = stm32_count_channel_ext,
 		.num_ext = ARRAY_SIZE(stm32_count_channel_ext),
 	},
+	{
+		.id = STM32_ETR_SIG,
+		.name = "ETR",
+	},
 };
 
 static struct counter_synapse stm32_count_synapses[] = {
@@ -981,8 +1003,8 @@ static struct counter_synapse stm32_count_synapses[] = {
 		.signal = &stm32_signals[STM32_CH2_SIG]
 	},
 	{
-		.actions_list = stm32_clock_synapse_actions,
-		.num_actions = ARRAY_SIZE(stm32_clock_synapse_actions),
+		.actions_list = stm32_synapse_actions_none_rising,
+		.num_actions = ARRAY_SIZE(stm32_synapse_actions_none_rising),
 		.signal = &stm32_signals[STM32_CLOCK_SIG]
 	},
 	{
@@ -994,6 +1016,11 @@ static struct counter_synapse stm32_count_synapses[] = {
 		.actions_list = stm32_channel_synapse_actions,
 		.num_actions = ARRAY_SIZE(stm32_channel_synapse_actions),
 		.signal = &stm32_signals[STM32_CH4_SIG]
+	},
+	{
+		.actions_list = stm32_synapse_actions_none_rising,
+		.num_actions = ARRAY_SIZE(stm32_synapse_actions_none_rising),
+		.signal = &stm32_signals[STM32_ETR_SIG]
 	},
 };
 
