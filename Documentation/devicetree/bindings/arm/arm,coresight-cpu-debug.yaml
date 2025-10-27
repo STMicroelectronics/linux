@@ -60,6 +60,9 @@ properties:
       dedicated power domain. CPU idle states may also need to be separately
       constrained to keep CPU cores powered.
 
+  access-controllers:
+    maxItems: 1
+
 required:
   - compatible
   - reg
