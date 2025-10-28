@@ -58,6 +58,14 @@ static int dwc2_ovr_avalid(struct dwc2_hsotg *hsotg, bool valid)
 		gotgctl &= ~(GOTGCTL_AVALOVAL | GOTGCTL_VBVALOVAL);
 	dwc2_writel(hsotg, gotgctl, GOTGCTL);
 
+	if (valid) {
+		if (dwc2_hsotg_wait_bit_set(hsotg, GOTGCTL, GOTGCTL_ASESVLD, 50))
+			dev_dbg(hsotg->dev, "GOTGCTL_ASESVLD not set\n");
+	} else {
+		if (dwc2_hsotg_wait_bit_clear(hsotg, GOTGCTL, GOTGCTL_ASESVLD, 50))
+			dev_dbg(hsotg->dev, "GOTGCTL_ASESVLD not cleared\n");
+	}
+
 	return 0;
 }
 
@@ -79,6 +87,18 @@ static int dwc2_ovr_bvalid(struct dwc2_hsotg *hsotg, bool valid)
 	else
 		gotgctl &= ~(GOTGCTL_BVALOVAL | GOTGCTL_VBVALOVAL);
 	dwc2_writel(hsotg, gotgctl, GOTGCTL);
+
+	if (valid) {
+		/*
+		 * Wait for GOTGCTL_BSESVLD to be set. It's checked later in
+		 * dwc2_hsotg_core_connect, to remove DCTL_SFTDISCON bit.
+		 */
+		if (dwc2_hsotg_wait_bit_set(hsotg, GOTGCTL, GOTGCTL_BSESVLD, 50))
+			dev_dbg(hsotg->dev, "GOTGCTL_BSESVLD not set\n");
+	} else {
+		if (dwc2_hsotg_wait_bit_clear(hsotg, GOTGCTL, GOTGCTL_BSESVLD, 50))
+			dev_dbg(hsotg->dev, "GOTGCTL_BSESVLD not cleared\n");
+	}
 
 	return 0;
 }
