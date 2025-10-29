@@ -79,6 +79,13 @@ properties:
 
               remote-endpoint: true
 
+  reg:
+    description: Only used as information, not used by the driver
+    maxItems: 1
+
+  access-controllers:
+    maxItems: 1
+
 required:
   - compatible
   - in-ports
