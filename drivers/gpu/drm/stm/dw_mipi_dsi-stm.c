@@ -1033,7 +1033,10 @@ dw_mipi_dsi_phy_141_get_timing(void *priv_data, unsigned int lane_mbps,
 	return 0;
 }
 
-#define CLK_TOLERANCE_HZ 50
+/* Set by default the clock tolerance to 5‰ */
+static int clock_tolerance = 5;
+module_param_named(clock_tolerance, clock_tolerance, int, 0444);
+MODULE_PARM_DESC(clock_tolerance, "Clock tolerance ‰");
 
 static enum drm_mode_status
 dw_mipi_dsi_stm_mode_valid(void *priv_data,
@@ -1074,7 +1077,7 @@ dw_mipi_dsi_stm_mode_valid(void *priv_data,
 	}
 
 	if (!(mode_flags & MIPI_DSI_MODE_VIDEO_BURST)) {
-		unsigned int px_clock_hz, target_px_clock_hz, lane_mbps;
+		unsigned int px_clock_hz, target_px_clock_min, target_px_clock_max, lane_mbps;
 		int dsi_short_packet_size_px, hfp, hsync, hbp, delay_to_lp;
 		struct dw_mipi_dsi_dphy_timing dphy_timing;
 
@@ -1082,14 +1085,19 @@ dw_mipi_dsi_stm_mode_valid(void *priv_data,
 		pll_out_khz = dsi_pll_get_clkout_khz(pll_in_khz, idf, ndiv, odf);
 
 		px_clock_hz = DIV_ROUND_CLOSEST_ULL(1000ULL * pll_out_khz * lanes, bpp);
-		target_px_clock_hz = mode->clock * 1000;
+
 		/*
 		 * Filter modes according to the clock value, particularly useful for
 		 * hdmi modes that require precise pixel clocks.
 		 */
-		if (px_clock_hz < target_px_clock_hz - CLK_TOLERANCE_HZ ||
-		    px_clock_hz > target_px_clock_hz + CLK_TOLERANCE_HZ)
-			return MODE_CLOCK_RANGE;
+		target_px_clock_min = mode->clock * (1000 - clock_tolerance);
+		target_px_clock_max = mode->clock * (1000 + clock_tolerance);
+
+		if (px_clock_hz < target_px_clock_min)
+			return MODE_CLOCK_LOW;
+
+		if (px_clock_hz > target_px_clock_max)
+			return MODE_CLOCK_HIGH;
 
 		/* sync packets are codes as DSI short packets (4 bytes) */
 		dsi_short_packet_size_px = DIV_ROUND_UP(4 * BITS_PER_BYTE, bpp);
@@ -1183,8 +1191,8 @@ dw_mipi_dsi_stm_phy_141_mode_valid(void *priv_data,
 		 * Filter modes according to the clock value, particularly useful for
 		 * hdmi modes that require precise pixel clocks.
 		 */
-		target_px_clock_min = mode->clock - CLK_TOLERANCE_HZ;
-		target_px_clock_max = mode->clock + CLK_TOLERANCE_HZ;
+		target_px_clock_min = mode->clock * (1000 - clock_tolerance);
+		target_px_clock_max = mode->clock * (1000 + clock_tolerance);
 
 		if (px_clock_hz < target_px_clock_min)
 			return MODE_CLOCK_LOW;
