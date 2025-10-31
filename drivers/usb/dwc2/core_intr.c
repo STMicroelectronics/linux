@@ -434,6 +434,10 @@ static void dwc2_handle_wakeup_detected_intr(struct dwc2_hsotg *hsotg)
 	}
 
 	if (dwc2_is_device_mode(hsotg)) {
+		/* Prevents remote wakeup interrupt race while suspending */
+		if (dwc2_is_device_connected(hsotg))
+			pm_wakeup_hard_event(hsotg->dev);
+
 		dev_dbg(hsotg->dev, "DSTS=0x%0x\n",
 			dwc2_readl(hsotg, DSTS));
 		if (hsotg->lx_state == DWC2_L2) {
