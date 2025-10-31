@@ -463,11 +463,28 @@ static int stm32_usb2phy_phy_power_off(struct phy *phy)
 	return 0;
 }
 
+static int stm32_usb2phy_phy_reset(struct phy *phy)
+{
+	struct stm32_usb2phy *phy_dev = phy_get_drvdata(phy);
+
+	/*
+	 * On stm32mp21, when exiting pcsi/osi idle state, the PHY may
+	 * need a reset, to properly resume operation. This allows the
+	 * clock to be suspended in low power state. There's no STPEN
+	 * bit in RCC anyway, to keep the clock active in stop modes.
+	 * This is useful, in conjunction with DWC2 controller to
+	 * initiate a new gadget session (e.g. either udc_start, or
+	 * drd role switch set routine).
+	 */
+	return reset_control_reset(phy_dev->rstc);
+}
+
 static const struct phy_ops stm32_usb2phy_data = {
 	.init = stm32_usb2phy_init,
 	.exit = stm32_usb2phy_exit,
 	.power_on = stm32_usb2phy_phy_power_on,
 	.power_off = stm32_usb2phy_phy_power_off,
+	.reset = stm32_usb2phy_phy_reset,
 	.set_mode = stm32_usb2phy_set_mode,
 	.owner = THIS_MODULE,
 };
