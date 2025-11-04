@@ -314,6 +314,7 @@ struct stm32_dma3_ddata {
 	u32 dma_requests;
 	enum stm32_dma3_port_data_width ports_max_dw[2];
 	u32 axi_max_burst_len;
+	u32 lap;
 	struct gen_pool *gen_pool;
 	struct dma_pool *dma_pool;
 };
@@ -578,14 +579,13 @@ static struct stm32_dma3_swdesc *stm32_dma3_chan_desc_alloc(struct stm32_dma3_ch
 		kfree(swdesc);
 		return NULL;
 	}
-	swdesc->ccr = 0;
 
 	/* Set LL base address */
 	writel_relaxed(swdesc->lli[0].hwdesc_addr & CLBAR_LBA,
 		       ddata->base + STM32_DMA3_CLBAR(chan->id));
 
 	/* Set LL allocated port */
-	swdesc->ccr &= ~CCR_LAP;
+	swdesc->ccr = FIELD_PREP(CCR_LAP, ddata->lap);
 
 	return swdesc;
 }
@@ -1948,10 +1948,18 @@ static int stm32_dma3_probe(struct platform_device *pdev)
 	master_ports = FIELD_GET(G_MASTER_PORTS, hwcfgr);
 
 	ddata->ports_max_dw[0] = FIELD_GET(G_M0_DATA_WIDTH_ENC, hwcfgr);
-	if (master_ports == AXI64 || master_ports == AHB32) /* Single master port */
+	ddata->lap = 0; /* Default Link Allocated Port is port 0 */
+	if (master_ports == AXI64 || master_ports == AHB32) { /* Single master port */
 		ddata->ports_max_dw[1] = DW_INVALID;
-	else /* Dual master ports */
+	} else { /* Dual master ports */
 		ddata->ports_max_dw[1] = FIELD_GET(G_M1_DATA_WIDTH_ENC, hwcfgr);
+		/* lli-bus-interface is optional, default Link Allocated Port is port 0 */
+		ret = of_property_read_u32(np, "lli-bus-interface", &ddata->lap);
+		if (ddata->lap > 1 || (ret && ret != -EINVAL)) {
+			dev_warn(&pdev->dev, "Invalid lli-bus-interface value, default to 0\n");
+			ddata->lap = 0;
+		}
+	}
 
 	/* axi_max_burst_len is optional, if not defined, use STM32_DMA3_MAX_BURST_LEN  */
 	ddata->axi_max_burst_len = STM32_DMA3_MAX_BURST_LEN;
