@@ -48,6 +48,14 @@ properties:
   resets:
     maxItems: 1
 
+  lli-bus-interface:
+    $ref: /schemas/types.yaml#/definitions/uint32
+    enum: [0, 1]
+    default: 0
+    description:
+      To select port 1 for fetching linked-list items (LLIs).
+      If not defined, port 0 is used by default.
+
   memory-region:
     maxItems: 1
     description:
@@ -157,6 +165,7 @@ examples:
                    <GIC_SPI 48 IRQ_TYPE_LEVEL_HIGH>;
       clocks = <&rcc CK_BUS_HPDMA1>;
       #dma-cells = <3>;
+      lli-bus-interface = <1>;
       memory-region = <&dma_lli>;
     };
 ...
