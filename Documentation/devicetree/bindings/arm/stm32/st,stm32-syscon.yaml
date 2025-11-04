@@ -9,6 +9,7 @@ title: STMicroelectronics STM32 Platforms System Controller
 maintainers:
   - Alexandre Torgue <alexandre.torgue@foss.st.com>
   - Christophe Roullier <christophe.roullier@foss.st.com>
+  - Antonio Borneo <antonio.borneo@foss.st.com>
 
 properties:
   compatible:
@@ -31,6 +32,7 @@ properties:
               - st,stm32mp25-tamp
           - const: syscon
           - const: simple-mfd
+      - const: st,stm32mp25-a35ss-syscfg
 
   reg:
     maxItems: 1
@@ -104,6 +106,12 @@ examples:
         compatible = "st,stm32mp157-syscfg", "syscon";
         reg = <0x50020000 0x400>;
         clocks = <&rcc SYSCFG>;
+    };
+
+  - |
+    a35ss_syscfg: syscon@48800000 {
+        compatible = "st,stm32mp25-a35ss-syscfg";
+        reg = <0x48800000 0x4000>;
     };
 
 ...
