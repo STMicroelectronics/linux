@@ -1475,6 +1475,12 @@
 				<&intc GIC_SPI 213 IRQ_TYPE_LEVEL_HIGH>;	/* EXTI_70 */
 		};
 
+		a35ss_syscfg: syscon@48800000  {
+			compatible = "st,stm32mp25-a35ss-syscfg";
+			reg = <0x48800000 0x4000>;
+			status = "disabled";
+		};
+
 		dbg_bus: bus@4a000000 {
 			compatible = "st,stm32mp231-dbg-bus";
 			#address-cells = <1>;

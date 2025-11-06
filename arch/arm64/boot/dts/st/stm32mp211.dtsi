@@ -891,6 +891,12 @@
 			};
 		};
 
+		a35ss_syscfg: syscon@48800000  {
+			compatible = "st,stm32mp25-a35ss-syscfg";
+			reg = <0x48800000 0x0 0x4000>;
+			status = "disabled";
+		};
+
 		intc: interrupt-controller@4ac10000 {
 			compatible = "arm,gic-400";
 			reg = <0x4ac10000 0x0 0x1000>,
