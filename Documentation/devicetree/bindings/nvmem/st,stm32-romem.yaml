@@ -34,7 +34,7 @@ properties:
     description: Phandle to a node describing non-secure OTP mirror area
 
 patternProperties:
-  "^.*@[0-9a-f]+$":
+  "@[0-9a-f]+$":
     type: object
     $ref: layouts/fixed-cell.yaml
     unevaluatedProperties: false
