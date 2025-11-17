@@ -1860,6 +1860,7 @@ static struct irq_domain *stm32_pctrl_get_irq_domain(struct stm32_pinctrl *pctl)
 		 * Each entry has 3 values: <&phandle 0 0>
 		 */
 		i = DIV_ROUND_UP(i, 3 * STM32_GPIO_IRQ_LINE * sizeof(u32));
+		domain = NULL;
 
 		while (i--) {
 			ret = of_irq_parse_one(np, i * STM32_GPIO_IRQ_LINE, &out_irq);
