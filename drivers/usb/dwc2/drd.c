@@ -223,6 +223,18 @@ static int dwc2_drd_role_sw_set(struct usb_role_switch *sw, enum usb_role role)
 		if (hsotg->params.power_down == DWC2_POWER_DOWN_PARAM_NONE &&
 		    !hsotg->params.no_clock_gating)
 			dwc2_gadget_exit_clock_gating(hsotg, 0);
+
+		if (hsotg->params.reset_phy_on_start) {
+			spin_unlock_irqrestore(&hsotg->lock, flags);
+			/*
+			 * In case the gadget has been stopped earlier, and
+			 * the platform enters some low power states, the phy
+			 * may need a reset before starting again.
+			 */
+			if (phy_reset(hsotg->phy))
+				dev_warn(hsotg->dev, "PHY reset failed\n");
+			spin_lock_irqsave(&hsotg->lock, flags);
+		}
 	}
 
 	if (role == USB_ROLE_HOST) {

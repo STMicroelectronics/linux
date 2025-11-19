@@ -322,6 +322,7 @@ static void dwc2_set_stm32mp21_hsotg_params(struct dwc2_hsotg *hsotg)
 	p->activate_stm32_bvaloval_en = true;
 	p->activate_stm32_otgarcr_en = true;
 	p->stm32_has_batt_chg_det = true;
+	p->reset_phy_on_start = true;
 }
 
 const struct of_device_id dwc2_of_match_table[] = {

@@ -4721,6 +4721,17 @@ static int dwc2_hsotg_udc_start(struct usb_gadget *gadget,
 	/* Exit low power mode, before starting */
 	dwc2_gadget_exit_lp(hsotg);
 
+	if (hsotg->params.reset_phy_on_start) {
+		/*
+		 * In case the gadget has been stopped earlier, and
+		 * the platform enters some low power states, the phy
+		 * may need a reset before starting again.
+		 */
+		ret = phy_reset(hsotg->phy);
+		if (ret)
+			dev_warn(hsotg->dev, "PHY reset failed\n");
+	}
+
 	if (!IS_ERR_OR_NULL(hsotg->uphy))
 		otg_set_peripheral(hsotg->uphy->otg, &hsotg->gadget);
 

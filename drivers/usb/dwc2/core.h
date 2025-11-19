@@ -515,6 +515,7 @@ struct dwc2_core_params {
 	u32 g_tx_fifo_size[MAX_EPS_CHANNELS];
 
 	bool change_speed_quirk;
+	bool reset_phy_on_start;
 };
 
 /**
