@@ -14,6 +14,7 @@
 #include <linux/usb/gadget.h>
 #include <linux/usb/otg.h>
 #include <linux/usb/phy.h>
+#include <linux/usb/role.h>
 #include "hw.h"
 
 /*
@@ -862,6 +863,7 @@ struct dwc2_hregs_backup {
  *                      - USB_DR_MODE_HOST
  *                      - USB_DR_MODE_OTG
  * @role_sw:		usb_role_switch handle
+ * @current_role:	current usb_role, when using role_sw
  * @role_sw_default_mode: default operation mode of controller while usb role
  *			is USB_ROLE_NONE
  * @hcd_enabled:	Host mode sub-driver initialization indicator.
@@ -1061,6 +1063,7 @@ struct dwc2_hsotg {
 	enum usb_otg_state op_state;
 	enum usb_dr_mode dr_mode;
 	struct usb_role_switch *role_sw;
+	enum usb_role current_role;
 	enum usb_dr_mode role_sw_default_mode;
 	unsigned int hcd_enabled:1;
 	unsigned int gadget_enabled:1;

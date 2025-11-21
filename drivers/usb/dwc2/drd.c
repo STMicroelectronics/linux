@@ -127,6 +127,11 @@ static int dwc2_drd_role_sw_set(struct usb_role_switch *sw, enum usb_role role)
 			role = USB_ROLE_DEVICE;
 	}
 
+	if (hsotg->current_role == role) {
+		spin_unlock_irqrestore(&hsotg->lock, flags);
+		goto skip;
+	}
+
 	if ((IS_ENABLED(CONFIG_USB_DWC2_PERIPHERAL) ||
 	     IS_ENABLED(CONFIG_USB_DWC2_DUAL_ROLE)) &&
 	     dwc2_is_device_mode(hsotg) &&
@@ -150,6 +155,7 @@ static int dwc2_drd_role_sw_set(struct usb_role_switch *sw, enum usb_role role)
 			dwc2_ovr_avalid(hsotg, false);
 	}
 
+	hsotg->current_role = role;
 	spin_unlock_irqrestore(&hsotg->lock, flags);
 
 	if (!already) {
@@ -166,6 +172,7 @@ static int dwc2_drd_role_sw_set(struct usb_role_switch *sw, enum usb_role role)
 			dwc2_hsotg_core_disconnect(hsotg);
 	}
 
+skip:
 	if (!hsotg->ll_hw_enabled && hsotg->clk)
 		clk_disable_unprepare(hsotg->clk);
 
