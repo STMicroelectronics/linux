@@ -1816,7 +1816,8 @@ void dwc2_hcd_disconnect(struct dwc2_hsotg *hsotg, bool force)
  */
 static void dwc2_hcd_rem_wakeup(struct dwc2_hsotg *hsotg)
 {
-	if (hsotg->bus_suspended) {
+	/* when swapping role to device, need to resume rhub to see disconnect */
+	if (hsotg->bus_suspended || dwc2_is_device_mode(hsotg)) {
 		hsotg->flags.b.port_suspend_change = 1;
 		usb_hcd_resume_root_hub(hsotg->priv);
 	}
