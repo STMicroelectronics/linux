@@ -270,6 +270,10 @@ static void dwc2_handle_conn_id_status_change_intr(struct dwc2_hsotg *hsotg)
 	gintmsk &= ~GINTSTS_SOF;
 	dwc2_writel(hsotg, gintmsk, GINTMSK);
 
+	/* Switching to host mode, need to disable channels interrupts */
+	if (dwc2_is_host_mode(hsotg))
+		dwc2_writel(hsotg, 0, HAINTMSK);
+
 	dev_dbg(hsotg->dev, " ++Connector ID Status Change Interrupt++  (%s)\n",
 		dwc2_is_host_mode(hsotg) ? "Host" : "Device");
 
