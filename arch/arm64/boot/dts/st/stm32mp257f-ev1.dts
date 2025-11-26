@@ -32,6 +32,11 @@
 		stdout-path = "serial0:115200n8";
 	};
 
+	clock-hog {
+		compatible = "st,stm32-hog";
+		clocks = <&rcc CK_LPTIM4_AM>;
+	};
+
 	clocks {
 		clk_ext_camera: clk-ext-camera {
 			#clock-cells = <0>;
