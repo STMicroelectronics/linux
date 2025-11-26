@@ -975,6 +975,7 @@ static int __maybe_unused dwc2_suspend(struct device *dev)
 
 	is_device_mode = dwc2_is_device_mode(dwc2);
 	if (is_device_mode) {
+		bool valid_session = !!(dwc2_readl(dwc2, GOTGCTL) & GOTGCTL_BSESVLD);
 		/*
 		 * Handle the case when bus has been suspended prior to platform suspend.
 		 * - When the lx_state is DWC2_L2, the HOST has suspended the bus. So the
@@ -986,7 +987,7 @@ static int __maybe_unused dwc2_suspend(struct device *dev)
 		 * suspended/disconnected. Then, temporarily exit the low power mode (clock
 		 * gating, ppd), so the gadget can be suspended and resumed later on.
 		 */
-		if (!dwc2_is_device_connected(dwc2) || dwc2_gadget_can_poweroff_phy(dwc2)) {
+		if (!valid_session || dwc2_gadget_can_poweroff_phy(dwc2)) {
 			if (dwc2->in_ppd) {
 				ret = dwc2_exit_partial_power_down(dwc2, 0, true);
 				if (ret)
