@@ -3449,6 +3449,19 @@ void dwc2_hsotg_core_init_disconnected(struct dwc2_hsotg *hsotg,
 	if (hsotg->params.ipg_isoc_en)
 		dcfg |= DCFG_IPG_ISOC_SUPPORDED;
 
+	/*
+	 * WA for Device Flushes Ongoing ISOC IN Packet at End-of-Periodic-Frame Boundary.
+	 * Once passed the end of periodic frame, and the controller is transmitting an
+	 * ISOC IN packet, the device fulshes the transmit FIFO. Tune periodic frame
+	 * interval to 95% instead of 80% to avoid it.
+	 */
+	if (using_desc_dma(hsotg) &&
+	    (hsotg->hw_params.snpsid >= DWC2_CORE_REV_2_70a &&
+	     hsotg->hw_params.snpsid <= DWC2_CORE_REV_4_00a)) {
+		dcfg &= ~DCFG_PERFRINT_MASK;
+		dcfg |= ((DCFG_PERFRINT_LIMIT << DCFG_PERFRINT_SHIFT) & DCFG_PERFRINT_MASK);
+	}
+
 	dwc2_writel(hsotg, dcfg,  DCFG);
 
 	/* Clear any pending OTG interrupts */
