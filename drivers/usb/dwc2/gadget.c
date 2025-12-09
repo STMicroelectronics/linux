@@ -5605,7 +5605,7 @@ int dwc2_gadget_restore_critical_registers(struct dwc2_hsotg *hsotg,
  *
  * Return non-zero if failed to enter to hibernation.
  */
-int dwc2_gadget_enter_hibernation(struct dwc2_hsotg *hsotg)
+static int dwc2_gadget_enter_hibernation(struct dwc2_hsotg *hsotg)
 {
 	u32 gpwrdn;
 	u32 gusbcfg;
@@ -5807,7 +5807,7 @@ int dwc2_gadget_exit_hibernation(struct dwc2_hsotg *hsotg,
  *
  * This function is for entering device mode partial power down.
  */
-int dwc2_gadget_enter_partial_power_down(struct dwc2_hsotg *hsotg)
+static int dwc2_gadget_enter_partial_power_down(struct dwc2_hsotg *hsotg)
 {
 	u32 pcgcctl;
 	int ret = 0;
@@ -5924,7 +5924,7 @@ int dwc2_gadget_exit_partial_power_down(struct dwc2_hsotg *hsotg,
  *
  * This function is for entering device mode clock gating.
  */
-void dwc2_gadget_enter_clock_gating(struct dwc2_hsotg *hsotg)
+static void dwc2_gadget_enter_clock_gating(struct dwc2_hsotg *hsotg)
 {
 	u32 pcgctl;
 
@@ -5984,4 +5984,52 @@ void dwc2_gadget_exit_clock_gating(struct dwc2_hsotg *hsotg, int rem_wakeup)
 	/* Change to L0 state */
 	hsotg->lx_state = DWC2_L0;
 	hsotg->bus_suspended = false;
+}
+
+/*
+ * dwc2_gadget_enter_lp() - Put the controller when in device mode, into one
+ *			    of the supported power saving modes:
+ *			    hibernation, partia power down, clock gating or none.
+ *
+ * Return: non-zero if failed to enter power saving mode.
+ */
+int dwc2_gadget_enter_lp(struct dwc2_hsotg *hsotg)
+{
+	int ret;
+
+	switch (hsotg->params.power_down) {
+	case DWC2_POWER_DOWN_PARAM_HIBERNATION:
+		ret = dwc2_gadget_enter_hibernation(hsotg);
+		if (ret) {
+			dev_err(hsotg->dev, "enter hibernation failed %d\n", ret);
+			return ret;
+		}
+		break;
+
+	case DWC2_POWER_DOWN_PARAM_PARTIAL:
+		ret = dwc2_gadget_enter_partial_power_down(hsotg);
+		if (ret) {
+			dev_err(hsotg->dev, "enter partial_power_down failed %d\n", ret);
+			return ret;
+		}
+		break;
+
+	case DWC2_POWER_DOWN_PARAM_NONE:
+		/*
+		 * If neither hibernation nor partial power down are supported,
+		 * clock gating is used to save power.
+		 */
+		if (!hsotg->params.no_clock_gating)
+			dwc2_gadget_enter_clock_gating(hsotg);
+	}
+
+	/* Core hasn't been put into one of the power saving modes: simply return */
+	if (!(hsotg->bus_suspended || hsotg->in_ppd || hsotg->hibernated))
+		return 0;
+
+	/* Ask phy to be suspended */
+	if (!IS_ERR_OR_NULL(hsotg->uphy))
+		usb_phy_set_suspend(hsotg->uphy, true);
+
+	return 0;
 }

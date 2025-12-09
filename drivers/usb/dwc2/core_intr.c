@@ -519,7 +519,6 @@ static void dwc2_handle_usb_suspend_intr(struct dwc2_hsotg *hsotg)
 {
 	u32 gintsts = dwc2_readl(hsotg, GINTSTS) & dwc2_readl(hsotg, GINTMSK);
 	u32 dsts;
-	int ret;
 
 	if (gintsts & GINTSTS_ERLYSUSP) {
 		dev_dbg(hsotg->dev, "USBSUSP temporarily ignored, raced with ERLYSUSP\n");
@@ -561,33 +560,7 @@ static void dwc2_handle_usb_suspend_intr(struct dwc2_hsotg *hsotg)
 			return;
 		}
 		if (dsts & DSTS_SUSPSTS) {
-			switch (hsotg->params.power_down) {
-			case DWC2_POWER_DOWN_PARAM_PARTIAL:
-				ret = dwc2_enter_partial_power_down(hsotg);
-				if (ret)
-					dev_err(hsotg->dev,
-						"enter partial_power_down failed\n");
-
-				udelay(100);
-
-				/* Ask phy to be suspended */
-				if (!IS_ERR_OR_NULL(hsotg->uphy))
-					usb_phy_set_suspend(hsotg->uphy, true);
-				break;
-			case DWC2_POWER_DOWN_PARAM_HIBERNATION:
-				ret = dwc2_enter_hibernation(hsotg, 0);
-				if (ret)
-					dev_err(hsotg->dev,
-						"enter hibernation failed\n");
-				break;
-			case DWC2_POWER_DOWN_PARAM_NONE:
-				/*
-				 * If neither hibernation nor partial power down are supported,
-				 * clock gating is used to save power.
-				 */
-				if (!hsotg->params.no_clock_gating)
-					dwc2_gadget_enter_clock_gating(hsotg);
-			}
+			dwc2_gadget_enter_lp(hsotg);
 
 			/*
 			 * Change to L2 (suspend) state before releasing

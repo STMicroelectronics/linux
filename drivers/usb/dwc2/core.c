@@ -124,19 +124,6 @@ int dwc2_exit_partial_power_down(struct dwc2_hsotg *hsotg, int rem_wakeup,
 }
 
 /**
- * dwc2_enter_partial_power_down() - Put controller in Partial Power Down.
- *
- * @hsotg: Programming view of the DWC_otg controller
- */
-int dwc2_enter_partial_power_down(struct dwc2_hsotg *hsotg)
-{
-	if (dwc2_is_host_mode(hsotg))
-		return dwc2_host_enter_partial_power_down(hsotg);
-	else
-		return dwc2_gadget_enter_partial_power_down(hsotg);
-}
-
-/**
  * dwc2_restore_essential_regs() - Restore essiential regs of core.
  *
  * @hsotg: Programming view of the DWC_otg controller
@@ -354,22 +341,6 @@ static bool dwc2_iddig_filter_enabled(struct dwc2_hsotg *hsotg)
 	}
 
 	return true;
-}
-
-/*
- * dwc2_enter_hibernation() - Common function to enter hibernation.
- *
- * @hsotg: Programming view of the DWC_otg controller
- * @is_host: True if core is in host mode.
- *
- * Return: 0 if successful, negative error code otherwise
- */
-int dwc2_enter_hibernation(struct dwc2_hsotg *hsotg, int is_host)
-{
-	if (is_host)
-		return dwc2_host_enter_hibernation(hsotg);
-	else
-		return dwc2_gadget_enter_hibernation(hsotg);
 }
 
 /*
