@@ -1076,21 +1076,9 @@ static void ltdc_crtc_atomic_enable(struct drm_crtc *crtc,
 	u32 bus_flags = 0;
 	u32 val;
 	int ret;
+	int idx;
 
 	DRM_DEBUG_DRIVER("\n");
-
-	if (pm_runtime_active(ddev->dev)) {
-		if (!IS_ERR(ldev->rstc)) {
-			reset_control_assert(ldev->rstc);
-			usleep_range(10, 20);
-			reset_control_deassert(ldev->rstc);
-		}
-
-		/* Wait a while to clear the current display (around 2 frames) */
-		mdelay(2 * 1000 / drm_mode_vrefresh(mode));
-
-		pm_runtime_put_sync_suspend(ddev->dev);
-	}
 
 	/* get encoder from crtc */
 	drm_for_each_encoder(en_iter, ddev)
@@ -1156,10 +1144,30 @@ static void ltdc_crtc_atomic_enable(struct drm_crtc *crtc,
 	else
 		pinctrl_pm_select_sleep_state(ddev->dev);
 
-	ret = pm_runtime_resume_and_get(ddev->dev);
-	if (ret) {
-		DRM_ERROR("Failed to enable crtc, cannot resume pm\n");
-		return;
+	if (pm_runtime_active(ddev->dev)) {
+		/* Disable all layers */
+		for (idx = 0; idx < ldev->caps.nb_layers; idx++)
+			regmap_write_bits(ldev->regmap, LTDC_L1CR + idx * LAY_OFS,
+					  LXCR_MASK, 0);
+
+		/* immediately commit disable of layers before switching off LTDC */
+		if (!ldev->caps.plane_reg_shadow)
+			regmap_set_bits(ldev->regmap, LTDC_SRCR, SRCR_IMR);
+		else
+			for (idx = 0; idx < ldev->caps.nb_layers; idx++)
+				regmap_write_bits(ldev->regmap,
+						  LTDC_L1RCR + idx * LAY_OFS,
+						  LXRCR_IMR | LXRCR_VBR | LXRCR_GRMSK,
+						  LXRCR_IMR);
+
+		/* Disable display streaming */
+		regmap_clear_bits(ldev->regmap, LTDC_GCR, GCR_LTDCEN);
+	} else {
+		ret = pm_runtime_resume_and_get(ddev->dev);
+		if (ret) {
+			DRM_ERROR("Failed to enable crtc, cannot resume pm\n");
+			return;
+		}
 	}
 
 	DRM_DEBUG_DRIVER("CRTC:%d mode:%s\n", crtc->base.id, mode->name);
