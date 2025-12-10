@@ -305,7 +305,7 @@ static void dwc2_handle_session_req_intr(struct dwc2_hsotg *hsotg)
 	if (dwc2_is_device_mode(hsotg)) {
 		if (hsotg->lx_state != DWC2_L0) {
 			if (hsotg->in_ppd) {
-				ret = dwc2_exit_partial_power_down(hsotg, 0,
+				ret = dwc2_exit_partial_power_down(hsotg, DWC2_POWER_DOWN_RESUME,
 								   true);
 				if (ret)
 					dev_err(hsotg->dev,
@@ -316,7 +316,7 @@ static void dwc2_handle_session_req_intr(struct dwc2_hsotg *hsotg)
 			if (hsotg->params.power_down ==
 			    DWC2_POWER_DOWN_PARAM_NONE && hsotg->bus_suspended &&
 			    !hsotg->params.no_clock_gating)
-				dwc2_gadget_exit_clock_gating(hsotg, 0);
+				dwc2_gadget_exit_clock_gating(hsotg, DWC2_POWER_DOWN_RESUME);
 		}
 
 		/*
@@ -438,7 +438,8 @@ static void dwc2_handle_wakeup_detected_intr(struct dwc2_hsotg *hsotg)
 				/* Clear Remote Wakeup Signaling */
 				dctl &= ~DCTL_RMTWKUPSIG;
 				dwc2_writel(hsotg, dctl, DCTL);
-				ret = dwc2_exit_partial_power_down(hsotg, 1,
+				ret = dwc2_exit_partial_power_down(hsotg,
+								   DWC2_POWER_DOWN_REMOTE_WKUP,
 								   true);
 				if (ret)
 					dev_err(hsotg->dev,
@@ -459,7 +460,8 @@ static void dwc2_handle_wakeup_detected_intr(struct dwc2_hsotg *hsotg)
 	} else {
 		if (hsotg->lx_state == DWC2_L2) {
 			if (hsotg->in_ppd) {
-				ret = dwc2_exit_partial_power_down(hsotg, 1,
+				ret = dwc2_exit_partial_power_down(hsotg,
+								   DWC2_POWER_DOWN_REMOTE_WKUP,
 								   true);
 				if (ret)
 					dev_err(hsotg->dev,
@@ -469,7 +471,7 @@ static void dwc2_handle_wakeup_detected_intr(struct dwc2_hsotg *hsotg)
 			if (hsotg->params.power_down ==
 			    DWC2_POWER_DOWN_PARAM_NONE && hsotg->bus_suspended &&
 			    !hsotg->params.no_clock_gating)
-				dwc2_host_exit_clock_gating(hsotg, 1);
+				dwc2_host_exit_clock_gating(hsotg, DWC2_POWER_DOWN_REMOTE_WKUP);
 
 			/*
 			 * If we've got this quirk then the PHY is stuck upon

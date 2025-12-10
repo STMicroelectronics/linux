@@ -1433,6 +1433,10 @@ void dwc2_dump_global_registers(struct dwc2_hsotg *hsotg);
 int stm32mp2_usb2phy_batt_chg_det(struct dwc2_hsotg *hsotg);
 int stm32mp2_usb2phy_usb_chg_psy_register(struct dwc2_hsotg *hsotg);
 
+#define DWC2_POWER_DOWN_RESUME		0
+#define DWC2_POWER_DOWN_REMOTE_WKUP	1
+#define DWC2_POWER_DOWN_SESSION_END	2
+
 /* Gadget defines */
 #if IS_ENABLED(CONFIG_USB_DWC2_PERIPHERAL) || \
 	IS_ENABLED(CONFIG_USB_DWC2_DUAL_ROLE)
