@@ -143,25 +143,28 @@ static int dwc2_drd_role_sw_set(struct usb_role_switch *sw, enum usb_role role)
 		already = dwc2_ovr_avalid(hsotg, true);
 	} else if (role == USB_ROLE_DEVICE) {
 		already = dwc2_ovr_bvalid(hsotg, true);
-		if (dwc2_is_device_enabled(hsotg)) {
-			/* This clear DCTL.SFTDISCON bit */
-			dwc2_hsotg_core_connect(hsotg);
-		}
 	} else {
-		if (dwc2_is_device_mode(hsotg)) {
-			if (!dwc2_ovr_bvalid(hsotg, false))
-				/* This set DCTL.SFTDISCON bit */
-				dwc2_hsotg_core_disconnect(hsotg);
-		} else {
+		if (dwc2_is_device_mode(hsotg))
+			already = dwc2_ovr_bvalid(hsotg, false);
+		else
 			dwc2_ovr_avalid(hsotg, false);
-		}
 	}
 
 	spin_unlock_irqrestore(&hsotg->lock, flags);
 
-	if (!already && hsotg->dr_mode == USB_DR_MODE_OTG)
-		/* This will raise a Connector ID Status Change Interrupt */
-		dwc2_force_mode(hsotg, role == USB_ROLE_HOST);
+	if (!already) {
+		if (hsotg->dr_mode == USB_DR_MODE_OTG)
+			/* This will raise a Connector ID Status Change Interrupt */
+			dwc2_force_mode(hsotg, role == USB_ROLE_HOST);
+
+		if (role == USB_ROLE_DEVICE && dwc2_is_device_enabled(hsotg))
+			/* This clear DCTL.SFTDISCON bit */
+			dwc2_hsotg_core_connect(hsotg);
+
+		if (role == USB_ROLE_NONE && dwc2_is_device_mode(hsotg))
+			/* This set DCTL.SFTDISCON bit */
+			dwc2_hsotg_core_disconnect(hsotg);
+	}
 
 	if (!hsotg->ll_hw_enabled && hsotg->clk)
 		clk_disable_unprepare(hsotg->clk);
