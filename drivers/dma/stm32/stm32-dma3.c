@@ -1344,7 +1344,7 @@ static irqreturn_t stm32_dma3_chan_irq(int irq, void *devid)
 {
 	struct stm32_dma3_chan *chan = devid;
 	struct stm32_dma3_ddata *ddata = to_stm32_dma3_ddata(chan);
-	u32 misr, csr, ccr;
+	u32 misr, csr, ccr, cfcr;
 
 	spin_lock(&chan->vchan.lock);
 
@@ -1356,6 +1356,14 @@ static irqreturn_t stm32_dma3_chan_irq(int irq, void *devid)
 
 	csr = readl_relaxed(ddata->base + STM32_DMA3_CSR(chan->id));
 	ccr = readl_relaxed(ddata->base + STM32_DMA3_CCR(chan->id)) & CCR_ALLIE;
+
+	/*
+	 * Half Transfer Interrupt may be disabled but Half Transfer Flag can be set,
+	 * ensure HTF flag to be cleared, with other flags.
+	 */
+	cfcr = csr & (ccr | CCR_HTIE);
+	if (cfcr)
+		writel_relaxed(cfcr, ddata->base + STM32_DMA3_CFCR(chan->id));
 
 	if (csr & CSR_TCF && ccr & CCR_TCIE) {
 		if (chan->swdesc->cyclic)
@@ -1385,15 +1393,6 @@ static irqreturn_t stm32_dma3_chan_irq(int irq, void *devid)
 		/* CCR.EN automatically cleared by HW */
 		stm32_dma3_chan_reset(chan);
 	}
-
-	/*
-	 * Half Transfer Interrupt may be disabled but Half Transfer Flag can be set,
-	 * ensure HTF flag to be cleared, with other flags.
-	 */
-	csr &= (ccr | CCR_HTIE);
-
-	if (csr)
-		writel_relaxed(csr, ddata->base + STM32_DMA3_CFCR(chan->id));
 
 	spin_unlock(&chan->vchan.lock);
 
