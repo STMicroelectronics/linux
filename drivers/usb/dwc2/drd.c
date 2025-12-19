@@ -225,6 +225,8 @@ static int dwc2_drd_role_sw_set(struct usb_role_switch *sw, enum usb_role role)
 	if (role == USB_ROLE_HOST) {
 		already = dwc2_ovr_avalid(hsotg, true);
 	} else if (role == USB_ROLE_DEVICE) {
+		if (hsotg->current_role == USB_ROLE_HOST)
+			dwc2_hcd_disconnect(hsotg, true);
 		already = dwc2_ovr_bvalid(hsotg, true);
 	} else {
 		if (dwc2_is_device_mode(hsotg))
