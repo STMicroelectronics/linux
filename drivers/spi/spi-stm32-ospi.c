@@ -1011,7 +1011,7 @@ static void stm32_ospi_remove(struct platform_device *pdev)
 	pm_runtime_force_suspend(ospi->dev);
 }
 
-static int __maybe_unused stm32_ospi_suspend(struct device *dev)
+static int stm32_ospi_suspend(struct device *dev)
 {
 	struct stm32_ospi *ospi = dev_get_drvdata(dev);
 
@@ -1022,7 +1022,7 @@ static int __maybe_unused stm32_ospi_suspend(struct device *dev)
 	return pm_runtime_force_suspend(ospi->dev);
 }
 
-static int __maybe_unused stm32_ospi_resume(struct device *dev)
+static int stm32_ospi_resume(struct device *dev)
 {
 	struct stm32_ospi *ospi = dev_get_drvdata(dev);
 	void __iomem *regs_base = ospi->regs_base;
@@ -1051,7 +1051,7 @@ static int __maybe_unused stm32_ospi_resume(struct device *dev)
 	return 0;
 }
 
-static int __maybe_unused stm32_ospi_runtime_suspend(struct device *dev)
+static int stm32_ospi_runtime_suspend(struct device *dev)
 {
 	struct stm32_ospi *ospi = dev_get_drvdata(dev);
 
@@ -1060,7 +1060,7 @@ static int __maybe_unused stm32_ospi_runtime_suspend(struct device *dev)
 	return 0;
 }
 
-static int __maybe_unused stm32_ospi_runtime_resume(struct device *dev)
+static int stm32_ospi_runtime_resume(struct device *dev)
 {
 	struct stm32_ospi *ospi = dev_get_drvdata(dev);
 
@@ -1068,9 +1068,8 @@ static int __maybe_unused stm32_ospi_runtime_resume(struct device *dev)
 }
 
 static const struct dev_pm_ops stm32_ospi_pm_ops = {
-	SET_SYSTEM_SLEEP_PM_OPS(stm32_ospi_suspend, stm32_ospi_resume)
-	SET_RUNTIME_PM_OPS(stm32_ospi_runtime_suspend,
-			   stm32_ospi_runtime_resume, NULL)
+	SYSTEM_SLEEP_PM_OPS(stm32_ospi_suspend, stm32_ospi_resume)
+	RUNTIME_PM_OPS(stm32_ospi_runtime_suspend, stm32_ospi_runtime_resume, NULL)
 };
 
 static const struct of_device_id stm32_ospi_of_match[] = {
@@ -1084,7 +1083,7 @@ static struct platform_driver stm32_ospi_driver = {
 	.remove	= stm32_ospi_remove,
 	.driver	= {
 		.name = "stm32-ospi",
-		.pm = &stm32_ospi_pm_ops,
+		.pm = pm_ptr(&stm32_ospi_pm_ops),
 		.of_match_table = stm32_ospi_of_match,
 	},
 };
