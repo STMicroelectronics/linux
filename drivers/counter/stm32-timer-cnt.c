@@ -37,6 +37,10 @@ struct stm32_timer_regs {
 	u32 arr;
 };
 
+struct stm32_timer_cfg {
+	const u32 tisel;	/* TISEL register offset */
+};
+
 struct stm32_timer_cnt {
 	struct regmap *regmap;
 	struct clk *clk;
@@ -48,6 +52,7 @@ struct stm32_timer_cnt {
 	unsigned int nr_irqs;
 	spinlock_t lock; /* protects nb_ovf */
 	u64 nb_ovf;
+	const struct stm32_timer_cfg *cfg;
 };
 
 static const enum counter_function stm32_count_functions[] = {
@@ -547,6 +552,81 @@ static struct counter_comp stm32_count_clock_ext[] = {
 	COUNTER_COMP_FREQUENCY(stm32_count_clk_get_freq),
 };
 
+static int stm32_count_tisel_get(struct counter_device *counter,
+				 struct counter_signal *signal,
+				 u8 *tisel)
+{
+	struct stm32_timer_cnt *const priv = counter_priv(counter);
+	u32 val;
+	int ret;
+
+	ret = regmap_read(priv->regmap, priv->cfg->tisel, &val);
+	if (ret)
+		return ret;
+
+	switch (signal->id) {
+	case STM32_CH1_SIG:
+		*tisel = FIELD_GET(TIM_TISEL_TI1, val);
+		break;
+	case STM32_CH2_SIG:
+		*tisel = FIELD_GET(TIM_TISEL_TI2, val);
+		break;
+	case STM32_CH3_SIG:
+		*tisel = FIELD_GET(TIM_TISEL_TI3, val);
+		break;
+	case STM32_CH4_SIG:
+		*tisel = FIELD_GET(TIM_TISEL_TI4, val);
+		break;
+	default:
+		return -EINVAL;
+	}
+
+	dev_dbg(counter->parent, "get tisel for channel %d, tisel=%u\n", signal->id, *tisel);
+
+	return 0;
+}
+
+static int stm32_count_tisel_set(struct counter_device *counter,
+				 struct counter_signal *signal,
+				 u8 tisel)
+{
+	struct stm32_timer_cnt *const priv = counter_priv(counter);
+	u32 mask, val;
+
+	if (tisel > 15)
+		return -ERANGE;
+
+	switch (signal->id) {
+	case STM32_CH1_SIG:
+		val = FIELD_PREP(TIM_TISEL_TI1, tisel);
+		mask = TIM_TISEL_TI1;
+		break;
+	case STM32_CH2_SIG:
+		val = FIELD_PREP(TIM_TISEL_TI2, tisel);
+		mask = TIM_TISEL_TI2;
+		break;
+	case STM32_CH3_SIG:
+		val = FIELD_PREP(TIM_TISEL_TI3, tisel);
+		mask = TIM_TISEL_TI3;
+		break;
+	case STM32_CH4_SIG:
+		val = FIELD_PREP(TIM_TISEL_TI4, tisel);
+		mask = TIM_TISEL_TI4;
+		break;
+	default:
+		return -EINVAL;
+	}
+
+	dev_dbg(counter->parent, "set tisel for channel %d, tisel=%u\n", signal->id, tisel);
+
+	return regmap_update_bits(priv->regmap, priv->cfg->tisel, mask, val);
+}
+
+static struct counter_comp stm32_count_channel_ext[] = {
+	/* Input select for channel 1..4, e.g. ti[1..4]_in[15:0] */
+	COUNTER_COMP_SIGNAL_U8("tisel", stm32_count_tisel_get, stm32_count_tisel_set),
+};
+
 static struct counter_signal stm32_signals[] = {
 	/*
 	 * Need to declare all the signals as a static array, and keep the signals order here,
@@ -559,11 +639,15 @@ static struct counter_signal stm32_signals[] = {
 	 */
 	{
 		.id = STM32_CH1_SIG,
-		.name = "Channel 1"
+		.name = "Channel 1",
+		.ext = stm32_count_channel_ext,
+		.num_ext = ARRAY_SIZE(stm32_count_channel_ext),
 	},
 	{
 		.id = STM32_CH2_SIG,
-		.name = "Channel 2"
+		.name = "Channel 2",
+		.ext = stm32_count_channel_ext,
+		.num_ext = ARRAY_SIZE(stm32_count_channel_ext),
 	},
 	{
 		.id = STM32_CLOCK_SIG,
@@ -573,11 +657,15 @@ static struct counter_signal stm32_signals[] = {
 	},
 	{
 		.id = STM32_CH3_SIG,
-		.name = "Channel 3"
+		.name = "Channel 3",
+		.ext = stm32_count_channel_ext,
+		.num_ext = ARRAY_SIZE(stm32_count_channel_ext),
 	},
 	{
 		.id = STM32_CH4_SIG,
-		.name = "Channel 4"
+		.name = "Channel 4",
+		.ext = stm32_count_channel_ext,
+		.num_ext = ARRAY_SIZE(stm32_count_channel_ext),
 	},
 };
 
@@ -743,6 +831,7 @@ static int stm32_timer_cnt_probe(struct platform_device *pdev)
 	priv->clk = ddata->clk;
 	priv->max_arr = ddata->max_arr;
 	priv->nr_irqs = ddata->nr_irqs;
+	priv->cfg = device_get_match_data(dev);
 
 	ret = stm32_timer_cnt_probe_encoder(dev, priv);
 	if (ret)
@@ -882,9 +971,18 @@ static const struct dev_pm_ops stm32_timer_cnt_pm_ops = {
 	RUNTIME_PM_OPS(stm32_timer_cnt_runtime_suspend, stm32_timer_cnt_runtime_resume, NULL)
 };
 
+static const struct stm32_timer_cfg stm32_timer_cfg = {
+	.tisel = TIM_TISEL,
+};
+
+static const struct stm32_timer_cfg stm32mp25_timer_cfg = {
+	.tisel = STM32MP25_TIM_TISEL,
+};
+
 static const struct of_device_id stm32_timer_cnt_of_match[] = {
-	{ .compatible = "st,stm32-timer-counter", },
-	{ .compatible = "st,stm32mp25-timer-counter", },
+	{ .compatible = "st,stm32-timer-counter", .data = (void *)&stm32_timer_cfg },
+	{ .compatible = "st,stm32mp21-timer-counter", .data = (void *)&stm32mp25_timer_cfg },
+	{ .compatible = "st,stm32mp25-timer-counter", .data = (void *)&stm32mp25_timer_cfg },
 	{},
 };
 MODULE_DEVICE_TABLE(of, stm32_timer_cnt_of_match);

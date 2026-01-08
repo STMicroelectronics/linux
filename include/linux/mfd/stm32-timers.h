@@ -33,6 +33,7 @@
 #define TIM_DCR		0x48			/* DMA control register			*/
 #define TIM_DMAR	0x4C			/* DMA register for transfer		*/
 #define TIM_TISEL	0x68			/* Input Selection			*/
+#define STM32MP25_TIM_TISEL	0x5C	/* Input Selection         */
 #define TIM_HWCFGR2	0x3EC			/* hardware configuration 2 Reg (MP25)	*/
 #define TIM_HWCFGR1	0x3F0			/* hardware configuration 1 Reg (MP25)	*/
 #define TIM_IPIDR	0x3F8			/* IP identification Reg (MP25)		*/
@@ -103,6 +104,10 @@
 #define TIM_BDTR_BKF(x)		(0xf << (16 + (x) * 4))
 #define TIM_DCR_DBA		GENMASK(4, 0)				/* DMA base addr				*/
 #define TIM_DCR_DBL		GENMASK(12, 8)				/* DMA burst len				*/
+#define TIM_TISEL_TI1	GENMASK(3, 0)	/* TI1 Input Selection mask*/
+#define TIM_TISEL_TI2	GENMASK(11, 8)	/* TI2 Input Selection mask*/
+#define TIM_TISEL_TI3	GENMASK(19, 16)	/* TI3 Input Selection mask*/
+#define TIM_TISEL_TI4	GENMASK(27, 24)	/* TI4 Input Selection mask*/
 #define TIM_HWCFGR1_NB_OF_CC	GENMASK(3, 0)				/* Capture/compare channels			*/
 #define TIM_HWCFGR1_NB_OF_DT	GENMASK(7, 4)				/* Complementary outputs & dead-time generators */
 #define TIM_HWCFGR2_CNT_WIDTH	GENMASK(15, 8)				/* Counter width				*/
