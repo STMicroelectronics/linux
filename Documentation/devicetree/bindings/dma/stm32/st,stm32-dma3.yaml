@@ -141,6 +141,9 @@ properties:
         -bit 17: Prevent linked-list refactoring
           0x0: don't prevent driver to refactor the linked-list for optimal performance
           0x1: prevent driver to refactor the linked-list, despite not optimal performance
+        -bit 18: Downgrade residue granularity to segment level
+          0x0: residue reported with burst granularity (implies a channel suspension causing latency)
+          0x1: residue reported with segment granularity (no channel suspension for high reactivity)
 
 required:
   - compatible
