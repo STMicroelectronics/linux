@@ -536,7 +536,8 @@ static void xhci_pci_quirks(struct device *dev, struct xhci_hcd *xhci)
 		xhci->quirks |= XHCI_ASMEDIA_MODIFY_FLOWCONTROL;
 
 	if (pdev->vendor == PCI_VENDOR_ID_ASMEDIA &&
-	    pdev->device == PCI_DEVICE_ID_ASMEDIA_3042_XHCI)
+	    (pdev->device == PCI_DEVICE_ID_ASMEDIA_1142_XHCI ||
+	     pdev->device == PCI_DEVICE_ID_ASMEDIA_3042_XHCI))
 		xhci->quirks |= XHCI_RESET_ON_RESUME;
 
 	if (pdev->vendor == PCI_VENDOR_ID_TI && pdev->device == 0x8241)
