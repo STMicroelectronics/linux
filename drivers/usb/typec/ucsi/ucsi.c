@@ -260,6 +260,7 @@ struct ucsi_work {
 	unsigned int count;
 	struct ucsi_connector *con;
 	int (*cb)(struct ucsi_connector *);
+	bool force_delete;
 };
 
 static void ucsi_poll_worker(struct work_struct *work)
@@ -279,7 +280,7 @@ static void ucsi_poll_worker(struct work_struct *work)
 
 	ret = uwork->cb(con);
 
-	if (uwork->count-- && (ret == -EBUSY || ret == -ETIMEDOUT)) {
+	if (uwork->count-- && (ret == -EBUSY || ret == -ETIMEDOUT) && !uwork->force_delete) {
 		queue_delayed_work(con->wq, &uwork->work, uwork->delay);
 	} else {
 		list_del(&uwork->node);
@@ -2097,15 +2098,18 @@ void ucsi_unregister(struct ucsi *ucsi)
 		cancel_work_sync(&ucsi->connector[i].work);
 
 		if (ucsi->connector[i].wq) {
-			struct ucsi_work *uwork;
+			struct ucsi_work *uwork, *uwork_temp;
 
 			mutex_lock(&ucsi->connector[i].lock);
 			/*
 			 * queue delayed items immediately so they can execute
 			 * and free themselves before the wq is destroyed
 			 */
-			list_for_each_entry(uwork, &ucsi->connector[i].partner_tasks, node)
+			list_for_each_entry_safe(uwork, uwork_temp,
+						 &ucsi->connector[i].partner_tasks, node) {
+				uwork->force_delete = true;
 				mod_delayed_work(ucsi->connector[i].wq, &uwork->work, 0);
+			}
 			mutex_unlock(&ucsi->connector[i].lock);
 			destroy_workqueue(ucsi->connector[i].wq);
 		}
