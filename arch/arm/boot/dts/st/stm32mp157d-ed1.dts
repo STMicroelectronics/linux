@@ -175,6 +175,10 @@
 	};
 };
 
+&dbg_bus {
+	status = "okay";
+};
+
 &dsi {
 	clocks = <&rcc DSI>, <&scmi_clk CK_SCMI_HSE>, <&rcc DSI_PX>;
 };

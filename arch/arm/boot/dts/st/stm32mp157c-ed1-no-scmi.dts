@@ -185,6 +185,10 @@
 	};
 };
 
+&dbg_bus {
+	status = "okay";
+};
+
 &dts {
 	status = "okay";
 };
