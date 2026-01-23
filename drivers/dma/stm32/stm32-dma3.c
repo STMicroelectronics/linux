@@ -231,6 +231,7 @@ enum stm32_dma3_port_data_width {
 #define STM32_DMA3_DT_TCEM		GENMASK(13, 12) /* CTR2_TCEM */
 #define STM32_DMA3_DT_NOPACK		BIT(16) /* CTR1_PAM */
 #define STM32_DMA3_DT_NOREFACT		BIT(17)
+#define STM32_DMA3_DT_SEG_RESIDUE	BIT(18) /* CCR_SUSP depending on residue granularity */
 
 /* struct stm32_dma3_chan .config_set bitfield */
 #define STM32_DMA3_CFG_SET_DT		BIT(0)
@@ -1194,6 +1195,25 @@ static int stm32_dma3_chan_get_curr_hwdesc(struct stm32_dma3_swdesc *swdesc, u32
 	return -EINVAL;
 }
 
+static void stm32_dma3_chan_set_segment_residue(struct stm32_dma3_chan *chan,
+						struct stm32_dma3_swdesc *swdesc,
+						struct dma_tx_state *txstate)
+{
+	struct stm32_dma3_ddata *ddata = to_stm32_dma3_ddata(chan);
+	u32 cllr = readl_relaxed(ddata->base + STM32_DMA3_CLLR(chan->id));
+	u32 residue = 0;
+	int curr_lli;
+
+	/* Get current hwdesc and get residue of pending hwdesc BNDT */
+	curr_lli = stm32_dma3_chan_get_curr_hwdesc(swdesc, cllr, &residue);
+	if (curr_lli < 0) {
+		dev_err(chan2dev(chan), "Can't get residue: current hwdesc not found\n");
+		return;
+	}
+
+	dma_set_residue(txstate, swdesc->lli[curr_lli].residue);
+}
+
 static void stm32_dma3_chan_set_residue(struct stm32_dma3_chan *chan,
 					struct stm32_dma3_swdesc *swdesc,
 					struct dma_tx_state *txstate)
@@ -1834,6 +1854,9 @@ static void stm32_dma3_caps(struct dma_chan *c, struct dma_slave_caps *caps)
 			caps->dst_addr_widths &= ~BIT(DMA_SLAVE_BUSWIDTH_8_BYTES);
 		}
 	}
+
+	if (chan->dt_config.tr_conf & STM32_DMA3_DT_SEG_RESIDUE)
+		caps->residue_granularity = DMA_RESIDUE_GRANULARITY_SEGMENT;
 }
 
 static int stm32_dma3_config(struct dma_chan *c, struct dma_slave_config *config)
@@ -1940,8 +1963,12 @@ static enum dma_status stm32_dma3_tx_status(struct dma_chan *c, dma_cookie_t coo
 		swdesc = chan->swdesc;
 
 	/* Get residue/in_flight_bytes only if a transfer is currently running (swdesc != NULL) */
-	if (swdesc)
-		stm32_dma3_chan_set_residue(chan, swdesc, txstate);
+	if (swdesc) {
+		if (chan->dt_config.tr_conf & STM32_DMA3_DT_SEG_RESIDUE)
+			stm32_dma3_chan_set_segment_residue(chan, swdesc, txstate);
+		else
+			stm32_dma3_chan_set_residue(chan, swdesc, txstate);
+	}
 
 	spin_unlock_irqrestore(&chan->vchan.lock, flags);
 
