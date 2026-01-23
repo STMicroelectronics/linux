@@ -27,8 +27,8 @@ config COMMON_CLK_STM32MP157
 
 config COMMON_CLK_STM32MP215
 	bool "Clock driver for stm32mp21x clocks"
-	depends on ARM || ARM64 || COMPILE_TEST
-	default y
+	depends on ARM64 || COMPILE_TEST
+	default ARCH_STM32
 	help
 	  Support for stm32mp21x SoC family clocks
 
