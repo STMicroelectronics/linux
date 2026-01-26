@@ -680,6 +680,12 @@ static void stm32_dwmac_remove(struct platform_device *pdev)
 
 static int stm32mp1_suspend(struct stm32_dwmac *dwmac)
 {
+	struct net_device *ndev = dev_get_drvdata(dwmac->dev);
+	struct stmmac_priv *priv = netdev_priv(ndev);
+
+	if (netif_running(ndev))
+		clk_disable_unprepare(priv->plat->clk_ptp_ref);
+
 	/* Keep the PHY up if we use Wake-on-Lan. */
 	if (!device_may_wakeup(dwmac->dev))
 		phy_power_on(dwmac, false);
@@ -689,7 +695,12 @@ static int stm32mp1_suspend(struct stm32_dwmac *dwmac)
 
 static void stm32mp1_resume(struct stm32_dwmac *dwmac)
 {
+	struct net_device *ndev = dev_get_drvdata(dwmac->dev);
+	struct stmmac_priv *priv = netdev_priv(ndev);
+
 	clk_disable_unprepare(dwmac->clk_ethstp);
+	if (netif_running(ndev))
+		clk_prepare_enable(priv->plat->clk_ptp_ref);
 
 	/* The PHY was up for Wake-on-Lan. */
 	if (!device_may_wakeup(dwmac->dev))
