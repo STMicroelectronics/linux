@@ -6,6 +6,7 @@
  * Author:  Alexandre Torgue <alexandre.torgue@st.com> for STMicroelectronics.
  */
 
+#include <linux/bus/stm32_firewall_device.h>
 #include <linux/clk.h>
 #include <linux/kernel.h>
 #include <linux/mfd/syscon.h>
@@ -108,6 +109,7 @@ struct stm32_dwmac {
 	u32 speed;
 	const struct stm32_ops *ops;
 	struct device *dev;
+	struct stm32_firewall firewall;
 };
 
 struct stm32_ops {
@@ -571,10 +573,26 @@ static int stm32_dwmac_probe(struct platform_device *pdev)
 	if (!dwmac)
 		return -ENOMEM;
 
+	/* Get stm32 firewall information */
+	ret = stm32_firewall_get_firewall(pdev->dev.of_node, &dwmac->firewall, 1);
+	if (ret)
+		return -EINVAL;
+
+	if (dwmac->firewall.firewall_id != 0) {
+		ret = stm32_firewall_grant_access_by_id(&dwmac->firewall,
+							dwmac->firewall.firewall_id);
+		if (ret) {
+			dev_err(&pdev->dev, "stm32 firewall grant error:%d\n",
+				ret);
+			return -EINVAL;
+		}
+	}
+
 	data = of_device_get_match_data(&pdev->dev);
 	if (!data) {
 		dev_err(&pdev->dev, "no of match data provided\n");
-		return -EINVAL;
+		ret = -EINVAL;
+		goto err_remove_firewall;
 	}
 
 	dwmac->ops = data;
@@ -583,7 +601,7 @@ static int stm32_dwmac_probe(struct platform_device *pdev)
 	ret = stm32_dwmac_parse_data(dwmac, &pdev->dev);
 	if (ret) {
 		dev_err(&pdev->dev, "Unable to parse OF data\n");
-		return ret;
+		goto err_remove_firewall;
 	}
 
 	plat_dat->flags |= STMMAC_FLAG_EN_TX_LPI_CLK_PHY_CAP;
@@ -623,7 +641,10 @@ err_clk_disable_suspend:
 
 err_clk_disable:
 	stm32_dwmac_clk_disable(dwmac);
-
+err_remove_firewall:
+	if (dwmac->firewall.firewall_id != 0)
+		stm32_firewall_release_access_by_id(&dwmac->firewall,
+						    dwmac->firewall.firewall_id);
 	return ret;
 }
 
@@ -651,6 +672,10 @@ static void stm32_dwmac_remove(struct platform_device *pdev)
 	}
 
 	phy_power_on(priv->plat->bsp_priv, false);
+
+	if (dwmac->firewall.firewall_id != 0)
+		stm32_firewall_release_access_by_id(&dwmac->firewall,
+						    dwmac->firewall.firewall_id);
 }
 
 static int stm32mp1_suspend(struct stm32_dwmac *dwmac)
