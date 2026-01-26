@@ -470,6 +470,9 @@ stmmac_probe_config_dt(struct platform_device *pdev, u8 *mac)
 	/* Get max speed of operation from device tree */
 	of_property_read_u32(np, "max-speed", &plat->max_speed);
 
+	/* Get external system time state from device tree */
+	plat->ext_systime = of_property_read_bool(np, "snps,ext-systime");
+
 	plat->bus_id = of_alias_get_id(np, "ethernet");
 	if (plat->bus_id < 0) {
 		if (bus_id < 0)

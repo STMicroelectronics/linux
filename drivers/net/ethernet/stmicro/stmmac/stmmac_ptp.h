@@ -58,6 +58,8 @@
 #define	PTP_TCR_TSEVNTENA	BIT(14)
 /* Enable Snapshot for Messages Relevant to Master */
 #define	PTP_TCR_TSMSTRENA	BIT(15)
+/* Enable External System Time input */
+#define	PTP_TCR_ESTI		BIT(20)
 /* Select PTP packets for Taking Snapshots
  * On gmac4 specifically:
  * Enable SYNC, Pdelay_Req, Pdelay_Resp when TSEVNTENA is enabled.

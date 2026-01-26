@@ -748,17 +748,21 @@ static int stmmac_init_tstamp_counter(struct stmmac_priv *priv,
 static int stmmac_init_timestamping(struct stmmac_priv *priv)
 {
 	bool xmac = dwmac_is_xmac(priv->plat->core_type);
+	u32 hwts_active = STMMAC_HWTS_ACTIVE;
 	int ret;
 
 	if (priv->plat->ptp_clk_freq_config)
 		priv->plat->ptp_clk_freq_config(priv);
+
+	if (priv->plat->ext_systime)
+		hwts_active |= PTP_TCR_ESTI;
 
 	if (!(priv->dma_cap.time_stamp || priv->dma_cap.atime_stamp)) {
 		netdev_info(priv->dev, "PTP not supported by HW\n");
 		return -EOPNOTSUPP;
 	}
 
-	ret = stmmac_init_tstamp_counter(priv, STMMAC_HWTS_ACTIVE);
+	ret = stmmac_init_tstamp_counter(priv, hwts_active);
 	if (ret) {
 		netdev_warn(priv->dev, "PTP init failed\n");
 		return ret;
