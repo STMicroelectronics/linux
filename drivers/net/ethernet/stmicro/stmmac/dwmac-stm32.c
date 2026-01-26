@@ -718,7 +718,9 @@ static struct platform_driver stm32_dwmac_driver = {
 	.remove = stm32_dwmac_remove,
 	.driver = {
 		.name           = "stm32-dwmac",
+#ifdef CONFIG_PM_SLEEP
 		.pm		= &stmmac_simple_pm_ops,
+#endif /* CONFIG_PM_SLEEP */
 		.of_match_table = stm32_dwmac_match,
 	},
 };
