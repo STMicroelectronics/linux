@@ -186,7 +186,11 @@ static int stpmic1_probe(struct i2c_client *i2c)
 		return ret;
 	}
 
-	ret = devm_register_power_off_handler(ddata->dev, stpmic1_power_off, ddata);
+	ret = devm_register_sys_off_handler(ddata->dev,
+					    SYS_OFF_MODE_POWER_OFF,
+					    SYS_OFF_PRIO_LOW,
+					    stpmic1_power_off,
+					    ddata);
 	if (ret) {
 		dev_err(ddata->dev, "failed to register sys-off handler: %d\n", ret);
 		return ret;
