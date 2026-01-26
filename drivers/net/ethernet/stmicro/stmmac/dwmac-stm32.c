@@ -758,6 +758,7 @@ MODULE_DEVICE_TABLE(of, stm32_dwmac_match);
 static struct platform_driver stm32_dwmac_driver = {
 	.probe  = stm32_dwmac_probe,
 	.remove = stm32_dwmac_remove,
+	.shutdown = stm32_dwmac_remove,
 	.driver = {
 		.name           = "stm32-dwmac",
 #ifdef CONFIG_PM_SLEEP
