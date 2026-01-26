@@ -18,6 +18,7 @@
 
 #include <linux/bitmap.h>
 #include <linux/debugfs.h>
+#include <linux/delay.h>
 #include <linux/device.h>
 #include <linux/export.h>
 #include <linux/idr.h>
@@ -1237,8 +1238,7 @@ static void xfer_put(const struct scmi_protocol_handle *ph,
 }
 
 static bool scmi_xfer_done_no_timeout(struct scmi_chan_info *cinfo,
-				      struct scmi_xfer *xfer, ktime_t stop,
-				      bool *ooo)
+				      struct scmi_xfer *xfer, bool *ooo)
 {
 	struct scmi_info *info = handle_to_scmi_info(cinfo->handle);
 
@@ -1247,7 +1247,14 @@ static bool scmi_xfer_done_no_timeout(struct scmi_chan_info *cinfo,
 	 * in case of out-of-order receptions of delayed responses
 	 */
 	return info->desc->ops->poll_done(cinfo, xfer) ||
-	       (*ooo = try_wait_for_completion(&xfer->done)) ||
+	       (*ooo = try_wait_for_completion(&xfer->done));
+}
+
+static bool scmi_xfer_done_timeout(struct scmi_chan_info *cinfo,
+				   struct scmi_xfer *xfer, ktime_t stop,
+				   bool *ooo)
+{
+	return scmi_xfer_done_no_timeout(cinfo, xfer, ooo) ||
 	       ktime_after(ktime_get(), stop);
 }
 
@@ -1266,14 +1273,30 @@ static int scmi_wait_for_reply(struct device *dev, const struct scmi_desc *desc,
 		if (!desc->sync_cmds_completed_on_ret) {
 			bool ooo = false;
 
-			/*
-			 * Poll on xfer using transport provided .poll_done();
-			 * assumes no completion interrupt was available.
-			 */
-			ktime_t stop = ktime_add_ms(ktime_get(), timeout_ms);
+			if (timekeeping_suspended) {
+				/* Poll with when timekeeping not available */
+				unsigned int retries = timeout_ms * 100;
 
-			spin_until_cond(scmi_xfer_done_no_timeout(cinfo, xfer,
-								  stop, &ooo));
+				while (retries--) {
+					if (scmi_xfer_done_no_timeout(cinfo,
+								      xfer,
+								      &ooo))
+						break;
+					udelay(10);
+				}
+			} else {
+				/*
+				 * Poll on xfer using transport provided .poll_done();
+				 * assumes no completion interrupt was available.
+				 */
+				ktime_t stop = ktime_add_ms(ktime_get(),
+							    timeout_ms);
+
+				spin_until_cond(scmi_xfer_done_timeout(cinfo,
+								       xfer,
+								       stop,
+								       &ooo));
+			}
 			if (!ooo && !info->desc->ops->poll_done(cinfo, xfer)) {
 				dev_err(dev,
 					"timed out in resp(caller: %pS) - polling\n",

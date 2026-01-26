@@ -262,7 +262,8 @@ struct scmi_desc {
 static inline bool is_polling_required(struct scmi_chan_info *cinfo,
 				       const struct scmi_desc *desc)
 {
-	return cinfo->no_completion_irq || desc->force_polling;
+	return cinfo->no_completion_irq || desc->force_polling ||
+	       timekeeping_suspended;
 }
 
 static inline bool is_transport_polling_capable(const struct scmi_desc *desc)
