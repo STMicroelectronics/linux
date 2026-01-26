@@ -115,8 +115,6 @@ properties:
           - enum:
               - shiratech,stm32mp157a-iot-box # IoT Box
               - shiratech,stm32mp157a-stinger96 # Stinger96
-              - st,stm32mp157c-ed1
-              - st,stm32mp157c-ed1-scmi
               - st,stm32mp157a-dk1
               - st,stm32mp157a-dk1-scmi
               - st,stm32mp157c-dk2
@@ -126,12 +124,22 @@ properties:
           - const: st,stm32mp157
 
       - items:
-          - const: st,stm32mp157c-ev1
-          - const: st,stm32mp157c-ed1
+          - enum:
+              - st,stm32mp157c-ed1
+              - st,stm32mp157c-ed1-scmi
+              - st,stm32mp157d-ed1
+              - st,stm32mp157f-ed1
           - const: st,stm32mp157
       - items:
-          - const: st,stm32mp157c-ev1-scmi
-          - const: st,stm32mp157c-ed1
+          - enum:
+              - st,stm32mp157c-ev1
+              - st,stm32mp157c-ev1-scmi
+              - st,stm32mp157d-ev1
+              - st,stm32mp157f-ev1
+          - enum:
+              - st,stm32mp157c-ed1
+              - st,stm32mp157d-ed1
+              - st,stm32mp157f-ed1
           - const: st,stm32mp157
 
       - description: DH STM32MP1 SoM based Boards
