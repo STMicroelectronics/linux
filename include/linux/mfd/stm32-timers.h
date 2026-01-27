@@ -45,6 +45,7 @@
 #define TIM_CR2_MMS2		GENMASK(23, 20)				/* Master mode selection 2			*/
 #define TIM_SMCR_SMS		(BIT(0) | BIT(1) | BIT(2))		/* Slave mode selection				*/
 #define TIM_SMCR_TS		(BIT(4) | BIT(5) | BIT(6))		/* Trigger selection				*/
+#define TIM_SMCR_SMS3	BIT(16) /* Slave mode selection bit 3 */
 #define TIM_DIER_UIE		BIT(0)					/* Update interrupt				*/
 #define TIM_DIER_CCxIE(x)	BIT(1 + ((x) - 1))			/* CCx Interrupt Enable	(x ∈ {1, .. 4})		*/
 #define TIM_DIER_CC1IE		TIM_DIER_CCxIE(1)			/* CC1 Interrupt Enable				*/
@@ -120,6 +121,7 @@
 #define TIM_SMCR_SMS_ENCODER_MODE_1		1 /* counts TI1FP1 edges, depending on TI2FP2 level */
 #define TIM_SMCR_SMS_ENCODER_MODE_2		2 /* counts TI2FP2 edges, depending on TI1FP1 level */
 #define TIM_SMCR_SMS_ENCODER_MODE_3		3 /* counts on both TI1FP1 and TI2FP2 edges */
+#define TIM_SMCR_SMS_EXTERNAL_CLOCK_MODE_1	7 /* counts on rising edges of the selected trgi */
 #define TIM_SMCR_TS_SHIFT			4
 #define TIM_BDTR_BKF_MASK			0xF
 #define TIM_BDTR_BKF_SHIFT(x)			(16 + (x) * 4)

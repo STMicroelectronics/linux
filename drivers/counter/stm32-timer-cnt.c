@@ -98,6 +98,7 @@ static int stm32_count_function_read(struct counter_device *counter,
 
 	switch (smcr & TIM_SMCR_SMS) {
 	case TIM_SMCR_SMS_SLAVE_MODE_DISABLED:
+	case TIM_SMCR_SMS_EXTERNAL_CLOCK_MODE_1:
 		*function = COUNTER_FUNCTION_INCREASE;
 		return 0;
 	case TIM_SMCR_SMS_ENCODER_MODE_1:
@@ -119,11 +120,24 @@ static int stm32_count_function_write(struct counter_device *counter,
 				      enum counter_function function)
 {
 	struct stm32_timer_cnt *const priv = counter_priv(counter);
-	u32 cr1, sms;
+	u32 cr1, smcr, sms;
 
 	switch (function) {
 	case COUNTER_FUNCTION_INCREASE:
-		sms = TIM_SMCR_SMS_SLAVE_MODE_DISABLED;
+		regmap_read(priv->regmap, TIM_SMCR, &smcr);
+
+		/*
+		 * SMS bitfield may already have been set through action callback.
+		 * Keep configuration if it is supported. Fallback to default conf, otherwise.
+		 */
+		switch (smcr & TIM_SMCR_SMS) {
+		case TIM_SMCR_SMS_SLAVE_MODE_DISABLED:
+		case TIM_SMCR_SMS_EXTERNAL_CLOCK_MODE_1:
+			return 0;
+		default:
+			sms = TIM_SMCR_SMS_SLAVE_MODE_DISABLED;
+			break;
+		}
 		break;
 	case COUNTER_FUNCTION_QUADRATURE_X2_A:
 		if (!priv->has_encoder)
@@ -466,12 +480,20 @@ static struct counter_comp stm32_count_ext[] = {
 };
 
 static const enum counter_synapse_action stm32_clock_synapse_actions[] = {
+	COUNTER_SYNAPSE_ACTION_NONE,
 	COUNTER_SYNAPSE_ACTION_RISING_EDGE,
 };
 
-static const enum counter_synapse_action stm32_channel_synapse_actions[] = {
+static const enum counter_synapse_action stm32_channel_extclk_synapse_actions[] = {
 	COUNTER_SYNAPSE_ACTION_NONE,
+	COUNTER_SYNAPSE_ACTION_RISING_EDGE,
 	COUNTER_SYNAPSE_ACTION_BOTH_EDGES,
+	COUNTER_SYNAPSE_CAPTURE_RISING_EDGE,
+	COUNTER_SYNAPSE_CAPTURE_FALLING_EDGE,
+	COUNTER_SYNAPSE_CAPTURE_BOTH_EDGES,
+};
+
+static const enum counter_synapse_action stm32_channel_synapse_actions[] = {
 	COUNTER_SYNAPSE_CAPTURE_RISING_EDGE,
 	COUNTER_SYNAPSE_CAPTURE_FALLING_EDGE,
 	COUNTER_SYNAPSE_CAPTURE_BOTH_EDGES,
@@ -485,7 +507,9 @@ static int stm32_action_read(struct counter_device *counter,
 	struct stm32_timer_cnt *const priv = counter_priv(counter);
 	const struct stm32_count_ccer_reg *ccer;
 	enum counter_function function;
-	unsigned int ch = synapse->signal->id;
+	unsigned int signal_id = synapse->signal->id;
+	unsigned int ch = signal_id;
+	u32 smcr, sms, ts;
 	u32 ccer_val;
 	int err;
 
@@ -493,50 +517,81 @@ static int stm32_action_read(struct counter_device *counter,
 	if (err)
 		return err;
 
-	if (synapse->signal->id > STM32_CLOCK_SIG)
+	if (ch > STM32_CLOCK_SIG)
 		ch--;
 
 	ccer = &stm32_ccer[ch];
 
 	regmap_read(priv->regmap, TIM_CCER, &ccer_val);
+	regmap_read(priv->regmap, TIM_SMCR, &smcr);
+
+	ccer_val &= (ccer->ccp | ccer->ccnp);
+	sms = smcr & TIM_SMCR_SMS;
+	ts = FIELD_GET(TIM_SMCR_TS, smcr);
+
+	*action = COUNTER_SYNAPSE_ACTION_NONE;
 
 	switch (function) {
 	case COUNTER_FUNCTION_INCREASE:
-		if (synapse->signal->id == STM32_CLOCK_SIG) {
-			*action = COUNTER_SYNAPSE_ACTION_RISING_EDGE;
-			return 0;
-		}
+		switch (signal_id) {
+		case STM32_CLOCK_SIG:
+			/* counts on internal clock when CEN=1 */
+			if (sms == TIM_SMCR_SMS_SLAVE_MODE_DISABLED && ts == 0)
+				*action = COUNTER_SYNAPSE_ACTION_RISING_EDGE;
 
-		/* Configure capture channel polarity */
-		ccer_val &= (ccer->ccp | ccer->ccnp);
-		if (!ccer_val) {
-			*action = COUNTER_SYNAPSE_CAPTURE_RISING_EDGE;
-		} else if (ccer_val == ccer->ccp) {
-			*action = COUNTER_SYNAPSE_CAPTURE_FALLING_EDGE;
-		} else if (ccer_val == (ccer->ccp | ccer->ccnp)) {
-			*action = COUNTER_SYNAPSE_CAPTURE_BOTH_EDGES;
-		} else {
-			dev_err(counter->parent, "Unknown action\n");
-			return -EINVAL;
+			return 0;
+		case STM32_CH1_SIG:
+		case STM32_CH2_SIG:
+		case STM32_CH3_SIG:
+		case STM32_CH4_SIG:
+			/* rising edge on ti1fp1 clocks the counter */
+			if (signal_id == STM32_CH1_SIG &&
+			    sms == TIM_SMCR_SMS_EXTERNAL_CLOCK_MODE_1 && ts == 5) {
+				*action = COUNTER_SYNAPSE_ACTION_RISING_EDGE;
+				return 0;
+			}
+
+			/* rising edge on ti2fp2 clocks the counter */
+			if (signal_id == STM32_CH2_SIG &&
+			    sms == TIM_SMCR_SMS_EXTERNAL_CLOCK_MODE_1 && ts == 6) {
+				*action = COUNTER_SYNAPSE_ACTION_RISING_EDGE;
+				return 0;
+			}
+
+			/* Configure capture channel polarity */
+			if (!ccer_val) {
+				*action = COUNTER_SYNAPSE_CAPTURE_RISING_EDGE;
+			} else if (ccer_val == ccer->ccp) {
+				*action = COUNTER_SYNAPSE_CAPTURE_FALLING_EDGE;
+			} else if (ccer_val == (ccer->ccp | ccer->ccnp)) {
+				*action = COUNTER_SYNAPSE_CAPTURE_BOTH_EDGES;
+			} else {
+				dev_err(counter->parent, "Unexpected state CCER=0x%x\n", ccer_val);
+				return -EINVAL;
+			}
+
+			return 0;
+		default:
+			dev_err(counter->parent, "Unknown signal [%d]\n", signal_id);
+				return -EINVAL;
 		}
-		return 0;
 	case COUNTER_FUNCTION_QUADRATURE_X2_A:
 		/* counts up/down on TI1FP1 edge depending on TI2FP2 level */
-		if (synapse->signal->id == STM32_CH1_SIG)
+		if (signal_id == STM32_CH1_SIG)
 			*action = COUNTER_SYNAPSE_ACTION_BOTH_EDGES;
 		else
 			*action = COUNTER_SYNAPSE_ACTION_NONE;
 		return 0;
 	case COUNTER_FUNCTION_QUADRATURE_X2_B:
 		/* counts up/down on TI2FP2 edge depending on TI1FP1 level */
-		if (synapse->signal->id == STM32_CH2_SIG)
+		if (signal_id == STM32_CH2_SIG)
 			*action = COUNTER_SYNAPSE_ACTION_BOTH_EDGES;
 		else
 			*action = COUNTER_SYNAPSE_ACTION_NONE;
 		return 0;
 	case COUNTER_FUNCTION_QUADRATURE_X4:
 		/* counts up/down on both TI1FP1 and TI2FP2 edges */
-		if (synapse->signal->id == STM32_CH1_SIG || synapse->signal->id == STM32_CH2_SIG)
+		if (signal_id == STM32_CH1_SIG || signal_id == STM32_CH2_SIG)
 			*action = COUNTER_SYNAPSE_ACTION_BOTH_EDGES;
 		else
 			*action = COUNTER_SYNAPSE_ACTION_NONE;
@@ -553,10 +608,10 @@ static int stm32_action_write(struct counter_device *counter,
 {
 	struct stm32_timer_cnt *const priv = counter_priv(counter);
 	enum counter_function function;
-	const struct stm32_count_ccer_reg *ccer;
-	unsigned int ch = synapse->signal->id;
+	const struct stm32_count_ccer_reg *ccer = NULL;
 	unsigned int signal_id = synapse->signal->id;
-	u32 ccer_val;
+	unsigned int ch = signal_id;
+	u32 ccer_val, cr1, sms, ts;
 	bool enabled = false;
 	int err;
 
@@ -567,50 +622,97 @@ static int stm32_action_write(struct counter_device *counter,
 	if (function != COUNTER_FUNCTION_INCREASE)
 		return -EINVAL;
 
-	if (signal_id > STM32_CLOCK_SIG)
-		ch--;
-
-	ccer = &stm32_ccer[ch];
-
 	switch (action) {
-	case COUNTER_SYNAPSE_CAPTURE_RISING_EDGE:
-		if (signal_id > STM32_CH4_SIG || signal_id == STM32_CLOCK_SIG)
+	case COUNTER_SYNAPSE_ACTION_NONE:
+		dev_warn(counter->parent, "None action set automatically. Cannot force it\n");
+		return 0;
+	case COUNTER_SYNAPSE_ACTION_RISING_EDGE:
+		switch (signal_id) {
+		case STM32_CLOCK_SIG:
+			/* counts on internal clock when CEN=1, no trigger */
+			sms = TIM_SMCR_SMS_SLAVE_MODE_DISABLED;
+			ts = 0;
+			break;
+		case STM32_CH1_SIG:
+			/* rising edge on ti1fp1 clocks the counter */
+			sms = TIM_SMCR_SMS_EXTERNAL_CLOCK_MODE_1;
+			ts = 5;
+			break;
+		case STM32_CH2_SIG:
+			/* rising edge on ti2fp2 clocks the counter */
+			sms = TIM_SMCR_SMS_EXTERNAL_CLOCK_MODE_1;
+			ts = 6;
+			break;
+		default:
+			dev_err(counter->parent, "Action [%d] not supported for signal [%d]\n",
+				action, signal_id);
 			return -EINVAL;
-
+		}
 		ccer_val = 0;
 		break;
+	case COUNTER_SYNAPSE_CAPTURE_RISING_EDGE:
 	case COUNTER_SYNAPSE_CAPTURE_FALLING_EDGE:
-		if (signal_id > STM32_CH4_SIG || signal_id == STM32_CLOCK_SIG)
-			return -EINVAL;
-
-		ccer_val = ccer->ccp;
-		break;
 	case COUNTER_SYNAPSE_CAPTURE_BOTH_EDGES:
 		if (signal_id > STM32_CH4_SIG || signal_id == STM32_CLOCK_SIG)
 			return -EINVAL;
 
-		ccer_val = ccer->ccp | ccer->ccnp;
+		if (ch > STM32_CLOCK_SIG)
+			ch--;
+		ccer = &stm32_ccer[ch];
+
+		sms = 0;
+		ts = 0;
+		ccer_val = 0;
+
+		if (action == COUNTER_SYNAPSE_CAPTURE_FALLING_EDGE)
+			ccer_val = ccer->ccp;
+
+		if (action == COUNTER_SYNAPSE_CAPTURE_BOTH_EDGES)
+			ccer_val = ccer->ccp | ccer->ccnp;
 		break;
 	default:
 		dev_err(counter->parent, "Action not supported\n");
 		return -EINVAL;
+		break;
 	}
 
-	if (regmap_test_bits(priv->regmap, TIM_CCER, ccer->cce)) {
-		regmap_clear_bits(priv->regmap, TIM_CCER, ccer->cce);
-		enabled = true;
+	/* Store enable status */
+	regmap_read(priv->regmap, TIM_CR1, &cr1);
+
+	regmap_clear_bits(priv->regmap, TIM_CR1, TIM_CR1_CEN);
+
+	regmap_update_bits(priv->regmap, TIM_SMCR, TIM_SMCR_SMS, sms);
+	/* There's a hole in SMS bitfield: need to manage last bit separately */
+	if (sms & 0x8)
+		regmap_set_bits(priv->regmap, TIM_SMCR, TIM_SMCR_SMS3);
+	else
+		regmap_clear_bits(priv->regmap, TIM_SMCR, TIM_SMCR_SMS3);
+	regmap_update_bits(priv->regmap, TIM_SMCR, TIM_SMCR_TS, FIELD_PREP(TIM_SMCR_TS, ts));
+
+	/* Make sure that registers are updated */
+	regmap_update_bits(priv->regmap, TIM_EGR, TIM_EGR_UG, TIM_EGR_UG);
+
+	/* Restore the enable status */
+	regmap_update_bits(priv->regmap, TIM_CR1, TIM_CR1_CEN, cr1);
+
+	if (ccer) {
+		/* CCxS bits are writable only when the channel is OFF (CCxE = 0 in TIM_CCER) */
+		if (regmap_test_bits(priv->regmap, TIM_CCER, ccer->cce)) {
+			regmap_clear_bits(priv->regmap, TIM_CCER, ccer->cce);
+			enabled = true;
+		}
+
+		regmap_update_bits(priv->regmap, TIM_CCER, ccer->ccp | ccer->ccnp, ccer_val);
+
+		if (enabled)
+			regmap_set_bits(priv->regmap, TIM_CCER, ccer->cce);
 	}
 
-	regmap_update_bits(priv->regmap, TIM_CCER, ccer->ccp | ccer->ccnp, ccer_val);
-
-	if (enabled)
-		regmap_set_bits(priv->regmap, TIM_CCER, ccer->cce);
-
-	dev_dbg(counter->parent, "Action [%d] set for signal [%d] / channel [%d]\n",
-		action, synapse->signal->id, ch);
+	dev_dbg(counter->parent, "Action [%d] set for signal [%d]\n",
+		action, signal_id);
 
 	return 0;
-};
+}
 
 static int stm32_count_capture_configure(struct counter_device *counter, unsigned int ch,
 					 bool enable)
@@ -869,13 +971,13 @@ static struct counter_signal stm32_signals[] = {
 
 static struct counter_synapse stm32_count_synapses[] = {
 	{
-		.actions_list = stm32_channel_synapse_actions,
-		.num_actions = ARRAY_SIZE(stm32_channel_synapse_actions),
+		.actions_list = stm32_channel_extclk_synapse_actions,
+		.num_actions = ARRAY_SIZE(stm32_channel_extclk_synapse_actions),
 		.signal = &stm32_signals[STM32_CH1_SIG]
 	},
 	{
-		.actions_list = stm32_channel_synapse_actions,
-		.num_actions = ARRAY_SIZE(stm32_channel_synapse_actions),
+		.actions_list = stm32_channel_extclk_synapse_actions,
+		.num_actions = ARRAY_SIZE(stm32_channel_extclk_synapse_actions),
 		.signal = &stm32_signals[STM32_CH2_SIG]
 	},
 	{
