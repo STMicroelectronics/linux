@@ -123,7 +123,12 @@
 #define TIM_SMCR_SMS_ENCODER_MODE_1		1 /* counts TI1FP1 edges, depending on TI2FP2 level */
 #define TIM_SMCR_SMS_ENCODER_MODE_2		2 /* counts TI2FP2 edges, depending on TI1FP1 level */
 #define TIM_SMCR_SMS_ENCODER_MODE_3		3 /* counts on both TI1FP1 and TI2FP2 edges */
+#define TIM_SMCR_SMS_RESET_MODE			4 /* trigger resets counter and update registers */
+#define TIM_SMCR_SMS_GATED_MODE			5 /* trigger input gates the counter clock */
+#define TIM_SMCR_SMS_TRIGGER_MODE		6 /* trigger input starts the counter */
 #define TIM_SMCR_SMS_EXTERNAL_CLOCK_MODE_1	7 /* counts on rising edges of the selected trgi */
+#define TIM_SMCR_SMS_RESET_TRIGGER_MODE		8 /* combined reset + trigger mode */
+#define TIM_SMCR_SMS_GATED_RESET_MODE		9 /* combined gated + reset mode */
 #define TIM_SMCR_TS_SHIFT			4
 #define TIM_BDTR_BKF_MASK			0xF
 #define TIM_BDTR_BKF_SHIFT(x)			(16 + (x) * 4)

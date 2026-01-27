@@ -100,6 +100,11 @@ static int stm32_count_function_read(struct counter_device *counter,
 	switch (smcr & TIM_SMCR_SMS) {
 	case TIM_SMCR_SMS_SLAVE_MODE_DISABLED:
 	case TIM_SMCR_SMS_EXTERNAL_CLOCK_MODE_1:
+	case TIM_SMCR_SMS_RESET_MODE:
+	case TIM_SMCR_SMS_GATED_MODE:
+	case TIM_SMCR_SMS_TRIGGER_MODE:
+	case TIM_SMCR_SMS_RESET_TRIGGER_MODE:
+	case TIM_SMCR_SMS_GATED_RESET_MODE:
 		*function = COUNTER_FUNCTION_INCREASE;
 		return 0;
 	case TIM_SMCR_SMS_ENCODER_MODE_1:
@@ -464,6 +469,104 @@ static int stm32_capture_source_write(struct counter_device *counter,
 	return 0;
 }
 
+static const enum counter_count_mode stm32_cnt_modes[] = {
+	COUNTER_COUNT_MODE_NORMAL,
+	COUNTER_COUNT_MODE_HARDWARE_TRIGGERED_RESET,
+	COUNTER_COUNT_MODE_HARDWARE_TRIGGERED_GATED,
+	COUNTER_COUNT_MODE_HARDWARE_TRIGGERED_START,
+	COUNTER_COUNT_MODE_HARDWARE_TRIGGERED_RESET_START,
+	COUNTER_COUNT_MODE_HARDWARE_TRIGGERED_GATED_RESET,
+};
+
+static int stm32_count_mode_read(struct counter_device *counter,
+				 struct counter_count *count,
+				 enum counter_count_mode *cnt_mode)
+{
+	struct stm32_timer_cnt *const priv = counter_priv(counter);
+	u32 smcr, sms;
+
+	regmap_read(priv->regmap, TIM_SMCR, &smcr);
+	/* There's a hole in SMS bitfield: need to manage last bit separately */
+	sms = FIELD_GET(TIM_SMCR_SMS, smcr) | (FIELD_GET(TIM_SMCR_SMS3, smcr) << 3);
+	switch (sms) {
+	case TIM_SMCR_SMS_SLAVE_MODE_DISABLED:
+	case TIM_SMCR_SMS_EXTERNAL_CLOCK_MODE_1:
+	case TIM_SMCR_SMS_ENCODER_MODE_1:
+	case TIM_SMCR_SMS_ENCODER_MODE_2:
+	case TIM_SMCR_SMS_ENCODER_MODE_3:
+		*cnt_mode = COUNTER_COUNT_MODE_NORMAL;
+		return 0;
+	case TIM_SMCR_SMS_RESET_MODE:
+		*cnt_mode = COUNTER_COUNT_MODE_HARDWARE_TRIGGERED_RESET;
+		return 0;
+	case TIM_SMCR_SMS_GATED_MODE:
+		*cnt_mode = COUNTER_COUNT_MODE_HARDWARE_TRIGGERED_GATED;
+		return 0;
+	case TIM_SMCR_SMS_TRIGGER_MODE:
+		*cnt_mode = COUNTER_COUNT_MODE_HARDWARE_TRIGGERED_START;
+		return 0;
+	case TIM_SMCR_SMS_RESET_TRIGGER_MODE:
+		*cnt_mode = COUNTER_COUNT_MODE_HARDWARE_TRIGGERED_RESET_START;
+		return 0;
+	case TIM_SMCR_SMS_GATED_RESET_MODE:
+		*cnt_mode = COUNTER_COUNT_MODE_HARDWARE_TRIGGERED_GATED_RESET;
+		return 0;
+	default:
+		return -EINVAL;
+	}
+}
+
+static int stm32_count_mode_write(struct counter_device *counter,
+				  struct counter_count *count,
+				  enum counter_count_mode cnt_mode)
+{
+	struct stm32_timer_cnt *const priv = counter_priv(counter);
+	u32 cr1, sms;
+
+	switch (cnt_mode) {
+	case COUNTER_COUNT_MODE_NORMAL:
+		/* default to reset value */
+		sms = TIM_SMCR_SMS_SLAVE_MODE_DISABLED;
+		break;
+	case COUNTER_COUNT_MODE_HARDWARE_TRIGGERED_RESET:
+		sms = TIM_SMCR_SMS_RESET_MODE;
+		break;
+	case COUNTER_COUNT_MODE_HARDWARE_TRIGGERED_GATED:
+		sms = TIM_SMCR_SMS_GATED_MODE;
+		break;
+	case COUNTER_COUNT_MODE_HARDWARE_TRIGGERED_START:
+		sms = TIM_SMCR_SMS_TRIGGER_MODE;
+		break;
+	case COUNTER_COUNT_MODE_HARDWARE_TRIGGERED_RESET_START:
+		sms = TIM_SMCR_SMS_RESET_TRIGGER_MODE;
+		break;
+	case COUNTER_COUNT_MODE_HARDWARE_TRIGGERED_GATED_RESET:
+		sms = TIM_SMCR_SMS_GATED_RESET_MODE;
+		break;
+	default:
+		/* should never reach this path */
+		return -EINVAL;
+	}
+	/* Store enable status */
+	regmap_read(priv->regmap, TIM_CR1, &cr1);
+	regmap_clear_bits(priv->regmap, TIM_CR1, TIM_CR1_CEN);
+	regmap_update_bits(priv->regmap, TIM_SMCR, TIM_SMCR_SMS, sms);
+	/* There's a hole in SMS bitfield: need to manage last bit separately */
+	if (sms & 0x8)
+		regmap_set_bits(priv->regmap, TIM_SMCR, TIM_SMCR_SMS3);
+	else
+		regmap_clear_bits(priv->regmap, TIM_SMCR, TIM_SMCR_SMS3);
+
+	/* Make sure that registers are updated */
+	regmap_update_bits(priv->regmap, TIM_EGR, TIM_EGR_UG, TIM_EGR_UG);
+
+	/* Restore the enable status */
+	regmap_update_bits(priv->regmap, TIM_CR1, TIM_CR1_CEN, cr1);
+
+	return 0;
+}
+
+static DEFINE_COUNTER_AVAILABLE(stm32_count_mode_available, stm32_cnt_modes);
 static DEFINE_COUNTER_ARRAY_U64(stm32_count_capture_sources, 4);
 static DEFINE_COUNTER_ARRAY_CAPTURE(stm32_count_cap_array, 4);
 
@@ -472,6 +575,8 @@ static struct counter_comp stm32_count_ext[] = {
 	COUNTER_COMP_ENABLE(stm32_count_enable_read, stm32_count_enable_write),
 	COUNTER_COMP_CEILING(stm32_count_ceiling_read,
 			     stm32_count_ceiling_write),
+	COUNTER_COMP_COUNT_MODE(stm32_count_mode_read, stm32_count_mode_write,
+				stm32_count_mode_available),
 	COUNTER_COMP_COUNT_U64("prescaler", stm32_count_prescaler_read,
 			       stm32_count_prescaler_write),
 	COUNTER_COMP_ARRAY_CAPTURE(stm32_count_cap_read, NULL, stm32_count_cap_array),
