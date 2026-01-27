@@ -152,7 +152,8 @@ static int stm32_count_function_write(struct counter_device *counter,
 	regmap_update_bits(priv->regmap, TIM_SMCR, TIM_SMCR_SMS, sms);
 
 	/* Configure polarity */
-	regmap_clear_bits(priv->regmap, TIM_CCER, TIM_CCER_MASK);
+	if (function != COUNTER_FUNCTION_INCREASE)
+		regmap_clear_bits(priv->regmap, TIM_CCER, TIM_CCER_MASK);
 
 	/* Make sure that registers are updated */
 	regmap_update_bits(priv->regmap, TIM_EGR, TIM_EGR_UG, TIM_EGR_UG);
@@ -339,22 +340,30 @@ static int stm32_count_nb_ovf_write(struct counter_device *counter,
 	return 0;
 }
 
-struct stm32_count_cc_regs {
+struct stm32_count_ccmr_reg {
 	u32 ccmr_reg;
 	u32 ccmr_mask;
-	u32 ccmr_bits;
-	u32 ccer_bits;
+	u32 ccmr_val;
 };
 
-static const struct stm32_count_cc_regs stm32_cc[] = {
-	{ TIM_CCMR1, TIM_CCMR_CC1S, TIM_CCMR_CC1S_TI1,
-		TIM_CCER_CC1E | TIM_CCER_CC1P | TIM_CCER_CC1NP },
-	{ TIM_CCMR1, TIM_CCMR_CC2S, TIM_CCMR_CC2S_TI2,
-		TIM_CCER_CC2E | TIM_CCER_CC2P | TIM_CCER_CC2NP },
-	{ TIM_CCMR2, TIM_CCMR_CC3S, TIM_CCMR_CC3S_TI3,
-		TIM_CCER_CC3E | TIM_CCER_CC3P | TIM_CCER_CC3NP },
-	{ TIM_CCMR2, TIM_CCMR_CC4S, TIM_CCMR_CC4S_TI4,
-		TIM_CCER_CC4E | TIM_CCER_CC4P | TIM_CCER_CC4NP },
+static const struct stm32_count_ccmr_reg stm32_ccmr[] = {
+	{ TIM_CCMR1, TIM_CCMR_CC1S, TIM_CCMR_CC1S_TI1 },
+	{ TIM_CCMR1, TIM_CCMR_CC2S, TIM_CCMR_CC2S_TI2 },
+	{ TIM_CCMR2, TIM_CCMR_CC3S, TIM_CCMR_CC3S_TI3 },
+	{ TIM_CCMR2, TIM_CCMR_CC4S, TIM_CCMR_CC4S_TI4 },
+};
+
+struct stm32_count_ccer_reg {
+	u32 cce;
+	u32 ccp;
+	u32 ccnp;
+};
+
+static const struct stm32_count_ccer_reg stm32_ccer[] = {
+	{ TIM_CCER_CC1E, TIM_CCER_CC1P, TIM_CCER_CC1NP },
+	{ TIM_CCER_CC2E, TIM_CCER_CC2P, TIM_CCER_CC2NP },
+	{ TIM_CCER_CC3E, TIM_CCER_CC3P, TIM_CCER_CC3NP },
+	{ TIM_CCER_CC4E, TIM_CCER_CC4P, TIM_CCER_CC4NP },
 };
 
 static int stm32_capture_source_read(struct counter_device *counter,
@@ -365,7 +374,7 @@ static int stm32_capture_source_read(struct counter_device *counter,
 	int ret;
 	u32 val;
 
-	ret = regmap_read(priv->regmap, stm32_cc[idx].ccmr_reg, &val);
+	ret = regmap_read(priv->regmap, stm32_ccmr[idx].ccmr_reg, &val);
 	if (ret)
 		return ret;
 
@@ -460,9 +469,12 @@ static const enum counter_synapse_action stm32_clock_synapse_actions[] = {
 	COUNTER_SYNAPSE_ACTION_RISING_EDGE,
 };
 
-static const enum counter_synapse_action stm32_synapse_actions[] = {
+static const enum counter_synapse_action stm32_channel_synapse_actions[] = {
 	COUNTER_SYNAPSE_ACTION_NONE,
-	COUNTER_SYNAPSE_ACTION_BOTH_EDGES
+	COUNTER_SYNAPSE_ACTION_BOTH_EDGES,
+	COUNTER_SYNAPSE_CAPTURE_RISING_EDGE,
+	COUNTER_SYNAPSE_CAPTURE_FALLING_EDGE,
+	COUNTER_SYNAPSE_CAPTURE_BOTH_EDGES,
 };
 
 static int stm32_action_read(struct counter_device *counter,
@@ -470,20 +482,43 @@ static int stm32_action_read(struct counter_device *counter,
 			     struct counter_synapse *synapse,
 			     enum counter_synapse_action *action)
 {
+	struct stm32_timer_cnt *const priv = counter_priv(counter);
+	const struct stm32_count_ccer_reg *ccer;
 	enum counter_function function;
+	unsigned int ch = synapse->signal->id;
+	u32 ccer_val;
 	int err;
 
 	err = stm32_count_function_read(counter, count, &function);
 	if (err)
 		return err;
 
+	if (synapse->signal->id > STM32_CLOCK_SIG)
+		ch--;
+
+	ccer = &stm32_ccer[ch];
+
+	regmap_read(priv->regmap, TIM_CCER, &ccer_val);
+
 	switch (function) {
 	case COUNTER_FUNCTION_INCREASE:
-		/* counts on internal clock when CEN=1 */
-		if (synapse->signal->id == STM32_CLOCK_SIG)
+		if (synapse->signal->id == STM32_CLOCK_SIG) {
 			*action = COUNTER_SYNAPSE_ACTION_RISING_EDGE;
-		else
-			*action = COUNTER_SYNAPSE_ACTION_NONE;
+			return 0;
+		}
+
+		/* Configure capture channel polarity */
+		ccer_val &= (ccer->ccp | ccer->ccnp);
+		if (!ccer_val) {
+			*action = COUNTER_SYNAPSE_CAPTURE_RISING_EDGE;
+		} else if (ccer_val == ccer->ccp) {
+			*action = COUNTER_SYNAPSE_CAPTURE_FALLING_EDGE;
+		} else if (ccer_val == (ccer->ccp | ccer->ccnp)) {
+			*action = COUNTER_SYNAPSE_CAPTURE_BOTH_EDGES;
+		} else {
+			dev_err(counter->parent, "Unknown action\n");
+			return -EINVAL;
+		}
 		return 0;
 	case COUNTER_FUNCTION_QUADRATURE_X2_A:
 		/* counts up/down on TI1FP1 edge depending on TI2FP2 level */
@@ -511,40 +546,116 @@ static int stm32_action_read(struct counter_device *counter,
 	}
 }
 
+static int stm32_action_write(struct counter_device *counter,
+			      struct counter_count *count,
+			      struct counter_synapse *synapse,
+			      enum counter_synapse_action action)
+{
+	struct stm32_timer_cnt *const priv = counter_priv(counter);
+	enum counter_function function;
+	const struct stm32_count_ccer_reg *ccer;
+	unsigned int ch = synapse->signal->id;
+	unsigned int signal_id = synapse->signal->id;
+	u32 ccer_val;
+	bool enabled = false;
+	int err;
+
+	err = stm32_count_function_read(counter, count, &function);
+	if (err)
+		return err;
+
+	if (function != COUNTER_FUNCTION_INCREASE)
+		return -EINVAL;
+
+	if (signal_id > STM32_CLOCK_SIG)
+		ch--;
+
+	ccer = &stm32_ccer[ch];
+
+	switch (action) {
+	case COUNTER_SYNAPSE_CAPTURE_RISING_EDGE:
+		if (signal_id > STM32_CH4_SIG || signal_id == STM32_CLOCK_SIG)
+			return -EINVAL;
+
+		ccer_val = 0;
+		break;
+	case COUNTER_SYNAPSE_CAPTURE_FALLING_EDGE:
+		if (signal_id > STM32_CH4_SIG || signal_id == STM32_CLOCK_SIG)
+			return -EINVAL;
+
+		ccer_val = ccer->ccp;
+		break;
+	case COUNTER_SYNAPSE_CAPTURE_BOTH_EDGES:
+		if (signal_id > STM32_CH4_SIG || signal_id == STM32_CLOCK_SIG)
+			return -EINVAL;
+
+		ccer_val = ccer->ccp | ccer->ccnp;
+		break;
+	default:
+		dev_err(counter->parent, "Action not supported\n");
+		return -EINVAL;
+	}
+
+	if (regmap_test_bits(priv->regmap, TIM_CCER, ccer->cce)) {
+		regmap_clear_bits(priv->regmap, TIM_CCER, ccer->cce);
+		enabled = true;
+	}
+
+	regmap_update_bits(priv->regmap, TIM_CCER, ccer->ccp | ccer->ccnp, ccer_val);
+
+	if (enabled)
+		regmap_set_bits(priv->regmap, TIM_CCER, ccer->cce);
+
+	dev_dbg(counter->parent, "Action [%d] set for signal [%d] / channel [%d]\n",
+		action, synapse->signal->id, ch);
+
+	return 0;
+};
+
 static int stm32_count_capture_configure(struct counter_device *counter, unsigned int ch,
 					 bool enable)
 {
 	struct stm32_timer_cnt *const priv = counter_priv(counter);
-	const struct stm32_count_cc_regs *cc;
-	u32 ccmr, ccer;
+	const struct stm32_count_ccer_reg *ccer;
+	const struct stm32_count_ccmr_reg *ccmr;
+	u32 ccer_msk, ccmr_val, ccer_val;
 
-	if (ch >= ARRAY_SIZE(stm32_cc) || ch >= priv->nchannels) {
+	if (ch >= ARRAY_SIZE(stm32_ccmr) || ch >= priv->nchannels) {
 		dev_err(counter->parent, "invalid ch: %d\n", ch);
 		return -EINVAL;
 	}
 
-	cc = &stm32_cc[ch];
+	ccer = &stm32_ccer[ch];
+	ccmr = &stm32_ccmr[ch];
+	ccer_msk = ccer->cce | ccer->ccp | ccer->ccnp;
 
 	/*
-	 * configure channel in input capture mode, map channel 1 on TI1, channel2 on TI2...
-	 * Select both edges / non-inverted to trigger a capture.
+	 * Configure channel in input capture mode, and map channel on TIx depending on action
+	 * selected for the channel.
 	 */
 	if (enable) {
 		/* first clear possibly latched capture flag upon enabling */
-		if (!regmap_test_bits(priv->regmap, TIM_CCER, cc->ccer_bits))
+		if (!regmap_test_bits(priv->regmap, TIM_CCER, ccer_msk))
 			regmap_write(priv->regmap, TIM_SR, ~TIM_SR_CC_IF(ch));
-		regmap_update_bits(priv->regmap, cc->ccmr_reg, cc->ccmr_mask,
-				   cc->ccmr_bits);
-		regmap_set_bits(priv->regmap, TIM_CCER, cc->ccer_bits);
+
+		/*
+		 * If CCMR input selection is not yet set, select default input
+		 * Must be set before enabling the channel.
+		 */
+		regmap_read(priv->regmap, ccmr->ccmr_reg, &ccmr_val);
+		if (!(ccmr_val & ccmr->ccmr_mask))
+			regmap_update_bits(priv->regmap, ccmr->ccmr_reg, ccmr->ccmr_mask,
+					   ccmr->ccmr_val);
+
+		regmap_set_bits(priv->regmap, TIM_CCER, ccer->cce);
 	} else {
-		regmap_clear_bits(priv->regmap, TIM_CCER, cc->ccer_bits);
-		regmap_clear_bits(priv->regmap, cc->ccmr_reg, cc->ccmr_mask);
+		regmap_clear_bits(priv->regmap, TIM_CCER, ccer_msk);
 	}
 
-	regmap_read(priv->regmap, cc->ccmr_reg, &ccmr);
-	regmap_read(priv->regmap, TIM_CCER, &ccer);
+	regmap_read(priv->regmap, ccmr->ccmr_reg, &ccmr_val);
+	regmap_read(priv->regmap, TIM_CCER, &ccer_val);
 	dev_dbg(counter->parent, "%s(%s) ch%d 0x%08x 0x%08x\n", __func__, enable ? "ena" : "dis",
-		ch, ccmr, ccer);
+		ch, ccmr_val, ccer_val);
 
 	return 0;
 }
@@ -620,6 +731,7 @@ static const struct counter_ops stm32_timer_cnt_ops = {
 	.function_read = stm32_count_function_read,
 	.function_write = stm32_count_function_write,
 	.action_read = stm32_action_read,
+	.action_write = stm32_action_write,
 	.events_configure = stm32_count_events_configure,
 	.watch_validate = stm32_count_watch_validate,
 };
@@ -757,13 +869,13 @@ static struct counter_signal stm32_signals[] = {
 
 static struct counter_synapse stm32_count_synapses[] = {
 	{
-		.actions_list = stm32_synapse_actions,
-		.num_actions = ARRAY_SIZE(stm32_synapse_actions),
+		.actions_list = stm32_channel_synapse_actions,
+		.num_actions = ARRAY_SIZE(stm32_channel_synapse_actions),
 		.signal = &stm32_signals[STM32_CH1_SIG]
 	},
 	{
-		.actions_list = stm32_synapse_actions,
-		.num_actions = ARRAY_SIZE(stm32_synapse_actions),
+		.actions_list = stm32_channel_synapse_actions,
+		.num_actions = ARRAY_SIZE(stm32_channel_synapse_actions),
 		.signal = &stm32_signals[STM32_CH2_SIG]
 	},
 	{
@@ -772,13 +884,13 @@ static struct counter_synapse stm32_count_synapses[] = {
 		.signal = &stm32_signals[STM32_CLOCK_SIG]
 	},
 	{
-		.actions_list = stm32_synapse_actions,
-		.num_actions = ARRAY_SIZE(stm32_synapse_actions),
+		.actions_list = stm32_channel_synapse_actions,
+		.num_actions = ARRAY_SIZE(stm32_channel_synapse_actions),
 		.signal = &stm32_signals[STM32_CH3_SIG]
 	},
 	{
-		.actions_list = stm32_synapse_actions,
-		.num_actions = ARRAY_SIZE(stm32_synapse_actions),
+		.actions_list = stm32_channel_synapse_actions,
+		.num_actions = ARRAY_SIZE(stm32_channel_synapse_actions),
 		.signal = &stm32_signals[STM32_CH4_SIG]
 	},
 };
