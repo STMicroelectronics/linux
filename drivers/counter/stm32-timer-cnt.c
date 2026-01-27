@@ -945,6 +945,41 @@ static struct counter_comp stm32_count_channel_ext[] = {
 	COUNTER_COMP_SIGNAL_U8("tisel", stm32_count_tisel_get, stm32_count_tisel_set),
 };
 
+static int stm32_count_etrsel_get(struct counter_device *counter,
+				  struct counter_signal *signal,
+				  u8 *etrsel)
+{
+	struct stm32_timer_cnt *const priv = counter_priv(counter);
+	u32 val;
+	int ret;
+
+	ret = regmap_read(priv->regmap, TIM_AF1, &val);
+	if (ret)
+		return ret;
+
+	*etrsel = FIELD_GET(TIM_AF1_ETRSEL, val);
+
+	return 0;
+}
+
+static int stm32_count_etrsel_set(struct counter_device *counter,
+				  struct counter_signal *signal,
+				  u8 etrsel)
+{
+	struct stm32_timer_cnt *const priv = counter_priv(counter);
+
+	if (etrsel > 15)
+		return -ERANGE;
+
+	return regmap_update_bits(priv->regmap, TIM_AF1, TIM_AF1_ETRSEL,
+				  FIELD_PREP(TIM_AF1_ETRSEL, etrsel));
+}
+
+static struct counter_comp stm32_count_etr_ext[] = {
+	/* ETRSEL mux to select from tim_etr0 to tim_etr15 */
+	COUNTER_COMP_SIGNAL_U8("etrsel", stm32_count_etrsel_get, stm32_count_etrsel_set),
+};
+
 static struct counter_signal stm32_signals[] = {
 	/*
 	 * Need to declare all the signals as a static array, and keep the signals order here,
@@ -988,6 +1023,8 @@ static struct counter_signal stm32_signals[] = {
 	{
 		.id = STM32_ETR_SIG,
 		.name = "ETR",
+		.ext = stm32_count_etr_ext,
+		.num_ext = ARRAY_SIZE(stm32_count_etr_ext),
 	},
 };
 
