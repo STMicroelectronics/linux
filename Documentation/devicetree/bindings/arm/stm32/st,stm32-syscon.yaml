@@ -54,6 +54,10 @@ patternProperties:
     type: object
     $ref: /schemas/nvmem/st,stm32-tamp-nvram.yaml#
 
+  "^reboot-mode":
+    type: object
+    $ref: /schemas/power/reset/nvmem-reboot-mode.yaml#
+
 required:
   - compatible
   - reg
