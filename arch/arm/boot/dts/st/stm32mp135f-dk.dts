@@ -235,6 +235,7 @@
 	phy-mode = "rmii";
 	max-speed = <100>;
 	phy-handle = <&phy0_eth1>;
+	st,phy-wol;
 
 	mdio {
 		#address-cells = <1>;
@@ -247,7 +248,6 @@
 			reset-gpios = <&mcp23017 9 GPIO_ACTIVE_LOW>;
 			reset-assert-us = <1000>;
 			reset-deassert-us = <30000>;
-			wakeup-source;
 		};
 	};
 };
