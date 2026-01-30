@@ -24675,6 +24675,12 @@ M:	Gatien Chevallier <gatien.chevallier@foss.st.com>
 S:	Maintained
 F:	Documentation/devicetree/bindings/soc/st/*rif*
 
+STM32 TAMP DRIVERS
+M:	Siméon Marijon <simeon.marijon@foss.st.com>
+L:	linux-stm32@st-md-mailman.stormreply.com (moderated for non-subscribers)
+S:	Maintained
+F:	Documentation/devicetree/bindings/nvmem/st,stm32-tamp-nvram.yaml
+
 STM32 TIMER/LPTIMER DRIVERS
 M:	Fabrice Gasnier <fabrice.gasnier@foss.st.com>
 S:	Maintained
