@@ -278,7 +278,7 @@
 			compatible = "ethernet-phy-id001c.c916";
 			reg = <1>;
 			reset-assert-us = <10000>;
-			reset-deassert-us = <300>;
+			reset-deassert-us = <80000>;
 			reset-gpios = <&gpiog 6 GPIO_ACTIVE_LOW>;
 		};
 	};
