@@ -835,22 +835,7 @@ static void lvds_config_data_mapping(struct stm_lvds *lvds)
 
 static void lvds_config_mode(struct stm_lvds *lvds)
 {
-	u32 bus_flags, lvds_cr = 0, lvds_cdl1cr = 0, lvds_cdl2cr = 0;
-	const struct drm_display_mode *mode;
-	const struct drm_connector *connector;
-
-	connector = &lvds->connector;
-	if (!connector)
-		return;
-
-	if (list_empty(&connector->modes)) {
-		drm_dbg(connector->dev, "connector: empty modes list\n");
-		return;
-	}
-
-	bus_flags = connector->display_info.bus_flags;
-	mode = list_first_entry(&connector->modes,
-				struct drm_display_mode, head);
+	u32 lvds_cr = 0, lvds_cdl1cr = 0, lvds_cdl2cr = 0;
 
 	lvds_clear(lvds, LVDS_CR, CR_LKMOD);
 	lvds_clear(lvds, LVDS_CDL1CR, CDLCR_DISTR0 | CDLCR_DISTR1 | CDLCR_DISTR2 |
@@ -870,16 +855,6 @@ static void lvds_config_mode(struct stm_lvds *lvds)
 			lvds_cdl2cr = CDL2CR_8DL_DEFAULT;
 		}
 	}
-
-	/* Set signal polarity */
-	if (bus_flags & DRM_BUS_FLAG_DE_LOW)
-		lvds_cr |= CR_DEPOL;
-
-	if (mode->flags & DRM_MODE_FLAG_NHSYNC)
-		lvds_cr |= CR_HSPOL;
-
-	if (mode->flags & DRM_MODE_FLAG_NVSYNC)
-		lvds_cr |= CR_VSPOL;
 
 	switch (lvds->link_type) {
 	case LVDS_SINGLE_LINK_PRIMARY:
