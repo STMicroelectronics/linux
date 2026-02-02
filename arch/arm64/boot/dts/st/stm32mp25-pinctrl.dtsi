@@ -197,6 +197,57 @@
 		};
 	};
 
+	eth3_rgmii_pins_a: eth3-rgmii-0 {
+		pins1 {
+			pinmux = <STM32_PINMUX('A', 6, AF14)>, /* ETH_RGMII_TXD0 */
+				 <STM32_PINMUX('A', 7, AF14)>, /* ETH_RGMII_TXD1 */
+				 <STM32_PINMUX('H', 6, AF14)>, /* ETH_RGMII_TXD2 */
+				 <STM32_PINMUX('H', 3, AF14)>, /* ETH_RGMII_TXD3 */
+				 <STM32_PINMUX('A', 3, AF14)>; /* ETH_RGMII_TX_CTL */
+			bias-disable;
+			drive-push-pull;
+			slew-rate = <3>;
+			st,io-sync = "data on both edges";
+		};
+		pins2 {
+			pinmux = <STM32_PINMUX('H', 2, AF14)>; /* ETH_RGMII_GTX_CLK */
+			bias-disable;
+			drive-push-pull;
+			slew-rate = <3>;
+			skew-delay-output-ps = <500>;
+		};
+		pins3 {
+			pinmux = <STM32_PINMUX('A', 9, AF14)>, /* ETH_RGMII_RXD0 */
+				 <STM32_PINMUX('A', 10, AF14)>, /* ETH_RGMII_RXD1 */
+				 <STM32_PINMUX('H', 7, AF14)>, /* ETH_RGMII_RXD2 */
+				 <STM32_PINMUX('H', 8, AF14)>, /* ETH_RGMII_RXD3 */
+				 <STM32_PINMUX('A', 2, AF14)>; /* ETH_RGMII_RX_CTL */
+			bias-disable;
+			st,io-sync = "data on both edges";
+		};
+		pins4 {
+			pinmux = <STM32_PINMUX('A', 5, AF14)>; /* ETH_RGMII_RX_CLK */
+			bias-disable;
+		};
+	};
+
+	eth3_rgmii_sleep_pins_a: eth3-rgmii-sleep-0 {
+		pins1 {
+			pinmux = <STM32_PINMUX('A', 6, ANALOG)>, /* ETH_RGMII_TXD0 */
+				 <STM32_PINMUX('A', 7, ANALOG)>, /* ETH_RGMII_TXD1 */
+				 <STM32_PINMUX('H', 6, ANALOG)>, /* ETH_RGMII_TXD2 */
+				 <STM32_PINMUX('H', 3, ANALOG)>, /* ETH_RGMII_TXD3 */
+				 <STM32_PINMUX('A', 3, ANALOG)>, /* ETH_RGMII_TX_CTL */
+				 <STM32_PINMUX('H', 2, ANALOG)>, /* ETH_RGMII_GTX_CLK */
+				 <STM32_PINMUX('A', 9, ANALOG)>, /* ETH_RGMII_RXD0 */
+				 <STM32_PINMUX('A', 10, ANALOG)>, /* ETH_RGMII_RXD1 */
+				 <STM32_PINMUX('H', 7, ANALOG)>, /* ETH_RGMII_RXD2 */
+				 <STM32_PINMUX('H', 8, ANALOG)>, /* ETH_RGMII_RXD3 */
+				 <STM32_PINMUX('A', 2, ANALOG)>, /* ETH_RGMII_RX_CTL */
+				 <STM32_PINMUX('A', 5, ANALOG)>; /* ETH_RGMII_RX_CLK */
+		};
+	};
+
 	i2c2_pins_a: i2c2-0 {
 		pins {
 			pinmux = <STM32_PINMUX('B', 5, AF9)>, /* I2C2_SCL */
