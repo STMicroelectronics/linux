@@ -519,11 +519,257 @@ static const u64 ltdc_format_modifiers[] = {
 	DRM_FORMAT_MOD_INVALID
 };
 
+static bool ltdc_readable_reg(struct device *dev, unsigned int reg)
+{
+	struct drm_device *ddev = dev_get_drvdata(dev);
+	struct ltdc_device *ldev;
+	int idx;
+
+	switch (reg) {
+	case LTDC_IDR:
+	case LTDC_LCR:
+	case LTDC_SSCR:
+	case LTDC_BPCR:
+	case LTDC_AWCR:
+	case LTDC_TWCR:
+	case LTDC_GCR:
+	case LTDC_GC1R:
+	case LTDC_GC2R:
+	case LTDC_SRCR:
+	case LTDC_GACR:
+	case LTDC_BCCR:
+	case LTDC_IER:
+	case LTDC_ISR:
+	case LTDC_LIPCR:
+	case LTDC_CPSR:
+	case LTDC_CDSR:
+		return true;
+	}
+
+	if (ddev) {
+		ldev = ddev->dev_private;
+	} else {
+		dev_warn(dev, "Missing drm device!\n");
+		return false;
+	}
+
+	for (idx = 0; idx <  ldev->caps.nb_layers; idx++) {
+		if (reg == LTDC_L1C0R + idx * LAY_OFS)
+			return true;
+		if (reg == LTDC_L1C1R + idx * LAY_OFS)
+			return true;
+		if (reg == LTDC_L1RCR + idx * LAY_OFS)
+			return true;
+		if (reg == LTDC_L1CR + idx * LAY_OFS)
+			return true;
+		if (reg == LTDC_L1WHPCR + idx * LAY_OFS)
+			return true;
+		if (reg == LTDC_L1WVPCR + idx * LAY_OFS)
+			return true;
+		if (reg == LTDC_L1CKCR + idx * LAY_OFS)
+			return true;
+		if (reg == LTDC_L1PFCR + idx * LAY_OFS)
+			return true;
+		if (reg == LTDC_L1CACR + idx * LAY_OFS)
+			return true;
+		if (reg == LTDC_L1DCCR + idx * LAY_OFS)
+			return true;
+		if (reg == LTDC_L1BFCR + idx * LAY_OFS)
+			return true;
+		if (reg == LTDC_L1BLCR + idx * LAY_OFS)
+			return true;
+		if (reg == LTDC_L1PCR + idx * LAY_OFS)
+			return true;
+		if (reg == LTDC_L1CFBAR + idx * LAY_OFS)
+			return true;
+		if (reg == LTDC_L1CFBLR + idx * LAY_OFS)
+			return true;
+		if (reg == LTDC_L1CFBLNR + idx * LAY_OFS)
+			return true;
+	}
+
+	switch (ldev->caps.hw_version) {
+	case HWVER_40100:
+	case HWVER_40101:
+		switch (reg) {
+		case LTDC_EDCR:
+		case LTDC_FUT:
+			return true;
+		}
+
+		for (idx = 0; idx <  ldev->caps.nb_layers; idx++) {
+			if (reg == LTDC_L1AFBA0R + idx * LAY_OFS)
+				return true;
+			if (reg == LTDC_L1AFBA1R + idx * LAY_OFS)
+				return true;
+			if (reg == LTDC_L1AFBLR + idx * LAY_OFS)
+				return true;
+			if (reg == LTDC_L1AFBLNR + idx * LAY_OFS)
+				return true;
+			if (reg == LTDC_L1CYR0R + idx * LAY_OFS)
+				return true;
+			if (reg == LTDC_L1CYR1R + idx * LAY_OFS)
+				return true;
+			if (reg == LTDC_L1FPF0R + idx * LAY_OFS)
+				return true;
+			if (reg == LTDC_L1FPF1R + idx * LAY_OFS)
+				return true;
+		}
+
+		if (of_device_is_compatible(dev->of_node, "st,stm32mp25-ltdc")) {
+			switch (reg) {
+			case LTDC_RB0AR:
+			case LTDC_RB1AR:
+			case LTDC_RBPR:
+			case LTDC_RIFCR:
+				return true;
+			}
+
+			for (idx = 0; idx <  ldev->caps.nb_layers; idx++) {
+				if (reg == LTDC_L1SISR + idx * LAY_OFS)
+					return true;
+				if (reg == LTDC_L1SOSR + idx * LAY_OFS)
+					return true;
+				if (reg == LTDC_L1SVSFR + idx * LAY_OFS)
+					return true;
+				if (reg == LTDC_L1SVSPR + idx * LAY_OFS)
+					return true;
+				if (reg == LTDC_L1SHSFR + idx * LAY_OFS)
+					return true;
+				if (reg == LTDC_L1SHSPR + idx * LAY_OFS)
+					return true;
+			}
+		}
+	}
+
+	return false;
+}
+
+static bool ltdc_writeable_reg(struct device *dev, unsigned int reg)
+{
+	struct drm_device *ddev = dev_get_drvdata(dev);
+	struct ltdc_device *ldev;
+	int idx;
+
+	switch (reg) {
+	case LTDC_SSCR:
+	case LTDC_BPCR:
+	case LTDC_AWCR:
+	case LTDC_TWCR:
+	case LTDC_GCR:
+	case LTDC_SRCR:
+	case LTDC_GACR:
+	case LTDC_BCCR:
+	case LTDC_IER:
+	case LTDC_ICR:
+	case LTDC_LIPCR:
+		return true;
+	}
+
+	if (ddev) {
+		ldev = ddev->dev_private;
+	} else {
+		dev_warn(dev, "Missing drm device!\n");
+		return false;
+	}
+
+	for (idx = 0; idx < ldev->caps.nb_layers; idx++) {
+		if (reg == LTDC_L1RCR + idx * LAY_OFS)
+			return true;
+		if (reg == LTDC_L1CR + idx * LAY_OFS)
+			return true;
+		if (reg == LTDC_L1WHPCR + idx * LAY_OFS)
+			return true;
+		if (reg == LTDC_L1WVPCR + idx * LAY_OFS)
+			return true;
+		if (reg == LTDC_L1CKCR + idx * LAY_OFS)
+			return true;
+		if (reg == LTDC_L1PFCR + idx * LAY_OFS)
+			return true;
+		if (reg == LTDC_L1CACR + idx * LAY_OFS)
+			return true;
+		if (reg == LTDC_L1DCCR + idx * LAY_OFS)
+			return true;
+		if (reg == LTDC_L1BFCR + idx * LAY_OFS)
+			return true;
+		if (reg == LTDC_L1BLCR + idx * LAY_OFS)
+			return true;
+		if (reg == LTDC_L1PCR + idx * LAY_OFS)
+			return true;
+		if (reg == LTDC_L1CFBAR + idx * LAY_OFS)
+			return true;
+		if (reg == LTDC_L1CFBLR + idx * LAY_OFS)
+			return true;
+		if (reg == LTDC_L1CFBLNR + idx * LAY_OFS)
+			return true;
+		if (reg == LTDC_L1CLUTWR + idx * LAY_OFS)
+			return true;
+	}
+
+	switch (ldev->caps.hw_version) {
+	case HWVER_40100:
+	case HWVER_40101:
+		switch (reg) {
+		case LTDC_EDCR:
+		case LTDC_FUT:
+			return true;
+		}
+
+		for (idx = 0; idx <  ldev->caps.nb_layers; idx++) {
+			if (reg == LTDC_L1AFBA0R + idx * LAY_OFS)
+				return true;
+			if (reg == LTDC_L1AFBA1R + idx * LAY_OFS)
+				return true;
+			if (reg == LTDC_L1AFBLR + idx * LAY_OFS)
+				return true;
+			if (reg == LTDC_L1AFBLNR + idx * LAY_OFS)
+				return true;
+			if (reg == LTDC_L1CYR0R + idx * LAY_OFS)
+				return true;
+			if (reg == LTDC_L1CYR1R + idx * LAY_OFS)
+				return true;
+			if (reg == LTDC_L1FPF0R + idx * LAY_OFS)
+				return true;
+			if (reg == LTDC_L1FPF1R + idx * LAY_OFS)
+				return true;
+		}
+
+		if (of_device_is_compatible(dev->of_node, "st,stm32mp25-ltdc")) {
+			switch (reg) {
+			case LTDC_RB0AR:
+			case LTDC_RB1AR:
+			case LTDC_RBPR:
+			case LTDC_RIFCR:
+				return true;
+			}
+
+			for (idx = 0; idx <  ldev->caps.nb_layers; idx++) {
+				if (reg == LTDC_L1SISR + idx * LAY_OFS)
+					return true;
+				if (reg == LTDC_L1SOSR + idx * LAY_OFS)
+					return true;
+				if (reg == LTDC_L1SVSFR + idx * LAY_OFS)
+					return true;
+				if (reg == LTDC_L1SVSPR + idx * LAY_OFS)
+					return true;
+				if (reg == LTDC_L1SHSFR + idx * LAY_OFS)
+					return true;
+				if (reg == LTDC_L1SHSPR + idx * LAY_OFS)
+					return true;
+			}
+		}
+	}
+
+	return false;
+}
+
 static const struct regmap_config stm32_ltdc_regmap_cfg = {
 	.reg_bits = 32,
 	.val_bits = 32,
 	.reg_stride = sizeof(u32),
-	.max_register = 0x400,
+	.max_register = 0x378,
+	.readable_reg = ltdc_readable_reg,
+	.writeable_reg = ltdc_writeable_reg,
 	.use_relaxed_mmio = true,
 	.cache_type = REGCACHE_NONE,
 };

@@ -97,24 +97,26 @@ static int drv_load(struct drm_device *ddev)
 	ddev->mode_config.helper_private = &drv_mode_config_helpers;
 	ddev->mode_config.normalize_zpos = true;
 
+	platform_set_drvdata(pdev, ddev);
+
 	ret = ltdc_load(ddev);
 	if (ret)
 		return ret;
-
 	drm_mode_config_reset(ddev);
 	drm_kms_helper_poll_init(ddev);
-
-	platform_set_drvdata(pdev, ddev);
 
 	return 0;
 }
 
 static void drv_unload(struct drm_device *ddev)
 {
+	struct platform_device *pdev = to_platform_device(ddev->dev);
+
 	DRM_DEBUG("%s\n", __func__);
 
 	drm_kms_helper_poll_fini(ddev);
 	ltdc_unload(ddev);
+	platform_set_drvdata(pdev, NULL);
 }
 
 static __maybe_unused int drv_suspend(struct device *dev)
