@@ -777,6 +777,8 @@
 			st,syscon = <&syscfg 0x3000>;
 			snps,mixed-burst;
 			snps,pbl = <2>;
+			snps,txqos = <7>;
+			snps,rxqos = <7>;
 			snps,axi-config = <&stmmac_axi_config_1>;
 			snps,tso;
 			access-controllers = <&rifsc 60>;

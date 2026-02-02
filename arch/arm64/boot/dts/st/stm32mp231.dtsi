@@ -873,6 +873,8 @@
 				snps,mtl-rx-config = <&mtl_rx_setup_1>;
 				snps,mtl-tx-config = <&mtl_tx_setup_1>;
 				snps,pbl = <2>;
+				snps,txqos = <7>;
+				snps,rxqos = <7>;
 				snps,tso;
 				st,syscon = <&syscfg 0x3000>;
 				access-controllers = <&rifsc 60>;

@@ -119,6 +119,8 @@
 		snps,mtl-rx-config = <&mtl_rx_setup_2>;
 		snps,mtl-tx-config = <&mtl_tx_setup_2>;
 		snps,pbl = <2>;
+		snps,txqos = <7>;
+		snps,rxqos = <7>;
 		snps,tso;
 		st,syscon = <&syscfg 0x3400>;
 		access-controllers = <&rifsc 61>;
