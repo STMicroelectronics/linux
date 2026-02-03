@@ -78,16 +78,12 @@
 		status = "disabled";
 	};
 
-	clk_dsi_txbyte: clock-0 {
-		compatible = "fixed-clock";
-		#clock-cells = <0>;
-		clock-frequency = <0>;
-	};
-
-	clk_rcbsec: clk-64000000 {
-		compatible = "fixed-clock";
-		#clock-cells = <0>;
-		clock-frequency = <64000000>;
+	clocks {
+		clk_rcbsec: clk-rcbsec {
+			#clock-cells = <0>;
+			compatible = "fixed-clock";
+			clock-frequency = <64000000>;
+		};
 	};
 
 	firmware {
@@ -971,8 +967,11 @@
 				<&scmi_clk CK_SCMI_TIMG1>,
 				<&scmi_clk CK_SCMI_TIMG2>,
 				<&scmi_clk CK_SCMI_PLL3>,
-				<&clk_dsi_txbyte>;
-				access-controllers = <&rifsc 156>;
+				<0>,
+				<&scmi_clk CK_SCMI_HSI_KER_CK>,
+				<&scmi_clk CK_SCMI_HSE_KER_CK>,
+				<&scmi_clk CK_SCMI_MSI_KER_CK>;
+			access-controllers = <&rifsc 156>;
 		};
 
 		exti1: interrupt-controller@44220000 {
@@ -1070,8 +1069,9 @@
 		};
 
 		syscfg: syscon@44230000 {
-			compatible = "st,stm32mp23-syscfg", "syscon";
+			compatible = "st,stm32mp25-syscfg", "syscon";
 			reg = <0x44230000 0x10000>;
+			#clock-cells = <0>;
 		};
 
 		pinctrl: pinctrl@44240000 {
