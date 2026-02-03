@@ -80,22 +80,10 @@
 	};
 
 	clocks {
-		clk_dsi_txbyte: txbyteclk {
-			#clock-cells = <0>;
-			compatible = "fixed-clock";
-			clock-frequency = <0>;
-		};
-
 		clk_rcbsec: clk-rcbsec {
 			#clock-cells = <0>;
 			compatible = "fixed-clock";
 			clock-frequency = <64000000>;
-		};
-
-		clk_flexgen_27_fixed: clk-54000000 {
-			#clock-cells = <0>;
-			compatible = "fixed-clock";
-			clock-frequency = <54000000>;
 		};
 	};
 
@@ -1965,8 +1953,11 @@
 				<&scmi_clk CK_SCMI_TIMG1>,
 				<&scmi_clk CK_SCMI_TIMG2>,
 				<&scmi_clk CK_SCMI_PLL3>,
-				<&clk_dsi_txbyte>;
-				access-controllers = <&rifsc 156>;
+				<0>,
+				<&scmi_clk CK_SCMI_HSI_KER_CK>,
+				<&scmi_clk CK_SCMI_HSE_KER_CK>,
+				<&scmi_clk CK_SCMI_MSI_KER_CK>;
+			access-controllers = <&rifsc 156>;
 		};
 
 		exti1: interrupt-controller@44220000 {
