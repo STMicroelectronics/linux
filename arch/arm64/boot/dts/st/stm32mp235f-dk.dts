@@ -82,6 +82,10 @@
 	bootph-all;
 };
 
+&dbg_bus {
+	status = "okay";
+};
+
 &ethernet1 {
 	pinctrl-0 = <&eth1_rgmii_pins_b>;
 	pinctrl-1 = <&eth1_rgmii_sleep_pins_b>;
