@@ -50,7 +50,7 @@
 		compatible = "orisetech,otm8009a";
 		reg = <0>;
 		reset-gpios = <&gpioe 4 GPIO_ACTIVE_LOW>;
-		power-supply = <&scmi_v3v3>;
+		power-supply = <&v3v3>;
 
 		port {
 			panel_in: endpoint {
@@ -82,23 +82,6 @@
 		interrupt-parent = <&gpiof>;
 		touchscreen-size-x = <480>;
 		touchscreen-size-y = <800>;
-	};
-};
-
-/* I2C4 is managed by OP-TEE */
-&i2c4 {
-	status = "disabled";
-
-	/* i2c4 subnodes, which won't be managed by Linux */
-	typec@28 {
-		status = "disabled";
-		connector {
-			status = "disabled";
-		};
-	};
-
-	stpmic@33 {
-		status = "disabled";
 	};
 };
 
@@ -137,7 +120,7 @@
 	cap-sdio-irq;
 	st,neg-edge;
 	bus-width = <4>;
-	vmmc-supply = <&scmi_v3v3>;
+	vmmc-supply = <&v3v3>;
 	mmc-pwrseq = <&wifi_pwrseq>;
 	#address-cells = <1>;
 	#size-cells = <0>;
@@ -164,21 +147,7 @@
 		shutdown-gpios = <&gpioz 6 GPIO_ACTIVE_HIGH>;
 		compatible = "brcm,bcm43438-bt";
 		max-speed = <3000000>;
-		vbat-supply = <&scmi_v3v3>;
-		vddio-supply = <&scmi_v3v3>;
+		vbat-supply = <&v3v3>;
+		vddio-supply = <&v3v3>;
 	};
-};
-
-/* Since I2C4 is disabled, STUSB1600 is also disabled so there is no Type-C support */
-&usbotg_hs {
-	dr_mode = "peripheral";
-	role-switch-default-mode = "peripheral";
-	/*
-	 * Forcing dr_mode = "peripheral"/"role-switch-default-mode = "peripheral";
-	 * will cause the pull-up on D+/D- to be raised as soon as the OTG is configured at runtime,
-	 * regardless of the presence of VBUS. Notice that on self-powered devices like
-	 * stm32mp157f-dk2, this isn't compliant with the USB standard. That's why usbotg_hs is kept
-	 * disabled here.
-	 */
-	status = "disabled";
 };
