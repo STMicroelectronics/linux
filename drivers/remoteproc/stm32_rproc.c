@@ -979,6 +979,7 @@ static const struct of_device_id stm32_rproc_match[] = {
 	{.compatible = "st,stm32mp1-m4", .data = &stm32_rproc_stm32pm15},
 	{.compatible = "st,stm32mp1-m4-tee", .data = &stm32_rproc_stm32pm15},
 	{.compatible = "st,stm32mp2-m33", .data = &stm32_rproc_stm32pm25},
+	{.compatible = "st,stm32mp2-m33-tee", .data = &stm32_rproc_stm32pm25},
 	{},
 };
 MODULE_DEVICE_TABLE(of, stm32_rproc_match);
@@ -1143,7 +1144,8 @@ static int stm32_rproc_probe(struct platform_device *pdev)
 	if (ret < 0 && ret != -EINVAL)
 		return ret;
 
-	if (of_device_is_compatible(np, "st,stm32mp1-m4-tee")) {
+	if (of_device_is_compatible(np, "st,stm32mp1-m4-tee") ||
+	    of_device_is_compatible(np, "st,stm32mp2-m33-tee")) {
 		trproc = tee_rproc_register(dev, desc->proc_id);
 		if (IS_ERR(trproc)) {
 			dev_err_probe(dev, PTR_ERR(trproc),
