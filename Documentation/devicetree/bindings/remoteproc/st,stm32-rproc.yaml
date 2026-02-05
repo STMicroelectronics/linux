@@ -169,6 +169,21 @@ properties:
     maxItems: 1
     description: Default name of the remote processor firmware.
 
+  power-domains:
+    items:
+      - description: CLUSTER power domain
+      - description: RETENTION power domain
+
+  power-domain-names:
+    items:
+      - const: default
+      - const: sleep
+
+  keep-power-in-suspend:
+    $ref: /schemas/types.yaml#/definitions/flag
+    description:
+      SRAM only. Preserves power during a suspend/resume cycle.
+
 required:
   - compatible
   - reg
