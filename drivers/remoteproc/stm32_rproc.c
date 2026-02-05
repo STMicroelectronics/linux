@@ -12,6 +12,7 @@
 #include <linux/mailbox_client.h>
 #include <linux/mfd/syscon.h>
 #include <linux/module.h>
+#include <linux/nvmem-consumer.h>
 #include <linux/of.h>
 #include <linux/of_reserved_mem.h>
 #include <linux/platform_device.h>
@@ -79,7 +80,7 @@ struct stm32_rproc_mem {
 
 struct stm32_rproc_data {
 	int proc_id;
-	int (*get_status)(struct stm32_rproc *ddata, unsigned int *state);
+	int (*get_info)(struct rproc *rproc);
 };
 
 struct stm32_mbox {
@@ -106,6 +107,7 @@ struct stm32_rproc {
 	struct tee_rproc *trproc;
 	const struct stm32_rproc_data *desc;
 	void __iomem *rsc_va;
+	size_t rsc_sz;
 };
 
 static u64 stm32_rproc_get_vect_table(struct rproc *rproc, const struct firmware *fw)
@@ -806,46 +808,9 @@ static struct resource_table *
 stm32_rproc_get_loaded_rsc_table(struct rproc *rproc, size_t *table_sz)
 {
 	struct stm32_rproc *ddata = rproc->priv;
-	struct device *dev = rproc->dev.parent;
-	phys_addr_t rsc_pa;
-	u32 rsc_da;
-	int err;
 
-	/* The resource table has already been mapped, nothing to do */
-	if (ddata->rsc_va)
-		goto done;
-
-	err = regmap_read(ddata->rsctbl.map, ddata->rsctbl.reg, &rsc_da);
-	if (err) {
-		dev_err(dev, "failed to read rsc tbl addr\n");
-		return ERR_PTR(-EINVAL);
-	}
-
-	if (!rsc_da)
-		/* no rsc table */
-		return ERR_PTR(-ENOENT);
-
-	err = stm32_rproc_da_to_pa(rproc, rsc_da, &rsc_pa);
-	if (err)
-		return ERR_PTR(err);
-
-	ddata->rsc_va = devm_ioremap_wc(dev, rsc_pa, RSC_TBL_SIZE);
-	if (IS_ERR_OR_NULL(ddata->rsc_va)) {
-		dev_err(dev, "Unable to map memory region: %pa+%x\n",
-			&rsc_pa, RSC_TBL_SIZE);
-		ddata->rsc_va = NULL;
-		return ERR_PTR(-ENOMEM);
-	}
-
-done:
-	/*
-	 * Assuming the resource table fits in 1kB is fair.
-	 * Notice for the detach, that this 1 kB memory area has to be reserved in the coprocessor
-	 * firmware for the resource table. On detach, the remoteproc core re-initializes this
-	 * entire area by overwriting it with the initial values stored in rproc->clean_table.
-	 */
-	*table_sz = RSC_TBL_SIZE;
-	return (__force struct resource_table *)ddata->rsc_va;
+	*table_sz = ddata->rsc_sz;
+	return (struct resource_table *)ddata->rsc_va;
 }
 
 static const struct rproc_ops st_rproc_ops = {
@@ -876,34 +841,81 @@ static const struct rproc_ops st_rproc_tee_ops = {
 	.load		= stm32_rproc_tee_elf_load,
 };
 
-static int stm32_rproc_get_m4_status(struct stm32_rproc *ddata,
-				     unsigned int *state)
+static int stm32_rproc_get_m4_info(struct rproc *rproc)
 {
-	/* See stm32_rproc_parse_dt() */
-	if (!ddata->cm_state.map) {
-		/*
-		 * We couldn't get the coprocessor's state, assume
-		 * it is not running.
-		 */
-		*state = CM_STATE_OFF;
+	struct stm32_rproc *ddata = rproc->priv;
+	struct device *dev = rproc->dev.parent;
+	phys_addr_t rsc_pa;
+	u32 rsc_da;
+	unsigned int state;
+	int ret;
+
+	rproc->state = CM_STATE_OFF;
+	ddata->rsc_va = NULL;
+	ddata->rsc_sz = 0;
+
+	/* check the Cortex-M state */
+	if (!ddata->cm_state.map)
+		 /* We couldn't get the coprocessor's state, assume it is not running */
 		return 0;
+
+	ret = regmap_read(ddata->cm_state.map, ddata->cm_state.reg, &state);
+	if (ret)
+		return ret;
+
+	if (state == CM_STATE_OFF)
+		return 0;
+
+	rproc->state = RPROC_DETACHED;
+
+	/* Get the resource table information */
+	ret = regmap_read(ddata->rsctbl.map, ddata->rsctbl.reg, &rsc_da);
+	if (ret) {
+		dev_err(dev, "failed to read rsc tbl addr\n");
+		return -EINVAL;
 	}
 
-	return regmap_read(ddata->cm_state.map, ddata->cm_state.reg, state);
+	if (!rsc_da)
+		/* no rsc table */
+		return 0;
+
+	ret = stm32_rproc_da_to_pa(rproc, rsc_da, &rsc_pa);
+	if (ret)
+		return ret;
+
+	ddata->rsc_va = devm_ioremap_wc(dev, rsc_pa, RSC_TBL_SIZE);
+	if (IS_ERR_OR_NULL(ddata->rsc_va)) {
+		dev_err(dev, "Unable to map memory region: %pa+%x\n", &rsc_pa, RSC_TBL_SIZE);
+		return -ENOMEM;
+	}
+
+	/*
+	 * Assuming the resource table fits in 1kB is fair.
+	 * Notice for the detach, that this 1 kB memory area has to be reserved in the coprocessor
+	 * firmware for the resource table. On detach, the remoteproc core re-initializes this
+	 * entire area by overwriting it with the initial values stored in rproc->clean_table.
+	 */
+	ddata->rsc_sz = RSC_TBL_SIZE;
+
+	return 0;
 }
 
-static int stm32_rproc_get_m33_status(struct stm32_rproc *ddata,
-				      unsigned int *state)
+static int stm32_rproc_get_m33_info(struct rproc *rproc)
 {
-	int ret;
+	struct stm32_rproc *ddata = rproc->priv;
+	struct device *dev = rproc->dev.parent;
 	unsigned int cm_state;
+	phys_addr_t rsc_pa;
+	u32 rsc_da;
+	u32 size;
+	int ret;
+
+	rproc->state = CM_STATE_OFF;
+	ddata->rsc_va = NULL;
+	ddata->rsc_sz = 0;
 
 	if (!ddata->cm_state.map) {
-		/*
-		 * We couldn't get the coprocessor's state, assume
-		 * it is not running.
-		 */
-		*state = CM_STATE_OFF;
+		/* We couldn't get the coprocessor's state, assume it is not running */
 		return 0;
 	}
 
@@ -913,31 +925,54 @@ static int stm32_rproc_get_m33_status(struct stm32_rproc *ddata,
 
 	switch ((cm_state >> M33_STATE_FIELD_SHIFT) & M33_STATE_FIELD_MASK) {
 	case M33_STATE_OFF:
-		*state = CM_STATE_OFF;
 		break;
 	case M33_STATE_CRUN:
-		*state = CM_STATE_CRUN;
-		break;
 	case M33_STATE_CSLEEP:
-		*state = CM_STATE_STANDBY;
-		break;
 	case M33_STATE_CSTOP:
-		*state = CM_STATE_CSTOP;
+		rproc->state = RPROC_DETACHED;
 		break;
 	default:
 		return -EINVAL;
 	}
 
+	/* Get the resource table information */
+	ret = nvmem_cell_read_u32(dev, "rsc-tbl-addr", &rsc_da);
+	if (ret) {
+		dev_err(dev, "failed to read rsc tbl addr\n");
+		return -EINVAL;
+	}
+
+	if (!rsc_da)
+		/* no rsc table */
+		return 0;
+
+	ret = stm32_rproc_da_to_pa(rproc, rsc_da, &rsc_pa);
+	if (ret)
+		return ret;
+
+	ddata->rsc_va = devm_ioremap_wc(dev, rsc_pa, RSC_TBL_SIZE);
+	if (IS_ERR_OR_NULL(ddata->rsc_va)) {
+		dev_err(dev, "Unable to map memory region: %pa+%x\n", &rsc_pa, RSC_TBL_SIZE);
+		return -ENOMEM;
+	}
+
+	ret = nvmem_cell_read_u32(dev, "rsc-tbl-size", &size);
+	if (ret) {
+		dev_err(dev, "failed to read rsc tbl size\n");
+		return -EINVAL;
+	}
+	ddata->rsc_sz = size;
+
 	return 0;
 }
 static const struct stm32_rproc_data stm32_rproc_stm32pm15 = {
 	.proc_id = STM32_MP1_M4_PROC_ID,
-	.get_status = stm32_rproc_get_m4_status,
+	.get_info = stm32_rproc_get_m4_info,
 };
 
 static const struct stm32_rproc_data stm32_rproc_stm32pm25 = {
 	.proc_id = STM32_MP2_M33_PROC_ID,
-	.get_status = stm32_rproc_get_m33_status,
+	.get_info = stm32_rproc_get_m33_info,
 };
 
 static const struct of_device_id stm32_rproc_match[] = {
@@ -1095,7 +1130,6 @@ static int stm32_rproc_probe(struct platform_device *pdev)
 	struct tee_rproc *trproc = NULL;
 	const char *fw_name;
 	struct rproc *rproc;
-	unsigned int state;
 	int ret;
 
 	desc = device_get_match_data(&pdev->dev);
@@ -1151,12 +1185,10 @@ static int stm32_rproc_probe(struct platform_device *pdev)
 	if (ret)
 		goto free_rproc;
 
-	ret = ddata->desc->get_status(ddata, &state);
+	ret = ddata->desc->get_info(rproc);
 	if (ret)
 		goto free_rproc;
 
-	if (state != CM_STATE_OFF)
-		rproc->state = RPROC_DETACHED;
 
 	rproc->has_iommu = false;
 
