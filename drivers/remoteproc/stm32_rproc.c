@@ -49,6 +49,9 @@
 
 /* Remote processor unique identifier aligned with the Trusted Execution Environment definitions */
 #define STM32_MP1_M4_PROC_ID    0
+#define STM32_MP2_M33_PROC_ID   1
+
+struct stm32_rproc;
 
 struct stm32_syscon {
 	struct regmap *map;
@@ -62,6 +65,11 @@ struct stm32_rproc_mem {
 	phys_addr_t bus_addr;
 	u32 dev_addr;
 	size_t size;
+};
+
+struct stm32_rproc_data {
+	int proc_id;
+	int (*get_status)(struct stm32_rproc *ddata, unsigned int *state);
 };
 
 struct stm32_mbox {
@@ -85,6 +93,7 @@ struct stm32_rproc {
 	bool hold_boot_smc;
 	bool fw_loaded;
 	struct tee_rproc *trproc;
+	const struct stm32_rproc_data *desc;
 	void __iomem *rsc_va;
 };
 
@@ -790,9 +799,18 @@ static const struct rproc_ops st_rproc_tee_ops = {
 	.load		= stm32_rproc_tee_elf_load,
 };
 
+static const struct stm32_rproc_data stm32_rproc_stm32pm15 = {
+	.proc_id = STM32_MP1_M4_PROC_ID,
+};
+
+static const struct stm32_rproc_data stm32_rproc_stm32pm25 = {
+	.proc_id = STM32_MP2_M33_PROC_ID,
+};
+
 static const struct of_device_id stm32_rproc_match[] = {
-	{.compatible = "st,stm32mp1-m4"},
-	{.compatible = "st,stm32mp1-m4-tee"},
+	{.compatible = "st,stm32mp1-m4", .data = &stm32_rproc_stm32pm15},
+	{.compatible = "st,stm32mp1-m4-tee", .data = &stm32_rproc_stm32pm15},
+	{.compatible = "st,stm32mp2-m33", .data = &stm32_rproc_stm32pm25},
 	{},
 };
 MODULE_DEVICE_TABLE(of, stm32_rproc_match);
@@ -951,11 +969,14 @@ static int stm32_rproc_probe(struct platform_device *pdev)
 	struct device *dev = &pdev->dev;
 	struct stm32_rproc *ddata;
 	struct device_node *np = dev->of_node;
+	const struct stm32_rproc_data *desc;
 	struct tee_rproc *trproc = NULL;
 	const char *fw_name;
 	struct rproc *rproc;
 	unsigned int state;
 	int ret;
+
+	desc = device_get_match_data(&pdev->dev);
 
 	ret = dma_coerce_mask_and_coherent(dev, DMA_BIT_MASK(32));
 	if (ret)
@@ -967,7 +988,7 @@ static int stm32_rproc_probe(struct platform_device *pdev)
 		return ret;
 
 	if (of_device_is_compatible(np, "st,stm32mp1-m4-tee")) {
-		trproc = tee_rproc_register(dev, STM32_MP1_M4_PROC_ID);
+		trproc = tee_rproc_register(dev, desc->proc_id);
 		if (IS_ERR(trproc)) {
 			dev_err_probe(dev, PTR_ERR(trproc),
 				      "signed firmware not supported by TEE\n");
@@ -988,6 +1009,7 @@ static int stm32_rproc_probe(struct platform_device *pdev)
 	}
 
 	ddata = rproc->priv;
+	ddata->desc = desc;
 	ddata->trproc = trproc;
 	if (trproc) {
 		trproc->rproc = rproc;
