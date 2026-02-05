@@ -378,6 +378,15 @@ config XLNX_R5_REMOTEPROC
 
 	  It's safe to say N if not interested in using RPU r5f cores.
 
+
+config TEE_REMOTEPROC
+	tristate "trusted firmware support by a TEE application"
+	depends on OPTEE
+	help
+	  Support for trusted remote processors firmware. The firmware
+	  authentication and/or decryption are managed by a trusted application.
+	  This can be either built-in or a loadable module.
+
 endif # REMOTEPROC
 
 endmenu
