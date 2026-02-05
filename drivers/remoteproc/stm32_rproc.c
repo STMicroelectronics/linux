@@ -21,7 +21,6 @@
 #include <linux/reset.h>
 #include <linux/slab.h>
 #include <linux/tee_remoteproc.h>
-#include <linux/workqueue.h>
 
 #include "remoteproc_internal.h"
 
@@ -35,9 +34,7 @@
 #define STM32_SMC_REG_WRITE	0x1
 
 #define STM32_MBX_VQ0		"vq0"
-#define STM32_MBX_VQ0_ID	0
 #define STM32_MBX_VQ1		"vq1"
-#define STM32_MBX_VQ1_ID	1
 #define STM32_MBX_SHUTDOWN	"shutdown"
 #define STM32_MBX_DETACH	"detach"
 
@@ -77,7 +74,6 @@ struct stm32_mbox {
 	const unsigned char name[10];
 	struct mbox_chan *chan;
 	struct mbox_client client;
-	struct work_struct vq_work;
 	int vq_id;
 };
 
@@ -92,7 +88,6 @@ struct stm32_rproc {
 	u32 nb_rmems;
 	struct stm32_rproc_mem *rmems;
 	struct stm32_mbox mb[MBOX_NB_MBX];
-	struct workqueue_struct *workqueue;
 	bool hold_boot_smc;
 	bool fw_loaded;
 	struct tee_rproc *trproc;
@@ -433,30 +428,13 @@ static irqreturn_t stm32_rproc_wdg(int irq, void *data)
 	return IRQ_HANDLED;
 }
 
-static void stm32_rproc_mb_vq_work(struct work_struct *work)
-{
-	struct stm32_mbox *mb = container_of(work, struct stm32_mbox, vq_work);
-	struct rproc *rproc = dev_get_drvdata(mb->client.dev);
-
-	mutex_lock(&rproc->lock);
-
-	if (rproc->state != RPROC_RUNNING && rproc->state != RPROC_ATTACHED)
-		goto unlock_mutex;
-
-	if (rproc_vq_interrupt(rproc, mb->vq_id) == IRQ_NONE)
-		dev_dbg(&rproc->dev, "no message found in vq%d\n", mb->vq_id);
-
-unlock_mutex:
-	mutex_unlock(&rproc->lock);
-}
-
 static void stm32_rproc_mb_callback(struct mbox_client *cl, void *data)
 {
 	struct rproc *rproc = dev_get_drvdata(cl->dev);
 	struct stm32_mbox *mb = container_of(cl, struct stm32_mbox, client);
-	struct stm32_rproc *ddata = rproc->priv;
 
-	queue_work(ddata->workqueue, &mb->vq_work);
+	if (rproc_vq_interrupt(rproc, mb->vq_id) == IRQ_NONE)
+		dev_dbg(&rproc->dev, "no message found in vq%d\n", mb->vq_id);
 }
 
 static void stm32_rproc_free_mbox(struct rproc *rproc)
@@ -474,7 +452,7 @@ static void stm32_rproc_free_mbox(struct rproc *rproc)
 static const struct stm32_mbox stm32_rproc_mbox[MBOX_NB_MBX] = {
 	{
 		.name = STM32_MBX_VQ0,
-		.vq_id = STM32_MBX_VQ0_ID,
+		.vq_id = 0,
 		.client = {
 			.rx_callback = stm32_rproc_mb_callback,
 			.tx_block = false,
@@ -482,7 +460,7 @@ static const struct stm32_mbox stm32_rproc_mbox[MBOX_NB_MBX] = {
 	},
 	{
 		.name = STM32_MBX_VQ1,
-		.vq_id = STM32_MBX_VQ1_ID,
+		.vq_id = 1,
 		.client = {
 			.rx_callback = stm32_rproc_mb_callback,
 			.tx_block = false,
@@ -537,10 +515,6 @@ static int stm32_rproc_request_mbox(struct rproc *rproc)
 			}
 			dev_warn(dev, "cannot get %s mbox\n", name);
 			ddata->mb[i].chan = NULL;
-		}
-		if (ddata->mb[i].vq_id >= 0) {
-			INIT_WORK(&ddata->mb[i].vq_work,
-				  stm32_rproc_mb_vq_work);
 		}
 	}
 
@@ -1024,18 +998,12 @@ static int stm32_rproc_probe(struct platform_device *pdev)
 		rproc->state = RPROC_DETACHED;
 
 	rproc->has_iommu = false;
-	ddata->workqueue = create_workqueue(dev_name(dev));
-	if (!ddata->workqueue) {
-		dev_err(dev, "cannot create workqueue\n");
-		ret = -ENOMEM;
-		goto free_resources;
-	}
 
 	platform_set_drvdata(pdev, rproc);
 
 	ret = stm32_rproc_request_mbox(rproc);
 	if (ret)
-		goto free_wkq;
+		goto free_resources;
 
 	ret = rproc_add(rproc);
 	if (ret)
@@ -1045,8 +1013,6 @@ static int stm32_rproc_probe(struct platform_device *pdev)
 
 free_mb:
 	stm32_rproc_free_mbox(rproc);
-free_wkq:
-	destroy_workqueue(ddata->workqueue);
 free_resources:
 	rproc_resource_cleanup(rproc);
 free_rproc:
@@ -1072,7 +1038,6 @@ static void stm32_rproc_remove(struct platform_device *pdev)
 
 	rproc_del(rproc);
 	stm32_rproc_free_mbox(rproc);
-	destroy_workqueue(ddata->workqueue);
 
 	if (device_may_wakeup(dev)) {
 		dev_pm_clear_wake_irq(dev);
