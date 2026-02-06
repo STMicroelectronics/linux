@@ -28,6 +28,9 @@ KBUILD_CFLAGS	+= $(call cc-option,-mno-fdpic)
 # This should work on most of the modern platforms
 KBUILD_DEFCONFIG := multi_v7_defconfig
 
+# Downstream STM32 MPU only. Replace multi_v7_defconfig with new defconfig
+KBUILD_DEFCONFIG := stm32mp_defconfig
+
 # defines filename extension depending memory management type.
 ifeq ($(CONFIG_MMU),)
 MMUEXT		:= -nommu
