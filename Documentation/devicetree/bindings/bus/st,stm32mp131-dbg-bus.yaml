@@ -30,6 +30,9 @@ properties:
   "#size-cells":
     const: 1
 
+  clocks:
+    maxItems: 1
+
   ranges:
     minItems: 1
     maxItems: 2
