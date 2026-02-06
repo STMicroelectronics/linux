@@ -15,7 +15,7 @@
 
 #define SCMI_MAX_STR_SIZE		64
 #define SCMI_SHORT_NAME_MAX_SIZE	16
-#define SCMI_MAX_NUM_RATES		16
+#define SCMI_MAX_NUM_RATES		256
 
 /**
  * struct scmi_revision_info - version information structure
