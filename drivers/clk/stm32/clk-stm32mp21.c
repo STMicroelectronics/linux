@@ -19,7 +19,7 @@
 #include <dt-bindings/reset/st,stm32mp21-rcc.h>
 
 /* Max clock binding value */
-#define STM32MP21_LAST_CLK	CK_SCMI_KER_ETR
+#define STM32MP21_LAST_CLK	(CK_KER_STM + 1)
 
 /* Clock security definition */
 #define SECF_NONE		-1
