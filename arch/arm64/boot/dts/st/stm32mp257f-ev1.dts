@@ -604,6 +604,15 @@
 	status = "disabled";
 };
 
+&switch0 {
+	status = "disabled";
+	pinctrl-0 = <&eth1_rgmii_pins_a>, <&eth3_rgmii_pins_a>;
+	pinctrl-1 = <&eth1_rgmii_sleep_pins_a>, <&eth3_rgmii_sleep_pins_a>;
+	pinctrl-names = "default", "sleep";
+	phy-mode = "rgmii";
+	st,ethsw-internal-125;
+};
+
 &syscfg {
 	bootph-all;
 };
