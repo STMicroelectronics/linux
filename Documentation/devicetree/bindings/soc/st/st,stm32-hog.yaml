@@ -1,0 +1,68 @@
+# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/soc/st/st,stm32-hog.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: STMicroelectronics STM32 SoC hog driver
+
+maintainers:
+  - Gabriel Fernandez <gabriel.fernandez@foss.st.com>
+
+description: |
+  The STM32 hog driver is a simple helper used to enable and keep active
+  a set of clocks on STM32 SoCs. All clocks referenced by the device node
+  are retrieved at probe time, prepared and enabled, and then kept on
+  until the driver is removed. This is typically used to guarantee that
+  critical peripherals or SoC resources remain clocked even when no
+  specific functional driver has been probed yet.
+  Since this clock hog node does not represent a real device, it must be
+  a sub-node of the root node and must be named 'clock-hog'.
+
+properties:
+  compatible:
+    const: st,stm32-hog
+  $nodename:
+    const: clock-hog
+
+  clocks:
+    description: >
+      List of clocks that must be enabled and kept running for the whole
+      lifetime of the device. All referenced clocks will be acquired in
+      bulk and enabled at probe time by the STM32 hog driver.
+    minItems: 1
+    maxItems: 32
+
+  clock-names:
+    description: >
+      Optional names associated to the clocks. They are not strictly
+      required by the driver but can be used to document the hardware
+      and improve readability of the device tree.
+    minItems: 1
+    maxItems: 32
+
+required:
+  - compatible
+  - clocks
+
+additionalProperties: false
+
+examples:
+  - |
+    / {
+        model = "STMicroelectronics STM32MP157F-DK2 Discovery Board";
+        compatible = "st,stm32mp157f-dk2", "st,stm32mp157";
+        #address-cells = <1>;
+        #size-cells = <1>;
+
+        clock-hog {
+            compatible = "st,stm32-hog";
+            /*
+            * All listed clocks will be enabled at boot time and
+            * kept running as long as this device is present.
+            */
+            clocks = <&rcc 0>, <&rcc 1>;
+            clock-names = "core", "per";
+        };
+    };
+...
