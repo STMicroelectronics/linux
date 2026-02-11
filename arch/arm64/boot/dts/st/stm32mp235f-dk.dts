@@ -90,6 +90,10 @@
 	};
 };
 
+&a35ss_syscfg {
+	status = "okay";
+};
+
 &arm_wdt {
 	timeout-sec = <32>;
 	bootph-all;
@@ -327,6 +331,17 @@
 };
 
 &ipcc1 {
+	status = "okay";
+};
+
+&m33_rproc {
+	mboxes = <&ipcc1 0x100>, <&ipcc1 0x101>, <&ipcc1 2>;
+	mbox-names = "vq0", "vq1", "shutdown";
+	memory-region = <&cm33_cube_fw>, <&cm33_cube_data>,
+			<&ipc_shmem_1>, <&vdev0vring0>,
+			<&vdev0vring1>, <&vdev0buffer>,
+			<&cm33_sram2>;
+	st,syscfg-nsvtor = <&a35ss_syscfg 0x20a8 0xffffff80>;
 	status = "okay";
 };
 
