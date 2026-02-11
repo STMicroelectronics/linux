@@ -2341,7 +2341,7 @@ static int stm32_spi_probe(struct platform_device *pdev)
 			spi->dma_rx = NULL;
 		} else {
 			dev_err_probe(&pdev->dev, ret, "failed to request rx dma channel\n");
-			goto err_dma_release;
+			goto err_dma_tx_release;
 		}
 	} else {
 		ctrl->dma_rx = spi->dma_rx;
@@ -2409,11 +2409,11 @@ err_pm_disable:
 		dma_release_channel(spi->mdma_rx);
 err_pool_free:
 	gen_pool_free(spi->sram_pool, (unsigned long)spi->sram_rx_buf, spi->sram_rx_buf_size);
-err_dma_release:
-	if (spi->dma_tx)
-		dma_release_channel(spi->dma_tx);
 	if (spi->dma_rx)
 		dma_release_channel(spi->dma_rx);
+err_dma_tx_release:
+	if (spi->dma_tx)
+		dma_release_channel(spi->dma_tx);
 err_clk_disable:
 	clk_disable_unprepare(spi->clk);
 
