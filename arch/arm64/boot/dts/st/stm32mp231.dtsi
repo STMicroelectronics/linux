@@ -276,6 +276,18 @@
 			#dma-cells = <3>;
 		};
 
+		ipcc1: mailbox@40490000 {
+			compatible = "st,stm32mp1-ipcc";
+			#mbox-cells = <1>;
+			reg = <0x40490000 0x400>;
+			st,proc-id = <0>;
+			interrupts = <GIC_SPI 171 IRQ_TYPE_LEVEL_HIGH>,
+				     <GIC_SPI 172 IRQ_TYPE_LEVEL_HIGH>;
+			interrupt-names = "rx", "tx";
+			clocks = <&scmi_clk CK_SCMI_IPCC1>;
+			status = "disabled";
+		};
+
 		rifsc: bus@42080000 {
 			compatible = "st,stm32mp25-rifsc", "simple-bus";
 			reg = <0x42080000 0x1000>;
