@@ -13,6 +13,7 @@
 #include "stm32mp25xf.dtsi"
 #include "stm32mp25-pinctrl.dtsi"
 #include "stm32mp25xxai-pinctrl.dtsi"
+#include "stm32mp257f-ev1-resmem.dtsi"
 
 / {
 	model = "STMicroelectronics STM32MP257F-EV1 Evaluation Board";
@@ -132,23 +133,6 @@
 		gpios = <&gpioi 5 GPIO_ACTIVE_HIGH>;
 		default-on;
 		status = "okay";
-	};
-
-	reserved-memory {
-		#address-cells = <2>;
-		#size-cells = <2>;
-		ranges;
-
-		fw@80000000 {
-			compatible = "shared-dma-pool";
-			reg = <0x0 0x80000000 0x0 0x4000000>;
-			no-map;
-		};
-
-		mm_ospi1: mm-ospi@60000000 {
-			reg = <0x0 0x60000000 0x0 0x10000000>;
-			no-map;
-		};
 	};
 };
 
