@@ -9,6 +9,7 @@
 #include <dt-bindings/input/input.h>
 #include "stm32mp215.dtsi"
 #include "stm32mp21xf.dtsi"
+#include "stm32mp215f-dk-resmem.dtsi"
 
 / {
 	model = "STMicroelectronics STM32MP215F-DK Discovery Board";
@@ -37,18 +38,6 @@
 	memory@80000000 {
 		device_type = "memory";
 		reg = <0x0 0x80000000 0x0 0x80000000>;
-	};
-
-	reserved-memory {
-		#address-cells = <2>;
-		#size-cells = <2>;
-		ranges;
-
-		fw@80000000 {
-			compatible = "shared-dma-pool";
-			reg = <0x0 0x80000000 0x0 0x4000000>;
-			no-map;
-		};
 	};
 };
 
