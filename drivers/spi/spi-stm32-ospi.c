@@ -24,6 +24,7 @@
 #include <linux/pinctrl/consumer.h>
 #include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
+#include <linux/regmap.h>
 #include <linux/reset.h>
 #include <linux/sizes.h>
 #include <linux/spi/spi-mem.h>
@@ -97,6 +98,21 @@
 
 #define OSPI_IR			0x110
 
+#define SYSCFG_DLYBOS_CR		0
+#define DLYBOS_CR_EN			BIT(0)
+#define DLYBOS_CR_RXTAPSEL_SHIFT	1
+#define DLYBOS_CR_RXTAPSEL_MASK		GENMASK(6, 1)
+#define DLYBOS_CR_TXTAPSEL_SHIFT	7
+#define DLYBOS_CR_TXTAPSEL_MASK		GENMASK(12, 7)
+#define DLYBOS_TAPSEL_NB		33
+#define DLYBOS_BYP_EN			BIT(16)
+#define DLYBOS_BYP_CMD_MASK		GENMASK(21, 17)
+
+#define SYSCFG_DLYBOS_SR	4
+#define DLYBOS_SR_LOCK		BIT(0)
+#define DLYBOS_SR_RXTAPSEL_ACK	BIT(1)
+#define DLYBOS_SR_TXTAPSEL_ACK	BIT(2)
+
 #define STM32_OSPI_MAX_MMAP_SZ	SZ_256M
 #define STM32_OSPI_MAX_NORCHIP	2
 
@@ -105,6 +121,9 @@
 #define STM32_COMP_TIMEOUT_MS		5000
 #define STM32_BUSY_TIMEOUT_US		100000
 #define STM32_WAIT_CMD_TIMEOUT_US	5000
+#define STM32_DLYB_FREQ_THRESHOLD	50000000
+#define STM32_DLYBOS_TIMEOUT_MS		1000
+#define STM32_DLYBOS_DELAY_NB		24
 
 #define STM32_AUTOSUSPEND_DELAY -1
 
@@ -113,6 +132,7 @@ struct stm32_ospi {
 	struct spi_controller *ctrl;
 	struct clk *clk;
 	struct reset_control *rstc;
+	struct regmap *regmap;
 
 	struct completion match_completion;
 
@@ -129,14 +149,22 @@ struct stm32_ospi {
 	u32 cr_reg;
 	u32 dcr_reg;
 	u32 flash_presc[STM32_OSPI_MAX_NORCHIP];
+	u32 dlyb_base;
 	int irq;
 	unsigned long status_timeout;
+	bool calibration;
 
+	int (*check_transfer)(struct stm32_ospi *ospi);
 	/*
 	 * To protect device configuration, could be different between
 	 * 2 flash access
 	 */
 	struct mutex lock;
+};
+
+struct stm32_tap_window {
+	u8 end;
+	u8 length;
 };
 
 static void stm32_ospi_read_fifo(void *val, void __iomem *addr, u8 len)
@@ -181,7 +209,7 @@ static int stm32_ospi_abort(struct stm32_ospi *ospi)
 						    cr, !(cr & CR_ABORT), 1,
 						    STM32_ABT_TIMEOUT_US);
 
-	if (timeout)
+	if (timeout && !ospi->calibration)
 		dev_err(ospi->dev, "%s abort timeout:%d\n", __func__, timeout);
 
 	return timeout;
@@ -205,8 +233,10 @@ static int stm32_ospi_poll(struct stm32_ospi *ospi, void *buf, u32 len, bool rea
 							sr, sr & SR_FTF, 1,
 							STM32_FIFO_TIMEOUT_US);
 		if (ret) {
-			dev_err(ospi->dev, "fifo timeout (len:%d stat:%#x)\n",
-				len, sr);
+			if (!ospi->calibration)
+				dev_err(ospi->dev,
+					"fifo timeout (len:%d stat:%#x)\n",
+					len, sr);
 			return ret;
 		}
 
@@ -326,6 +356,251 @@ static int stm32_ospi_dma_setup(struct stm32_ospi *ospi,
 	init_completion(&ospi->dma_completion);
 
 	return ret;
+}
+
+static int stm32_ospi_dlyb_set_tap(struct stm32_ospi *ospi, u8 tap, bool rx_tap)
+{
+	u32 sr, mask, ack;
+	int ret;
+	u8 shift;
+
+	if (rx_tap) {
+		mask = DLYBOS_CR_RXTAPSEL_MASK;
+		shift = DLYBOS_CR_RXTAPSEL_SHIFT;
+		ack = DLYBOS_SR_RXTAPSEL_ACK;
+	} else {
+		mask = DLYBOS_CR_TXTAPSEL_MASK;
+		shift = DLYBOS_CR_TXTAPSEL_SHIFT;
+		ack = DLYBOS_SR_TXTAPSEL_ACK;
+	}
+
+	regmap_update_bits(ospi->regmap,
+			   ospi->dlyb_base + SYSCFG_DLYBOS_CR,
+			   mask, mask & (tap << shift));
+
+	ret = regmap_read_poll_timeout(ospi->regmap,
+				       ospi->dlyb_base + SYSCFG_DLYBOS_SR,
+				       sr, sr & ack, 1,
+				       1000 * STM32_DLYBOS_TIMEOUT_MS);
+	if (ret)
+		dev_err(ospi->dev, "%s delay Block phase configuration timeout\n",
+			rx_tap ? "RX" : "TX");
+
+	return ret;
+}
+
+static int stm32_ospi_dlyb_find_tap(struct stm32_ospi *ospi, bool rx_only, u8 *window_len)
+{
+	struct stm32_tap_window rx_tap_w[DLYBOS_TAPSEL_NB];
+	int ret = 0;
+	u8 rx_len, rx_window_len = 0, rx_window_end = 0;
+	u8 tx_len, tx_window_len, tx_window_end;
+	u8 rx_tap, tx_tap, tx_tap_max, tx_tap_min, best_tx_tap = 0;
+	u8 score, score_max;
+
+	tx_len = 0;
+	tx_window_len = 0;
+	tx_window_end = 0;
+
+	for (tx_tap = 0;
+	     tx_tap < (rx_only ? 1 : DLYBOS_TAPSEL_NB);
+	     tx_tap++) {
+		ret = stm32_ospi_dlyb_set_tap(ospi, tx_tap, false);
+		if (ret)
+			return ret;
+
+		rx_len = 0;
+		rx_window_len = 0;
+		rx_window_end = 0;
+
+		for (rx_tap = 0; rx_tap < DLYBOS_TAPSEL_NB; rx_tap++) {
+			ret = stm32_ospi_dlyb_set_tap(ospi, rx_tap, true);
+			if (ret)
+				return ret;
+
+			ospi->calibration = true;
+			ret = ospi->check_transfer(ospi);
+			ospi->calibration = false;
+			if (ret) {
+				if ((!rx_only && ret == -ETIMEDOUT) ||
+				    ret == -EOPNOTSUPP)
+					break;
+
+				rx_len = 0;
+			} else {
+				rx_len++;
+				if (rx_len > rx_window_len) {
+					rx_window_len = rx_len;
+					rx_window_end = rx_tap;
+				}
+			}
+		}
+
+		if (ret == -EOPNOTSUPP)
+			break;
+
+		rx_tap_w[tx_tap].end = rx_window_end;
+		rx_tap_w[tx_tap].length = rx_window_len;
+
+		if (!rx_window_len) {
+			tx_len = 0;
+		} else {
+			tx_len++;
+			if (tx_len > tx_window_len) {
+				tx_window_len = tx_len;
+				tx_window_end = tx_tap;
+			}
+		}
+		dev_dbg(ospi->dev, "rx_tap_w[%02d].end = %d rx_tap_w[%02d].length = %d\n",
+			tx_tap, rx_tap_w[tx_tap].end, tx_tap, rx_tap_w[tx_tap].length);
+	}
+
+	if (ret == -EOPNOTSUPP) {
+		dev_err(ospi->dev, "Calibration can not be done on this device\n");
+		return ret;
+	}
+
+	if (rx_only) {
+		if (!rx_window_len) {
+			dev_err(ospi->dev, "Can't find RX phase settings\n");
+			return -EIO;
+		}
+
+		rx_tap = rx_window_end - rx_window_len / 2;
+		*window_len = rx_window_len;
+		dev_dbg(ospi->dev, "RX_TAP_SEL set to %d\n", rx_tap);
+
+		return stm32_ospi_dlyb_set_tap(ospi, rx_tap, true);
+	}
+
+	/* find the best duet TX/RX TAP */
+	tx_tap_min = tx_window_end - tx_window_len + 1;
+	tx_tap_max = tx_window_end;
+	score_max = 0;
+	for (tx_tap = tx_tap_min; tx_tap <= tx_tap_max; tx_tap++) {
+		score = min_t(u8, tx_tap - tx_tap_min, tx_tap_max - tx_tap) +
+			rx_tap_w[tx_tap].length;
+		if (score > score_max) {
+			score_max = score;
+			best_tx_tap = tx_tap;
+		}
+	}
+
+	rx_tap = rx_tap_w[best_tx_tap].end - rx_tap_w[best_tx_tap].length / 2;
+
+	dev_dbg(ospi->dev, "RX_TAP_SEL set to %d\n", rx_tap);
+	ret = stm32_ospi_dlyb_set_tap(ospi, rx_tap, true);
+	if (ret)
+		return ret;
+
+	dev_dbg(ospi->dev, "TX_TAP_SEL set to %d\n", best_tx_tap);
+
+	return stm32_ospi_dlyb_set_tap(ospi, best_tx_tap, false);
+}
+
+/* ½ memory clock period in pico second */
+static const u16 dlybos_delay_ps[STM32_DLYBOS_DELAY_NB] = {
+2816, 4672, 6272, 7872, 9472, 11104, 12704, 14304, 15904, 17536, 19136, 20736,
+22336, 23968, 25568, 27168, 28768, 30400, 32000, 33600, 35232, 36832, 38432, 40032
+};
+
+static u32 stm32_ospi_find_byp_cmd(u16 period_ps)
+{
+	u16 half_period_ps = period_ps / 2;
+	u8 max = STM32_DLYBOS_DELAY_NB - 1;
+	u8 i, min = 0;
+
+	/* find closest value in dlybos_delay_ps[] with half_period_ps*/
+	if (half_period_ps < dlybos_delay_ps[0])
+		return FIELD_PREP(DLYBOS_BYP_CMD_MASK, 1);
+
+	if (half_period_ps > dlybos_delay_ps[max])
+		return FIELD_PREP(DLYBOS_BYP_CMD_MASK, STM32_DLYBOS_DELAY_NB);
+
+	while (max - min > 1) {
+		i = DIV_ROUND_UP(min + max, 2);
+		if (half_period_ps > dlybos_delay_ps[i])
+			min = i;
+		else
+			max = i;
+	}
+
+	if ((dlybos_delay_ps[max] - half_period_ps) >
+	    (half_period_ps - dlybos_delay_ps[min]))
+		return FIELD_PREP(DLYBOS_BYP_CMD_MASK, min + 1);
+	else
+		return FIELD_PREP(DLYBOS_BYP_CMD_MASK, max + 1);
+}
+
+static void stm32_ospi_dlyb_get_cr(struct stm32_ospi *ospi, u32 *dlyb_cr)
+{
+	regmap_read(ospi->regmap, ospi->dlyb_base + SYSCFG_DLYBOS_CR, dlyb_cr);
+}
+
+static void stm32_ospi_dlyb_stop(struct stm32_ospi *ospi)
+{
+	/* disable delay block */
+	regmap_write(ospi->regmap, ospi->dlyb_base + SYSCFG_DLYBOS_CR, 0x0);
+}
+
+static int stm32_ospi_dlyb_init(struct stm32_ospi *ospi, bool bypass_mode,
+				u16 period_ps)
+{
+	u32 sr, val, mask;
+	int ret;
+
+	if (bypass_mode) {
+		val = DLYBOS_BYP_EN;
+		val |= stm32_ospi_find_byp_cmd(period_ps);
+		mask = DLYBOS_BYP_CMD_MASK | DLYBOS_BYP_EN;
+	} else {
+		val = DLYBOS_CR_EN;
+		mask = DLYBOS_CR_EN;
+	}
+
+	/* enable Delay Block */
+	regmap_update_bits(ospi->regmap, ospi->dlyb_base + SYSCFG_DLYBOS_CR,
+			   mask, val);
+
+	if (bypass_mode)
+		return 0;
+
+	/* in lock mode, wait for lock status bit */
+	ret = regmap_read_poll_timeout(ospi->regmap,
+				       ospi->dlyb_base + SYSCFG_DLYBOS_SR,
+				       sr, sr & DLYBOS_SR_LOCK, 1,
+				       1000 * STM32_DLYBOS_TIMEOUT_MS);
+	if (ret) {
+		dev_err(ospi->dev, "Delay Block lock timeout\n");
+		stm32_ospi_dlyb_stop(ospi);
+	}
+
+	return ret;
+}
+
+static int stm32_ospi_dlyb_set_cr(struct stm32_ospi *ospi, u32 dlyb_cr)
+{
+	bool bypass_mode = false;
+	int ret;
+	u16 period_ps;
+	u8 rx_tap, tx_tap;
+
+	period_ps = FIELD_GET(DLYBOS_BYP_CMD_MASK, dlyb_cr);
+	if ((dlyb_cr & DLYBOS_BYP_EN) == DLYBOS_BYP_EN)
+		bypass_mode = true;
+
+	ret = stm32_ospi_dlyb_init(ospi, bypass_mode, period_ps);
+	if (ret)
+		return ret;
+
+	/* restore Rx and TX tap */
+	rx_tap = FIELD_GET(DLYBOS_CR_RXTAPSEL_MASK, dlyb_cr);
+	ret = stm32_ospi_dlyb_set_tap(ospi, rx_tap, true);
+	if (ret)
+		return ret;
+
+	tx_tap = FIELD_GET(DLYBOS_CR_TXTAPSEL_MASK, dlyb_cr);
+	return stm32_ospi_dlyb_set_tap(ospi, tx_tap, false);
 }
 
 static int stm32_ospi_tx_mm(struct stm32_ospi *ospi,
@@ -829,6 +1104,20 @@ static int stm32_ospi_get_resources(struct platform_device *pdev)
 	if (IS_ERR(ospi->rstc))
 		return dev_err_probe(dev, PTR_ERR(ospi->rstc),
 				     "Can't get reset\n");
+
+	ospi->regmap = syscon_regmap_lookup_by_phandle(dev->of_node,
+						       "st,syscfg-dlyb");
+	if (IS_ERR(ospi->regmap)) {
+		dev_err(dev, "Can't find st,syscfg-dlyb property\n");
+		return PTR_ERR(ospi->regmap);
+	}
+
+	ret = of_property_read_u32_index(dev->of_node, "st,syscfg-dlyb",
+					 1, &ospi->dlyb_base);
+	if (ret) {
+		dev_err(dev, "Can't read delay block base address\n");
+		return ret;
+	}
 
 	ospi->dma_chrx = dma_request_chan(dev, "rx");
 	if (IS_ERR(ospi->dma_chrx)) {
