@@ -80,6 +80,12 @@
 			linux,code = <BTN_1>;
 			gpios = <&gpioa 13 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
 		};
+        button-user2 {
+            label = "User-PA14";
+            linux,code = <BTN_2>;
+            gpios = <&gpioa 14 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
+        };
+
 
 		button-wakeup {
 			label = "wake-up";
@@ -90,7 +96,7 @@
 
 	leds {
 		compatible = "gpio-leds";
-
+       /*
 		led-blue {
 			function = LED_FUNCTION_HEARTBEAT;
 			color = <LED_COLOR_ID_BLUE>;
@@ -98,6 +104,7 @@
 			linux,default-trigger = "heartbeat";
 			default-state = "off";
 		};
+		*/
 	};
 
 	panel_backlight: panel-backlight {
