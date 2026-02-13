@@ -189,7 +189,7 @@
 		regulator-min-microvolt = <1800000>;
 		regulator-max-microvolt = <3300000>;
 	};
-	scmi_vdd_sdcard: regulator@23 {
+	scmi_vdd_sdcard: regulator@17 {
 		reg = <VOLTD_SCMI_STPMIC2_LDO7>;
 		regulator-name = "vdd_sdcard";
 	};
