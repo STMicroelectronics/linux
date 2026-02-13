@@ -439,23 +439,23 @@
 };
 
 &scmi_regu {
-	scmi_vdd_adc: regulator@10 {
+	scmi_vdd_adc: regulator@a {
 		reg = <VOLTD_SCMI_STPMIC1_LDO1>;
 		regulator-name = "vdd_adc";
 	};
-	scmi_vdd_usb: regulator@13 {
+	scmi_vdd_usb: regulator@d {
 		reg = <VOLTD_SCMI_STPMIC1_LDO4>;
 		regulator-name = "vdd_usb";
 	};
-	scmi_vdd_sd: regulator@14 {
+	scmi_vdd_sd: regulator@e {
 		reg = <VOLTD_SCMI_STPMIC1_LDO5>;
 		regulator-name = "vdd_sd";
 	};
-	scmi_v1v8_periph: regulator@15 {
+	scmi_v1v8_periph: regulator@f {
 		reg = <VOLTD_SCMI_STPMIC1_LDO6>;
 		regulator-name = "v1v8_periph";
 	};
-	scmi_v3v3_sw: regulator@19 {
+	scmi_v3v3_sw: regulator@13 {
 		reg = <VOLTD_SCMI_STPMIC1_PWR_SW2>;
 		regulator-name = "v3v3_sw";
 	};
