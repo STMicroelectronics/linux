@@ -439,6 +439,18 @@
 };
 
 &scmi_regu {
+	scmi_vddcpu: regulator@6 {
+		reg = <VOLTD_SCMI_STPMIC1_BUCK1>;
+		regulator-name = "vddcpu";
+	};
+	scmi_vdd: regulator@8 {
+		reg = <VOLTD_SCMI_STPMIC1_BUCK3>;
+		regulator-name = "vdd";
+	};
+	scmi_vddcore: regulator@9 {
+		reg = <VOLTD_SCMI_STPMIC1_BUCK4>;
+		regulator-name = "vddcore";
+	};
 	scmi_vdd_adc: regulator@a {
 		reg = <VOLTD_SCMI_STPMIC1_LDO1>;
 		regulator-name = "vdd_adc";
