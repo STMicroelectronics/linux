@@ -22,7 +22,7 @@
 			device_type = "cpu";
 			reg = <0>;
 			enable-method = "psci";
-			power-domains = <&CPU_PD0>;
+			power-domains = <&cpu0_pd>;
 			power-domain-names = "psci";
 		};
 	};
@@ -145,17 +145,17 @@
 		compatible = "arm,psci-1.0";
 		method = "smc";
 
-		CPU_PD0: power-domain-cpu0 {
+		cpu0_pd: power-domain-cpu0 {
 			#power-domain-cells = <0>;
-			power-domains = <&CLUSTER_PD>;
+			power-domains = <&cluster_pd>;
 		};
 
-		CLUSTER_PD: power-domain-cluster {
+		cluster_pd: power-domain-cluster {
 			#power-domain-cells = <0>;
-			power-domains = <&RET_PD>;
+			power-domains = <&ret_pd>;
 		};
 
-		RET_PD: power-domain-retention {
+		ret_pd: power-domain-retention {
 			#power-domain-cells = <0>;
 		};
 	};
@@ -261,7 +261,7 @@
 				 <&scmi_reset RST_SCMI_OSPI2>;
 			reset-names = "omm", "ospi1", "ospi2";
 			access-controllers = <&rifsc 111>;
-			power-domains = <&CLUSTER_PD>;
+			power-domains = <&cluster_pd>;
 			#address-cells = <2>;
 			#size-cells = <1>;
 			st,syscfg-amcr = <&syscfg 0x2c00 0x7>;
@@ -278,7 +278,7 @@
 				resets = <&scmi_reset RST_SCMI_OSPI1>,
 					 <&scmi_reset RST_SCMI_OSPI1DLL>;
 				access-controllers = <&rifsc 74>;
-				power-domains = <&CLUSTER_PD>;
+				power-domains = <&cluster_pd>;
 				st,syscfg-dlyb = <&syscfg 0x1000>;
 				status = "disabled";
 			};
@@ -294,7 +294,7 @@
 				resets = <&scmi_reset RST_SCMI_OSPI2>,
 					 <&scmi_reset RST_SCMI_OSPI2DLL>;
 				access-controllers = <&rifsc 75>;
-				power-domains = <&CLUSTER_PD>;
+				power-domains = <&cluster_pd>;
 				st,syscfg-dlyb = <&syscfg 0x1400>;
 				status = "disabled";
 			};
@@ -318,7 +318,7 @@
 				#address-cells = <1>;
 				#size-cells = <0>;
 				access-controllers = <&rifsc 1>;
-				power-domains = <&CLUSTER_PD>;
+				power-domains = <&cluster_pd>;
 				status = "disabled";
 
 				counter {
@@ -349,7 +349,7 @@
 				#address-cells = <1>;
 				#size-cells = <0>;
 				access-controllers = <&rifsc 2>;
-				power-domains = <&CLUSTER_PD>;
+				power-domains = <&cluster_pd>;
 				status = "disabled";
 
 				counter {
@@ -380,7 +380,7 @@
 				#address-cells = <1>;
 				#size-cells = <0>;
 				access-controllers = <&rifsc 3>;
-				power-domains = <&CLUSTER_PD>;
+				power-domains = <&cluster_pd>;
 				status = "disabled";
 
 				counter {
@@ -411,7 +411,7 @@
 				#address-cells = <1>;
 				#size-cells = <0>;
 				access-controllers = <&rifsc 4>;
-				power-domains = <&CLUSTER_PD>;
+				power-domains = <&cluster_pd>;
 				status = "disabled";
 
 				counter {
@@ -442,7 +442,7 @@
 				#address-cells = <1>;
 				#size-cells = <0>;
 				access-controllers = <&rifsc 5>;
-				power-domains = <&CLUSTER_PD>;
+				power-domains = <&cluster_pd>;
 				status = "disabled";
 
 				counter {
@@ -467,7 +467,7 @@
 				#address-cells = <1>;
 				#size-cells = <0>;
 				access-controllers = <&rifsc 6>;
-				power-domains = <&CLUSTER_PD>;
+				power-domains = <&cluster_pd>;
 				status = "disabled";
 
 				counter {
@@ -492,7 +492,7 @@
 				#address-cells = <1>;
 				#size-cells = <0>;
 				access-controllers = <&rifsc 10>;
-				power-domains = <&CLUSTER_PD>;
+				power-domains = <&cluster_pd>;
 				status = "disabled";
 
 				counter {
@@ -523,7 +523,7 @@
 				#address-cells = <1>;
 				#size-cells = <0>;
 				access-controllers = <&rifsc 11>;
-				power-domains = <&CLUSTER_PD>;
+				power-domains = <&cluster_pd>;
 				status = "disabled";
 
 				counter {
@@ -554,7 +554,7 @@
 				#address-cells = <1>;
 				#size-cells = <0>;
 				access-controllers = <&rifsc 12>;
-				power-domains = <&CLUSTER_PD>;
+				power-domains = <&cluster_pd>;
 				status = "disabled";
 
 				counter {
@@ -584,7 +584,7 @@
 				#address-cells = <1>;
 				#size-cells = <0>;
 				access-controllers = <&rifsc 17>;
-				power-domains = <&RET_PD>;
+				power-domains = <&ret_pd>;
 				wakeup-source;
 				status = "disabled";
 
@@ -620,7 +620,7 @@
 				#address-cells = <1>;
 				#size-cells = <0>;
 				access-controllers = <&rifsc 18>;
-				power-domains = <&RET_PD>;
+				power-domains = <&ret_pd>;
 				wakeup-source;
 				status = "disabled";
 
@@ -891,7 +891,7 @@
 				#address-cells = <1>;
 				#size-cells = <0>;
 				access-controllers = <&rifsc 8>;
-				power-domains = <&CLUSTER_PD>;
+				power-domains = <&cluster_pd>;
 				status = "disabled";
 
 				counter {
@@ -922,7 +922,7 @@
 				#address-cells = <1>;
 				#size-cells = <0>;
 				access-controllers = <&rifsc 9>;
-				power-domains = <&CLUSTER_PD>;
+				power-domains = <&cluster_pd>;
 				status = "disabled";
 
 				counter {
@@ -956,7 +956,7 @@
 				#address-cells = <1>;
 				#size-cells = <0>;
 				access-controllers = <&rifsc 0>;
-				power-domains = <&CLUSTER_PD>;
+				power-domains = <&cluster_pd>;
 				status = "disabled";
 
 				counter {
@@ -990,7 +990,7 @@
 				#address-cells = <1>;
 				#size-cells = <0>;
 				access-controllers = <&rifsc 7>;
-				power-domains = <&CLUSTER_PD>;
+				power-domains = <&cluster_pd>;
 				status = "disabled";
 
 				counter {
@@ -1078,7 +1078,7 @@
 				#address-cells = <1>;
 				#size-cells = <0>;
 				access-controllers = <&rifsc 13>;
-				power-domains = <&CLUSTER_PD>;
+				power-domains = <&cluster_pd>;
 				status = "disabled";
 
 				counter {
@@ -1109,7 +1109,7 @@
 				#address-cells = <1>;
 				#size-cells = <0>;
 				access-controllers = <&rifsc 14>;
-				power-domains = <&CLUSTER_PD>;
+				power-domains = <&cluster_pd>;
 				status = "disabled";
 
 				counter {
@@ -1140,7 +1140,7 @@
 				#address-cells = <1>;
 				#size-cells = <0>;
 				access-controllers = <&rifsc 15>;
-				power-domains = <&CLUSTER_PD>;
+				power-domains = <&cluster_pd>;
 				status = "disabled";
 
 				counter {
@@ -1303,7 +1303,7 @@
 				#address-cells = <1>;
 				#size-cells = <0>;
 				access-controllers = <&rifsc 16>;
-				power-domains = <&CLUSTER_PD>;
+				power-domains = <&cluster_pd>;
 				status = "disabled";
 
 				counter {
@@ -1614,7 +1614,7 @@
 				resets = <&rcc USB3PCIEPHY_R>;
 				reset-names = "phy";
 				access-controllers = <&rifsc 67>;
-				power-domains = <&CLUSTER_PD>;
+				power-domains = <&cluster_pd>;
 				wakeup-source;
 				interrupts-extended = <&exti1 45 IRQ_TYPE_EDGE_FALLING>;
 				status = "disabled";
@@ -1695,7 +1695,7 @@
 				resets = <&rcc PCIE_R>;
 				phys = <&combophy PHY_TYPE_PCIE>;
 				access-controllers = <&rifsc 68>;
-				power-domains = <&CLUSTER_PD>;
+				power-domains = <&cluster_pd>;
 				status = "disabled";
 			};
 
@@ -1721,7 +1721,7 @@
 				resets = <&rcc PCIE_R>;
 				msi-parent = <&v2m0>;
 				access-controllers = <&rifsc 68>;
-				power-domains = <&CLUSTER_PD>;
+				power-domains = <&cluster_pd>;
 				status = "disabled";
 
 				pcie@0,0 {

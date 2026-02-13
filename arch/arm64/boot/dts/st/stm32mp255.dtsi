@@ -20,7 +20,7 @@
 		clock-names = "pclk", "ref";
 		resets = <&rcc LVDS_R>;
 		access-controllers = <&rifsc 84>;
-		power-domains = <&CLUSTER_PD>;
+		power-domains = <&cluster_pd>;
 		status = "disabled";
 	};
 
