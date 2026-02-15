@@ -30,7 +30,9 @@ allOf:
 
 properties:
   compatible:
-    const: st,stm32mp25-dma3
+    enum:
+      - st,stm32mp21-dma3
+      - st,stm32mp25-dma3
 
   reg:
     maxItems: 1
