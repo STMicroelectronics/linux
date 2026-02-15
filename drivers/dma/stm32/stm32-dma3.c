@@ -107,6 +107,7 @@ enum ccidcfgr_cid {
 #define CCR_EN				BIT(0)
 #define CCR_RESET			BIT(1)
 #define CCR_SUSP			BIT(2)
+#define CCR_DRAINFIFO			BIT(3)
 #define CCR_TCIE			BIT(8)
 #define CCR_HTIE			BIT(9)
 #define CCR_DTEIE			BIT(10)
@@ -309,6 +310,8 @@ struct stm32_dma3_chan {
 struct stm32_dma3_pdata {
 	u32 axi_max_burst_len;
 	bool axi_addr_remap_supported;
+	bool fifol_in_bytes;
+	bool fifo_drain;
 };
 
 struct stm32_dma3_ddata {
@@ -1106,6 +1109,32 @@ static int stm32_dma3_chan_suspend(struct stm32_dma3_chan *chan, bool susp)
 	return ret;
 }
 
+static int stm32_dma3_chan_terminate(struct stm32_dma3_chan *chan)
+{
+	struct stm32_dma3_ddata *ddata = to_stm32_dma3_ddata(chan);
+	u32 csr, ccr = readl_relaxed(ddata->base + STM32_DMA3_CCR(chan->id)) & ~CCR_EN;
+	int ret;
+
+	/* Channel is already suspended and fifo can't be drained */
+	if (ccr & CCR_SUSP && !ddata->pdata.fifo_drain)
+		return 0;
+
+	ccr |= CCR_SUSP;
+	/* CxTR2.DREQ=1 and CxCR.DRAINFIFO=1 is not supported */
+	if (ddata->pdata.fifo_drain && chan->dma_config.direction != DMA_MEM_TO_DEV)
+		ccr |= CCR_DRAINFIFO;
+
+	writel_relaxed(ccr, ddata->base + STM32_DMA3_CCR(chan->id));
+
+	ret = readl_relaxed_poll_timeout_atomic(ddata->base + STM32_DMA3_CSR(chan->id), csr,
+						csr & (CSR_SUSPF | CSR_TCF), 1, 10);
+	if (ret)
+		dev_warn(chan2dev(chan), "%s: timeout, data might be lost (ccr=%08x csr=%08x)\n",
+			 __func__, ccr, csr);
+
+	return ret;
+}
+
 static void stm32_dma3_chan_reset(struct stm32_dma3_chan *chan)
 {
 	struct stm32_dma3_ddata *ddata = to_stm32_dma3_ddata(chan);
@@ -1144,7 +1173,7 @@ static void stm32_dma3_chan_set_residue(struct stm32_dma3_chan *chan,
 	struct stm32_dma3_ddata *ddata = to_stm32_dma3_ddata(chan);
 	struct device *dev = chan2dev(chan);
 	struct stm32_dma3_hwdesc *hwdesc;
-	u32 residue, curr_lli, csr, cdar, cbr1, cllr, bndt, fifol;
+	u32 residue, curr_lli, csr, cdar = 0, cbr1, cllr, bndt, fifol;
 	bool pack_unpack;
 	int ret;
 
@@ -1177,7 +1206,8 @@ static void stm32_dma3_chan_set_residue(struct stm32_dma3_chan *chan,
 	/* Read registers to have a snapshot */
 	cllr = readl_relaxed(ddata->base + STM32_DMA3_CLLR(chan->id));
 	cbr1 = readl_relaxed(ddata->base + STM32_DMA3_CBR1(chan->id));
-	cdar = readl_relaxed(ddata->base + STM32_DMA3_CDAR(chan->id));
+	if (!ddata->pdata.fifol_in_bytes)
+		cdar = readl_relaxed(ddata->base + STM32_DMA3_CDAR(chan->id));
 
 	/* Resume current transfer */
 	if (csr & CSR_SUSPF) {
@@ -1197,12 +1227,17 @@ static void stm32_dma3_chan_set_residue(struct stm32_dma3_chan *chan,
 	}
 	curr_lli = ret;
 
-	/* Read current FIFO level - in units of programmed destination data width */
-	hwdesc = swdesc->lli[curr_lli].hwdesc;
-	fifol = FIELD_GET(CSR_FIFOL, csr) * (1 << FIELD_GET(CTR1_DDW_LOG2, hwdesc->ctr1));
-	/* If the FIFO contains as many bytes as its size, it can't contain more */
-	if (fifol == (1 << (chan->fifo_size + 1)))
+	/* Read current FIFO level */
+	if (ddata->pdata.fifol_in_bytes) {
+		fifol = FIELD_GET(CSR_FIFOL, csr);
 		goto skip_fifol_update;
+	} else { /* FIFO level in units of programmed destination data width */
+		hwdesc = swdesc->lli[curr_lli].hwdesc;
+		fifol = FIELD_GET(CSR_FIFOL, csr) * (1 << FIELD_GET(CTR1_DDW_LOG2, hwdesc->ctr1));
+		/* If the FIFO contains as many bytes as its size, it can't contain more */
+		if (fifol == (1 << (chan->fifo_size + 1)))
+			goto skip_fifol_update;
+	}
 
 	/*
 	 * In case of PACKING (Destination burst length > Source burst length) or UNPACKING
@@ -1254,16 +1289,16 @@ static int stm32_dma3_chan_stop(struct stm32_dma3_chan *chan)
 	ccr = readl_relaxed(ddata->base + STM32_DMA3_CCR(chan->id));
 	writel_relaxed(ccr & ~(CCR_ALLIE | CCR_EN), ddata->base + STM32_DMA3_CCR(chan->id));
 
-	if (!(ccr & CCR_SUSP) && (ccr & CCR_EN)) {
-		/* Suspend the channel */
-		ret = stm32_dma3_chan_suspend(chan, true);
-		if (ret)
-			dev_warn(chan2dev(chan), "%s: timeout, data might be lost\n", __func__);
-	}
+	if (!(ccr & CCR_EN))
+		goto skip_terminate;
 
+	/* Terminate the channel */
+	ret = stm32_dma3_chan_terminate(chan);
+
+skip_terminate:
 	/*
 	 * Reset the channel: this causes the reset of the FIFO and the reset of the channel
-	 * internal state, the reset of CCR_EN and CCR_SUSP bits.
+	 * internal state, the reset of CCR_SUSP (and CCR_DRAINFIFO) and CCR_EN bits.
 	 */
 	stm32_dma3_chan_reset(chan);
 
@@ -1386,6 +1421,15 @@ static int stm32_dma3_alloc_chan_resources(struct dma_chan *c)
 	struct stm32_dma3_ddata *ddata = to_stm32_dma3_ddata(chan);
 	int ret;
 
+	/*
+	 * At this point, chan->dma_config is either allocated with __GFP_ZERO or memset 0,
+	 * so chan->dma_config.direction == 0 (== DMA_MEM_TO_MEM).
+	 * This driver relies on chan->dma_config.direction for _tx_status and _terminate_all ops.
+	 * Initialize it with DMA_TRANS_NONE so that the driver knows that the channel direction
+	 * has not yet been configured.
+	 */
+	chan->dma_config.direction = DMA_TRANS_NONE;
+
 	ret = pm_runtime_resume_and_get(ddata2dev(ddata));
 	if (ret < 0)
 		return ret;
@@ -1435,6 +1479,7 @@ static void stm32_dma3_free_chan_resources(struct dma_chan *c)
 	/* Reset configuration */
 	memset(&chan->dt_config, 0, sizeof(chan->dt_config));
 	memset(&chan->dma_config, 0, sizeof(chan->dma_config));
+	chan->dma_config.direction = DMA_TRANS_NONE;
 	chan->config_set = 0;
 }
 
@@ -1741,6 +1786,14 @@ static int stm32_dma3_config(struct dma_chan *c, struct dma_slave_config *config
 	struct stm32_dma3_chan *chan = to_stm32_dma3_chan(c);
 
 	memcpy(&chan->dma_config, config, sizeof(*config));
+	/*
+	 * This driver uses the direction argument to the device_prep_slave_sg/_dma_cyclic functions
+	 * to set chan->dma_config.direction. So config->direction potentially set before is not
+	 * used. This driver relies on chan->dma_config.direction for _tx_status and _terminate_all
+	 * ops. Overwrite it here so that the driver knows that the channel direction has not yet
+	 * been configured.
+	 */
+	chan->dma_config.direction = DMA_TRANS_NONE;
 	chan->config_set |= STM32_DMA3_CFG_SET_DMA;
 
 	return 0;
@@ -2012,6 +2065,8 @@ static u32 stm32_dma3_check_rif(struct stm32_dma3_ddata *ddata)
 static struct stm32_dma3_pdata stm32mp21_pdata = {
 	.axi_max_burst_len = 16,
 	.axi_addr_remap_supported = true,
+	.fifol_in_bytes = true,
+	.fifo_drain = true,
 };
 
 static struct stm32_dma3_pdata stm32mp25_pdata = {
