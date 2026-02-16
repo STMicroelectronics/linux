@@ -175,6 +175,15 @@
 	bootph-all;
 };
 
+&i2c2 {
+	pinctrl-names = "default", "sleep";
+	pinctrl-0 = <&i2c2_pins_a>;
+	pinctrl-1 = <&i2c2_sleep_pins_a>;
+	i2c-scl-rising-time-ns = <34>;
+	i2c-scl-falling-time-ns = <2>;
+	status = "okay";
+};
+
 &optee {
 	bootph-all;
 };
