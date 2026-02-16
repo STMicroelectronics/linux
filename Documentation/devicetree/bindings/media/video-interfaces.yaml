@@ -238,4 +238,9 @@ properties:
       Whether the clock signal is used as clock (0) or strobe (1). Used with
       CCP2, for instance.
 
+  pclk-max-frequency:
+    $ref: /schemas/types.yaml#/definitions/uint32
+    description:
+      Maximum acceptable pixel clock frequency.
+
 additionalProperties: true
