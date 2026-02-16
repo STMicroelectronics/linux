@@ -20,7 +20,7 @@
 		clock-names = "pclk", "ref";
 		resets = <&rcc LVDS_R>;
 		access-controllers = <&rifsc 84>;
-		power-domains = <&cluster_pd>;
+		power-domains = <&d1_pd>;
 		status = "disabled";
 	};
 
@@ -30,7 +30,7 @@
 		interrupts = <GIC_SPI 117 IRQ_TYPE_LEVEL_HIGH>;
 		clocks = <&rcc CK_BUS_VDEC>;
 		access-controllers = <&rifsc 89>;
-
+		power-domains = <&d1_pd>;
 	};
 
 	venc: venc@480e0000 {
@@ -39,5 +39,6 @@
 		interrupts = <GIC_SPI 167 IRQ_TYPE_LEVEL_HIGH>;
 		clocks = <&rcc CK_BUS_VENC>;
 		access-controllers = <&rifsc 90>;
+		power-domains = <&d1_pd>;
 	};
 };
