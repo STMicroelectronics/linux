@@ -203,6 +203,38 @@
 				status = "disabled";
 			};
 
+			i2c1: i2c@40170000 {
+				compatible = "st,stm32mp25-i2c";
+				reg = <0x40170000 0x0 0x400>;
+				interrupt-names = "event";
+				interrupts-extended = <&exti1 21 IRQ_TYPE_LEVEL_HIGH>;
+				clocks = <&rcc CK_KER_I2C1>;
+				resets = <&rcc I2C1_R>;
+				#address-cells = <1>;
+				#size-cells = <0>;
+				access-controllers = <&rifsc 41>;
+				i2c-analog-filter;
+				wakeup-source;
+				power-domains = <&d1_pd>;
+				status = "disabled";
+			};
+
+			i2c2: i2c@40180000 {
+				compatible = "st,stm32mp25-i2c";
+				reg = <0x40180000 0x0 0x400>;
+				interrupt-names = "event";
+				interrupts-extended = <&exti1 22 IRQ_TYPE_LEVEL_HIGH>;
+				clocks = <&rcc CK_KER_I2C2>;
+				resets = <&rcc I2C2_R>;
+				#address-cells = <1>;
+				#size-cells = <0>;
+				access-controllers = <&rifsc 42>;
+				i2c-analog-filter;
+				wakeup-source;
+				power-domains = <&d1_pd>;
+				status = "disabled";
+			};
+
 			iwdg1: watchdog@44010000 {
 				compatible = "st,stm32mp1-iwdg";
 				reg = <0x44010000 0x0 0x400>;
@@ -220,6 +252,22 @@
 				clocks = <&rcc CK_BUS_IWDG2>, <&scmi_clk CK_SCMI_LSI>;
 				clock-names = "pclk", "lsi";
 				access-controllers = <&rifsc 101>;
+				status = "disabled";
+			};
+
+			i2c3: i2c@46040000 {
+				compatible = "st,stm32mp25-i2c";
+				reg = <0x46040000 0x0 0x400>;
+				interrupt-names = "event";
+				interrupts-extended = <&exti1 23 IRQ_TYPE_LEVEL_HIGH>;
+				clocks = <&rcc CK_KER_I2C3>;
+				resets = <&rcc I2C3_R>;
+				#address-cells = <1>;
+				#size-cells = <0>;
+				access-controllers = <&rifsc 43>;
+				i2c-analog-filter;
+				wakeup-source;
+				power-domains = <&d1_pd>;
 				status = "disabled";
 			};
 
