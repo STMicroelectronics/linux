@@ -55,6 +55,10 @@
 	bootph-all;
 };
 
+&rcc {
+	bootph-all;
+};
+
 &rifsc {
 	bootph-all;
 };
