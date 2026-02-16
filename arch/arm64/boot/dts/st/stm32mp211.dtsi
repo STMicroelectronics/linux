@@ -140,6 +140,12 @@
 		};
 	};
 
+	d1_pd: power-domain-d1 {
+		compatible = "st,stm32mp-pm-domain";
+		#power-domain-cells = <0>;
+		power-domains = <&cluster_pd>;
+	};
+
 	psci: psci {
 		compatible = "arm,psci-1.0";
 		method = "smc";
@@ -192,6 +198,7 @@
 				reg = <0x400e0000 0x0 0x400>;
 				interrupts = <GIC_SPI 102 IRQ_TYPE_LEVEL_HIGH>;
 				clocks = <&ck_flexgen_08>;
+				power-domains = <&d1_pd>;
 				status = "disabled";
 			};
 		};
