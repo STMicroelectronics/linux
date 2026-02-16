@@ -832,7 +832,7 @@
 				compatible = "st,stm32mp25-i2c";
 				reg = <0x40120000 0x400>;
 				interrupt-names = "event";
-				interrupts = <GIC_SPI 108 IRQ_TYPE_LEVEL_HIGH>;
+				interrupts-extended = <&exti1 21 IRQ_TYPE_LEVEL_HIGH>;
 				clocks = <&rcc CK_KER_I2C1>;
 				resets = <&rcc I2C1_R>;
 				#address-cells = <1>;
@@ -843,6 +843,7 @@
 				access-controllers = <&rifsc 41>;
 				power-domains = <&d1_pd>;
 				i2c-analog-filter;
+				wakeup-source;
 				status = "disabled";
 			};
 
@@ -850,7 +851,7 @@
 				compatible = "st,stm32mp25-i2c";
 				reg = <0x40130000 0x400>;
 				interrupt-names = "event";
-				interrupts = <GIC_SPI 110 IRQ_TYPE_LEVEL_HIGH>;
+				interrupts-extended = <&exti1 22 IRQ_TYPE_LEVEL_HIGH>;
 				clocks = <&rcc CK_KER_I2C2>;
 				resets = <&rcc I2C2_R>;
 				#address-cells = <1>;
@@ -861,6 +862,7 @@
 				access-controllers = <&rifsc 42>;
 				power-domains = <&d1_pd>;
 				i2c-analog-filter;
+				wakeup-source;
 				status = "disabled";
 			};
 
@@ -868,7 +870,7 @@
 				compatible = "st,stm32mp25-i2c";
 				reg = <0x40140000 0x400>;
 				interrupt-names = "event";
-				interrupts = <GIC_SPI 137 IRQ_TYPE_LEVEL_HIGH>;
+				interrupts-extended = <&exti1 23 IRQ_TYPE_LEVEL_HIGH>;
 				clocks = <&rcc CK_KER_I2C3>;
 				resets = <&rcc I2C3_R>;
 				#address-cells = <1>;
@@ -879,6 +881,7 @@
 				access-controllers = <&rifsc 43>;
 				power-domains = <&d1_pd>;
 				i2c-analog-filter;
+				wakeup-source;
 				status = "disabled";
 			};
 
@@ -886,7 +889,7 @@
 				compatible = "st,stm32mp25-i2c";
 				reg = <0x40150000 0x400>;
 				interrupt-names = "event";
-				interrupts = <GIC_SPI 168 IRQ_TYPE_LEVEL_HIGH>;
+				interrupts-extended = <&exti1 24 IRQ_TYPE_LEVEL_HIGH>;
 				clocks = <&rcc CK_KER_I2C4>;
 				resets = <&rcc I2C4_R>;
 				#address-cells = <1>;
@@ -897,6 +900,7 @@
 				access-controllers = <&rifsc 44>;
 				power-domains = <&d1_pd>;
 				i2c-analog-filter;
+				wakeup-source;
 				status = "disabled";
 			};
 
@@ -904,7 +908,7 @@
 				compatible = "st,stm32mp25-i2c";
 				reg = <0x40160000 0x400>;
 				interrupt-names = "event";
-				interrupts = <GIC_SPI 181 IRQ_TYPE_LEVEL_HIGH>;
+				interrupts-extended = <&exti1 25 IRQ_TYPE_LEVEL_HIGH>;
 				clocks = <&rcc CK_KER_I2C5>;
 				resets = <&rcc I2C5_R>;
 				#address-cells = <1>;
@@ -915,6 +919,7 @@
 				access-controllers = <&rifsc 45>;
 				power-domains = <&d1_pd>;
 				i2c-analog-filter;
+				wakeup-source;
 				status = "disabled";
 			};
 
@@ -922,7 +927,7 @@
 				compatible = "st,stm32mp25-i2c";
 				reg = <0x40170000 0x400>;
 				interrupt-names = "event";
-				interrupts = <GIC_SPI 208 IRQ_TYPE_LEVEL_HIGH>;
+				interrupts-extended = <&exti1 49 IRQ_TYPE_LEVEL_HIGH>;
 				clocks = <&rcc CK_KER_I2C6>;
 				resets = <&rcc I2C6_R>;
 				#address-cells = <1>;
@@ -933,6 +938,7 @@
 				access-controllers = <&rifsc 46>;
 				power-domains = <&d1_pd>;
 				i2c-analog-filter;
+				wakeup-source;
 				status = "disabled";
 			};
 
@@ -940,7 +946,7 @@
 				compatible = "st,stm32mp25-i2c";
 				reg = <0x40180000 0x400>;
 				interrupt-names = "event";
-				interrupts = <GIC_SPI 210 IRQ_TYPE_LEVEL_HIGH>;
+				interrupts-extended = <&exti1 50 IRQ_TYPE_LEVEL_HIGH>;
 				clocks = <&rcc CK_KER_I2C7>;
 				resets = <&rcc I2C7_R>;
 				#address-cells = <1>;
@@ -951,6 +957,7 @@
 				access-controllers = <&rifsc 47>;
 				power-domains = <&d1_pd>;
 				i2c-analog-filter;
+				wakeup-source;
 				status = "disabled";
 			};
 
@@ -1567,7 +1574,7 @@
 				compatible = "st,stm32mp25-i2c";
 				reg = <0x46040000 0x400>;
 				interrupt-names = "event";
-				interrupts = <GIC_SPI 212 IRQ_TYPE_LEVEL_HIGH>;
+				interrupts-extended = <&exti2 25 IRQ_TYPE_LEVEL_HIGH>;
 				clocks = <&rcc CK_KER_I2C8>;
 				resets = <&rcc I2C8_R>;
 				#address-cells = <1>;
@@ -1578,6 +1585,7 @@
 				access-controllers = <&rifsc 48>;
 				power-domains = <&d1_pd>;
 				i2c-analog-filter;
+				wakeup-source;
 				status = "disabled";
 			};
 
