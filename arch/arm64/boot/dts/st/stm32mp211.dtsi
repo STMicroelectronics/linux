@@ -19,6 +19,40 @@
 			reg = <0>;
 			device_type = "cpu";
 			enable-method = "psci";
+			power-domains = <&cpu0_pd>;
+			power-domain-names = "psci";
+		};
+
+		idle-states {
+			entry-method = "psci";
+
+			cpu_pwrdn: cpu-power-down {
+
+				compatible = "arm,idle-state";
+				arm,psci-suspend-param = <0x00000002>;
+				local-timer-stop;
+				entry-latency-us = <150>;
+				exit-latency-us = <200>;
+				min-residency-us = <1000>;
+			};
+		};
+
+		domain-idle-states {
+			stop1: domain-stop1 {
+				compatible = "domain-idle-state";
+				arm,psci-suspend-param = <0x00000012>;
+				entry-latency-us = <300>;
+				exit-latency-us = <500>;
+				min-residency-us = <1500>;
+			};
+
+			lp_stop1: domain-lp-stop1 {
+				compatible = "domain-idle-state";
+				arm,psci-suspend-param = <0x0000022>;
+				entry-latency-us = <350>;
+				exit-latency-us = <600>;
+				min-residency-us = <2000>;
+			};
 		};
 	};
 
@@ -104,6 +138,22 @@
 	psci: psci {
 		compatible = "arm,psci-1.0";
 		method = "smc";
+
+		cpu0_pd: power-domain-cpu0 {
+			#power-domain-cells = <0>;
+			domain-idle-states = <&cpu_pwrdn>;
+			power-domains = <&cluster_pd>;
+		};
+
+		cluster_pd: power-domain-cluster {
+			#power-domain-cells = <0>;
+			domain-idle-states = <&stop1>, <&lp_stop1>;
+			power-domains = <&ret_pd>;
+		};
+
+		ret_pd: power-domain-retention {
+			#power-domain-cells = <0>;
+		};
 	};
 
 	timer {
