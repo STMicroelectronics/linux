@@ -12,8 +12,8 @@
 			device_type = "cpu";
 			reg = <1>;
 			enable-method = "psci";
-			power-domains = <&cpu1_pd>;
-			power-domain-names = "psci";
+			power-domains = <&cpu1_pd>, <&scmi_perf 0>;
+			power-domain-names = "psci", "perf";
 		};
 	};
 

@@ -22,8 +22,8 @@
 			device_type = "cpu";
 			reg = <0>;
 			enable-method = "psci";
-			power-domains = <&cpu0_pd>;
-			power-domain-names = "psci";
+			power-domains = <&cpu0_pd>, <&scmi_perf 0>;
+			power-domain-names = "psci", "perf";
 		};
 
 		idle-states {
@@ -117,6 +117,11 @@
 
 			scmi_devpd: protocol@11 {
 				reg = <0x11>;
+				#power-domain-cells = <1>;
+			};
+
+			scmi_perf: protocol@13 {
+				reg = <0x13>;
 				#power-domain-cells = <1>;
 			};
 
