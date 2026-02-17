@@ -224,6 +224,7 @@
 			hsync-active = <0>;
 			vsync-active = <0>;
 			pclk-sample = <0>;
+			pclk-max-frequency = <120000000>;
 		};
 	};
 };
