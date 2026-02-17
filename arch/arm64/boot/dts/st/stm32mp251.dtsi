@@ -115,6 +115,11 @@
 			#size-cells = <0>;
 			linaro,optee-channel-id = <0>;
 
+			scmi_devpd: protocol@11 {
+				reg = <0x11>;
+				#power-domain-cells = <1>;
+			};
+
 			scmi_clk: protocol@14 {
 				reg = <0x14>;
 				#clock-cells = <1>;
