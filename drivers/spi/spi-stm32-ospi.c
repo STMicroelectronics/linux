@@ -17,6 +17,7 @@
 #include <linux/mfd/syscon.h>
 #include <linux/mtd/cfi.h>
 #include <linux/mtd/hyperbus.h>
+#include <linux/mtd/sfdp.h>
 #include <linux/module.h>
 #include <linux/mutex.h>
 #include <linux/of.h>
@@ -204,6 +205,7 @@ struct stm32_common {
 	u32 dlyb_base;
 	int irq;
 	bool calibration;
+	bool jedec_flash;
 
 	int (*check_transfer)(struct stm32_common *common);
 };
@@ -1955,8 +1957,13 @@ static int stm32_hyperbus_check_transfert(struct stm32_common *common)
 	cfi.interleave = 1;
 	cfi.device_type = CFI_DEVICETYPE_X16;
 
-	ret = cfi_qry_mode_on(0, map, &cfi);
-	cfi_qry_mode_off(0, map, &cfi);
+	if (common->jedec_flash) {
+		ret = hyperbus_sfdp_mode_on(0, map, &cfi);
+		hyperbus_sfdp_mode_off(0, map, &cfi);
+	} else {
+		ret = cfi_qry_mode_on(0, map, &cfi);
+		cfi_qry_mode_off(0, map, &cfi);
+	}
 
 	return !ret;
 }
@@ -2169,6 +2176,7 @@ static int stm32_common_probe(struct platform_device *pdev)
 	int ret;
 	u8 spi_flash_count = 0;
 	u8 hyperflash_count = 0;
+	bool jedec_flash = false;
 
 	/*
 	 * Flash subnodes sanity check:
@@ -2183,6 +2191,11 @@ static int stm32_common_probe(struct platform_device *pdev)
 
 		if (of_device_is_compatible(child, "cfi-flash"))
 			hyperflash_count++;
+
+		if (of_device_is_compatible(child, "jedec-flash")) {
+			hyperflash_count++;
+			jedec_flash = true;
+		}
 	}
 
 	if (!hyperflash_count && !spi_flash_count) {
@@ -2205,6 +2218,7 @@ static int stm32_common_probe(struct platform_device *pdev)
 		return -ENOMEM;
 
 	common->dev = dev;
+	common->jedec_flash = jedec_flash;
 	platform_set_drvdata(pdev, common);
 
 	ret = stm32_ospi_get_resources(pdev);
