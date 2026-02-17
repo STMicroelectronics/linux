@@ -121,8 +121,8 @@
 			      <0x4ac20000 0x0 0x20000>,
 			      <0x4ac40000 0x0 0x20000>,
 			      <0x4ac60000 0x0 0x20000>;
-			      #interrupt-cells = <3>;
-			      interrupt-controller;
+			#interrupt-cells = <3>;
+			interrupt-controller;
 		};
 	};
 };
