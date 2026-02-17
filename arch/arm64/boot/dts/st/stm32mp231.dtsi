@@ -1963,6 +1963,11 @@
 			access-controllers = <&rifsc 156>;
 		};
 
+		pwr: syscon@44210000 {
+			compatible = "st,stm32mp25-pwr", "syscon";
+			reg = <0x44210000 0x0400>;
+		};
+
 		exti1: interrupt-controller@44220000 {
 			compatible = "st,stm32mp1-exti";
 			reg = <0x44220000 0x400>;
