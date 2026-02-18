@@ -140,6 +140,8 @@
 	wifi_pwrseq: wifi-pwrseq {
 		compatible = "mmc-pwrseq-simple";
 		reset-gpios = <&mcp23017 11 GPIO_ACTIVE_LOW>;
+		clocks = <&rtc>;
+		clock-names = "ext_clock";
 	};
 };
 
@@ -490,8 +492,9 @@
 };
 
 &rtc {
+	#clock-cells = <0>;
 	pinctrl-names = "default";
-	pinctrl-0 = <&rtc_rsvd_pins_a>;
+	pinctrl-0 = <&rtc_rsvd_pins_a &rtc_lsco_pins_a>;
 	status = "okay";
 
 	rtc_lsco_pins_a: rtc-lsco-0 {
@@ -595,8 +598,6 @@
 	brcmf: wifi@1 {
 		reg = <1>;
 		compatible = "brcm,bcm4329-fmac";
-		pinctrl-names = "default";
-		pinctrl-0 = <&rtc_lsco_pins_a>;
 	};
 };
 
@@ -737,6 +738,8 @@
 	bluetooth {
 		shutdown-gpios = <&mcp23017 13 GPIO_ACTIVE_HIGH>;
 		compatible = "brcm,bcm43438-bt";
+		clocks = <&rtc>;
+		clock-names = "lpo";
 		max-speed = <3000000>;
 		vbat-supply = <&v3v3_ao>;
 		vddio-supply = <&v3v3_ao>;
