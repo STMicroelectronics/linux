@@ -227,6 +227,18 @@
 	bootph-all;
 };
 
+&rtc {
+	#clock-cells = <0>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&rtc_rsvd_pins_a &rtc_lsco_pins_a>;
+	status = "okay";
+
+	rtc_lsco_pins_a: rtc-lsco-0 {
+		pins = "out1";
+		function = "lsco";
+	};
+};
+
 &scmi {
 	bootph-all;
 };
