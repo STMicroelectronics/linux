@@ -5,5 +5,17 @@
  */
 #include "stm32mp213.dtsi"
 
-/ {
+&rifsc {
+	csi: csi@48020000 {
+		compatible = "st,stm32mp25-csi";
+		reg = <0x48020000 0x0 0x2000>;
+		interrupts = <GIC_SPI 129 IRQ_TYPE_LEVEL_HIGH>;
+		resets = <&rcc CSI_R>;
+		clocks = <&rcc CK_KER_CSI>, <&rcc CK_KER_CSITXESC>,
+			 <&rcc CK_KER_CSIPHY>;
+		clock-names = "pclk", "txesc", "csi2phy";
+		access-controllers = <&rifsc 86>;
+		power-domains = <&d1_pd>;
+		status = "disabled";
+	};
 };
