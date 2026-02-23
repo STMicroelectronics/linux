@@ -184,6 +184,10 @@
 	status = "okay";
 };
 
+&ipcc1 {
+	status = "okay";
+};
+
 &optee {
 	bootph-all;
 };
