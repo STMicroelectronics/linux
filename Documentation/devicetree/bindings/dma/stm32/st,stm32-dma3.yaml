@@ -25,9 +25,6 @@ description: |
 maintainers:
   - Amelie Delaunay <amelie.delaunay@foss.st.com>
 
-allOf:
-  - $ref: /schemas/dma/dma-controller.yaml#
-
 properties:
   compatible:
     enum:
@@ -69,6 +66,18 @@ properties:
 
   power-domains:
     maxItems: 1
+
+  st,syscfg-arcr:
+    description: |
+      Phandle to system configuration controller. It is used to get the status of the STM32 DMA3 AXI
+      port address remapping. When enabled, the 4GB address space accessible by the STM32 DMA3 AXI
+      port starts at address 0x80000000 instead of 0x00000000.
+    $ref: /schemas/types.yaml#/definitions/phandle-array
+    items:
+      - items:
+          - description: phandle to syscfg
+          - description: register offset within syscfg
+          - description: register bitmask for DMA controller Address Remapping ENable (AREN) bit
 
   "#dma-cells":
     const: 3
@@ -122,6 +131,20 @@ properties:
           0x0: don't prevent additional transfers for optimal performance
           0x1: prevent additional transfer to accommodate user constraints such as single transfer
 
+allOf:
+  - $ref: /schemas/dma/dma-controller.yaml#
+  - if:
+      properties:
+        compatible:
+          contains:
+            const: st,stm32mp21-dma3
+    then:
+      required:
+        - st,syscfg-arcr
+    else:
+      properties:
+        st,syscfg-arcr: false
+
 required:
   - compatible
   - reg
@@ -133,6 +156,7 @@ unevaluatedProperties: false
 
 examples:
   - |
+    // Example 1 on STM32MP25
     #include <dt-bindings/interrupt-controller/arm-gic.h>
     #include <dt-bindings/clock/st,stm32mp25-rcc.h>
 
@@ -170,4 +194,38 @@ examples:
       lli-bus-interface = <1>;
       memory-region = <&dma_lli>;
     };
+
+  - |
+    // Example 2 on STM32MP21
+    #include <dt-bindings/interrupt-controller/arm-gic.h>
+
+    soc {
+      #address-cells = <1>;
+      #size-cells = <2>;
+
+      dma-controller@40400000 {
+        compatible = "st,stm32mp21-dma3";
+        reg = <0x40400000 0x0 0x1000>;
+        interrupts = <GIC_SPI 31 IRQ_TYPE_LEVEL_HIGH>,
+                    <GIC_SPI 32 IRQ_TYPE_LEVEL_HIGH>,
+                    <GIC_SPI 33 IRQ_TYPE_LEVEL_HIGH>,
+                    <GIC_SPI 34 IRQ_TYPE_LEVEL_HIGH>,
+                    <GIC_SPI 35 IRQ_TYPE_LEVEL_HIGH>,
+                    <GIC_SPI 36 IRQ_TYPE_LEVEL_HIGH>,
+                    <GIC_SPI 37 IRQ_TYPE_LEVEL_HIGH>,
+                    <GIC_SPI 38 IRQ_TYPE_LEVEL_HIGH>,
+                    <GIC_SPI 39 IRQ_TYPE_LEVEL_HIGH>,
+                    <GIC_SPI 40 IRQ_TYPE_LEVEL_HIGH>,
+                    <GIC_SPI 41 IRQ_TYPE_LEVEL_HIGH>,
+                    <GIC_SPI 42 IRQ_TYPE_LEVEL_HIGH>,
+                    <GIC_SPI 43 IRQ_TYPE_LEVEL_HIGH>,
+                    <GIC_SPI 44 IRQ_TYPE_LEVEL_HIGH>,
+                    <GIC_SPI 45 IRQ_TYPE_LEVEL_HIGH>,
+                    <GIC_SPI 46 IRQ_TYPE_LEVEL_HIGH>;
+        clocks = <&rcc 95>;
+        #dma-cells = <3>;
+        st,syscfg-arcr = <&syscfg 0x2050 0x1>;
+      };
+    };
+
 ...
