@@ -228,6 +228,10 @@
 	/delete-property/dma-names;
 };
 
+&ipcc1 {
+	status = "okay";
+};
+
 &optee {
 	bootph-all;
 };
