@@ -355,6 +355,31 @@ static struct device *ddata2dev(struct stm32_dma3_ddata *ddata)
 	return ddata->dma_dev.dev;
 }
 
+#ifdef CONFIG_DEBUG_FS
+#include <linux/debugfs.h>
+static void stm32_dma3_dbg_summary_show(struct seq_file *s, struct dma_device *dma_dev)
+{
+	struct stm32_dma3_ddata *ddata = dev_get_drvdata(dma_dev->dev);
+	struct dma_chan *c;
+
+	if (ddata->axi_addr_offset)
+		seq_printf(s, "dma%d (%s): AXI port address remapping is enabled, offset=%pap\n",
+			   dma_dev->dev_id, dev_name(dma_dev->dev), &ddata->axi_addr_offset);
+
+	list_for_each_entry(c, &dma_dev->channels, device_node) {
+		if (!c->client_count)
+			continue;
+
+		seq_printf(s, " %-13s| %s", dma_chan_name(c), c->dbg_client_name ?: "in-use");
+
+		if (c->slave && c->slave->dma_range_map)
+			seq_puts(s, " (is aware of DMA memory ranges)");
+
+		seq_puts(s, "\n");
+	}
+}
+#endif
+
 static void stm32_dma3_chan_dump_reg(struct stm32_dma3_chan *chan)
 {
 	struct stm32_dma3_ddata *ddata = to_stm32_dma3_ddata(chan);
@@ -2160,6 +2185,9 @@ static int stm32_dma3_probe(struct platform_device *pdev)
 	dma_dev->device_synchronize = stm32_dma3_synchronize;
 	dma_dev->device_tx_status = stm32_dma3_tx_status;
 	dma_dev->device_issue_pending = stm32_dma3_issue_pending;
+#ifdef CONFIG_DEBUG_FS
+	dma_dev->dbg_summary_show = stm32_dma3_dbg_summary_show;
+#endif
 
 	/* if dma_channels is not modified, get it from hwcfgr1 */
 	if (of_property_read_u32(np, "dma-channels", &ddata->dma_channels)) {
