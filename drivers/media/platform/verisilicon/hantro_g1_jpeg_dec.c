@@ -402,6 +402,12 @@ int hantro_g1_jpeg_dec_run(struct hantro_ctx *ctx)
 	reg = G1_REG_DEC_CTRL3_STREAM_LEN(jpeg_size);
 	vdpu_write_relaxed(vpu, reg, G1_REG_DEC_CTRL3);
 
+	/* Vertical alignment */
+	reg = IS_ALIGNED(header.frame.height, MB_DIM) ?
+		0 : G1_REG_DEC_CTRL4_PJPEG_FILDOWN_E;
+
+	vdpu_write_relaxed(vpu, reg, G1_REG_DEC_CTRL4);
+
 	/* Disable slice mode */
 	vdpu_write_relaxed(vpu, G1_REG_JPEG_CTRL_SLICE_H(0), G1_REG_JPEG_CTRL);
 
