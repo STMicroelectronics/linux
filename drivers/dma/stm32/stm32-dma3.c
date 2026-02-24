@@ -1533,9 +1533,7 @@ static u32 stm32_dma3_get_ll_count(struct stm32_dma3_chan *chan, size_t len, boo
 static void stm32_dma3_init_chan_config_for_memcpy(struct stm32_dma3_chan *chan,
 						   dma_addr_t dst, dma_addr_t src)
 {
-	struct stm32_dma3_ddata *ddata = to_stm32_dma3_ddata(chan);
-	u32 dw = get_chan_max_dw(ddata->ports_max_dw[0], chan->max_burst); /* port 0 by default */
-	u32 burst = chan->max_burst / dw;
+	u32 sap, dap;
 
 	/* Initialize dt_config if channel not pre-configured through DT */
 	if (!(chan->config_set & STM32_DMA3_CFG_SET_DT)) {
@@ -1545,12 +1543,15 @@ static void stm32_dma3_init_chan_config_for_memcpy(struct stm32_dma3_chan *chan,
 		chan->dt_config.tr_conf |= FIELD_PREP(STM32_DMA3_DT_TCEM, CTR2_TCEM_CHANNEL);
 	}
 
+	sap = FIELD_GET(STM32_DMA3_DT_SAP, chan->dt_config.tr_conf);
+	dap = FIELD_GET(STM32_DMA3_DT_DAP, chan->dt_config.tr_conf);
+
 	/* Initialize dma_config if dmaengine_slave_config() not used */
 	if (!(chan->config_set & STM32_DMA3_CFG_SET_DMA)) {
-		chan->dma_config.src_addr_width = dw;
-		chan->dma_config.dst_addr_width = dw;
-		chan->dma_config.src_maxburst = burst;
-		chan->dma_config.dst_maxburst = burst;
+		chan->dma_config.src_addr_width = get_chan_max_dw(sap, chan->max_burst);
+		chan->dma_config.dst_addr_width = get_chan_max_dw(dap, chan->max_burst);
+		chan->dma_config.src_maxburst = chan->max_burst / chan->dma_config.src_addr_width;
+		chan->dma_config.dst_maxburst = chan->max_burst / chan->dma_config.dst_addr_width;
 		chan->dma_config.src_addr = src;
 		chan->dma_config.dst_addr = dst;
 	}
