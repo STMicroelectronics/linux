@@ -21,16 +21,15 @@
 #define RNG_CR			0x00
 #define RNG_CR_RNGEN		BIT(2)
 #define RNG_CR_CED		BIT(5)
-#define RNG_CR_CONFIG1		GENMASK(11, 8)
+#define RNG_CR_CONFIG3		GENMASK(11, 8)
 #define RNG_CR_NISTC		BIT(12)
 #define RNG_CR_CONFIG2		GENMASK(15, 13)
 #define RNG_CR_CLKDIV_SHIFT	16
 #define RNG_CR_CLKDIV		GENMASK(19, 16)
-#define RNG_CR_CONFIG3		GENMASK(25, 20)
+#define RNG_CR_CONFIG1		GENMASK(25, 20)
 #define RNG_CR_CONDRST		BIT(30)
 #define RNG_CR_CONFLOCK		BIT(31)
-#define RNG_CR_ENTROPY_SRC_MASK	(RNG_CR_CONFIG1 | RNG_CR_NISTC | RNG_CR_CONFIG2 | RNG_CR_CONFIG3)
-#define RNG_CR_CONFIG_MASK	(RNG_CR_ENTROPY_SRC_MASK | RNG_CR_CED | RNG_CR_CLKDIV)
+#define RNG_CR_CONFIG_MASK	(RNG_CR_CED | RNG_CR_CLKDIV)
 
 #define RNG_SR			0x04
 #define RNG_SR_DRDY		BIT(0)
@@ -38,6 +37,7 @@
 #define RNG_SR_SECS		BIT(2)
 #define RNG_SR_CEIS		BIT(5)
 #define RNG_SR_SEIS		BIT(6)
+#define RNG_SR_ERROR_MASK	(RNG_SR_CECS | RNG_SR_SECS | RNG_SR_CEIS | RNG_SR_SEIS)
 
 #define RNG_DR			0x08
 
@@ -51,6 +51,7 @@
 struct stm32_rng_data {
 	uint	max_clock_rate;
 	uint	nb_clock;
+	u32	cr_config1_mask;
 	u32	cr;
 	u32	nscr;
 	u32	htcr;
@@ -80,7 +81,14 @@ struct stm32_rng_private {
 	const struct stm32_rng_data *data;
 	bool ced;
 	bool lock_conf;
+	bool init_done;
 };
+
+static uint32_t stm32_rng_get_entropy_mask(struct stm32_rng_private *priv)
+{
+	return (RNG_CR_CONFIG3 | RNG_CR_NISTC |
+		RNG_CR_CONFIG2 | priv->data->cr_config1_mask);
+}
 
 /*
  * Extracts from the STM32 RNG specification when RNG supports CONDRST.
@@ -94,9 +102,8 @@ struct stm32_rng_private {
  * Indeed, when SEIS is set and SECS is cleared it means RNG performed
  * the reset automatically (auto-reset).
  * 2. If SECS was set in step 1 (no auto-reset) wait for CONDRST
- * to be cleared in the RNG_CR register, then confirm that SEIS is
- * cleared in the RNG_SR register. Otherwise just clear SEIS bit in
- * the RNG_SR register.
+ * to be cleared in the RNG_CR register. Otherwise just clear SEIS bit
+ * in the RNG_SR register.
  * 3. If SECS was set in step 1 (no auto-reset) wait for SECS to be
  * cleared by RNG. The random number generation is now back to normal.
  */
@@ -123,10 +130,6 @@ static int stm32_rng_conceal_seed_error_cond_reset(struct stm32_rng_private *pri
 		dev_err(dev, "%s: timeout %x\n", __func__, sr);
 		return err;
 	}
-
-	/* Check SEIS is cleared (step 2.) */
-	if (readl_relaxed(priv->base + RNG_SR) & RNG_SR_SEIS)
-		return -EINVAL;
 
 	err = readl_relaxed_poll_timeout_atomic(priv->base + RNG_SR, sr, !(sr & RNG_SR_SECS), 10,
 						100000);
@@ -304,9 +307,10 @@ static int stm32_rng_init(struct hwrng *rng)
 	 */
 	if (priv->data->has_cond_reset && priv->data->cr) {
 		uint clock_div = stm32_rng_clock_freq_restrain(rng);
+		u32 entropy_mask = stm32_rng_get_entropy_mask(priv);
 
-		reg &= ~RNG_CR_CONFIG_MASK;
-		reg |= RNG_CR_CONDRST | (priv->data->cr & RNG_CR_ENTROPY_SRC_MASK) |
+		reg &= ~(RNG_CR_CONFIG_MASK | entropy_mask);
+		reg |= RNG_CR_CONDRST | (priv->data->cr & entropy_mask) |
 		       (clock_div << RNG_CR_CLKDIV_SHIFT);
 		if (priv->ced)
 			reg &= ~RNG_CR_CED;
@@ -356,16 +360,26 @@ static int stm32_rng_init(struct hwrng *rng)
 	err = readl_relaxed_poll_timeout_atomic(priv->base + RNG_SR, reg,
 						reg & RNG_SR_DRDY,
 						10, 100000);
-	if (err || (reg & ~RNG_SR_DRDY)) {
-		clk_bulk_disable_unprepare(priv->data->nb_clock, priv->clk_bulk);
+
+	/* Clocks will be enabled at runtime */
+	clk_bulk_disable_unprepare(priv->data->nb_clock, priv->clk_bulk);
+
+	if (err || (reg & RNG_SR_ERROR_MASK)) {
 		dev_err(priv->dev, "%s: timeout:%x SR: %x!\n", __func__, err, reg);
 
 		return -EINVAL;
 	}
 
-	clk_bulk_disable_unprepare(priv->data->nb_clock, priv->clk_bulk);
+	priv->init_done = true;
 
 	return 0;
+}
+
+static void stm32_rng_cleanup(struct hwrng *rng)
+{
+	struct stm32_rng_private *priv = container_of(rng, struct stm32_rng_private, rng);
+
+	priv->init_done = false;
 }
 
 static void stm32_rng_remove(struct platform_device *ofdev)
@@ -391,6 +405,10 @@ static int __maybe_unused stm32_rng_suspend(struct device *dev)
 {
 	struct stm32_rng_private *priv = dev_get_drvdata(dev);
 	int err;
+
+	/* Skip routine if init is not done */
+	if (!priv->init_done)
+		return 0;
 
 	err = clk_bulk_prepare_enable(priv->data->nb_clock, priv->clk_bulk);
 	if (err)
@@ -436,6 +454,10 @@ static int __maybe_unused stm32_rng_resume(struct device *dev)
 	struct stm32_rng_private *priv = dev_get_drvdata(dev);
 	int err;
 	u32 reg;
+
+	/* Skip routine if init is not done */
+	if (!priv->init_done)
+		return 0;
 
 	err = clk_bulk_prepare_enable(priv->data->nb_clock, priv->clk_bulk);
 	if (err)
@@ -491,15 +513,27 @@ static const struct stm32_rng_data stm32mp25_rng_data = {
 	.has_cond_reset = true,
 	.max_clock_rate = 48000000,
 	.nb_clock = 2,
+	.cr_config1_mask = GENMASK(27, 20),
 	.cr = 0x00F00D00,
 	.nscr = 0x2B5BB,
 	.htcr = 0x969D,
+};
+
+static const struct stm32_rng_data stm32mp21_rng_data = {
+	.has_cond_reset = true,
+	.max_clock_rate = 8000000,
+	.nb_clock = 2,
+	.cr_config1_mask = GENMASK(27, 20),
+	.cr = 0x00800D00,
+	.nscr = 0x01FF,
+	.htcr = 0xAAC7,
 };
 
 static const struct stm32_rng_data stm32mp13_rng_data = {
 	.has_cond_reset = true,
 	.max_clock_rate = 48000000,
 	.nb_clock = 1,
+	.cr_config1_mask = GENMASK(25, 20),
 	.cr = 0x00F00D00,
 	.nscr = 0x2B5BB,
 	.htcr = 0x969D,
@@ -515,6 +549,10 @@ static const struct of_device_id stm32_rng_match[] = {
 	{
 		.compatible = "st,stm32mp25-rng",
 		.data = &stm32mp25_rng_data,
+	},
+	{
+		.compatible = "st,stm32mp21-rng",
+		.data = &stm32mp21_rng_data,
 	},
 	{
 		.compatible = "st,stm32mp13-rng",
@@ -563,6 +601,7 @@ static int stm32_rng_probe(struct platform_device *ofdev)
 
 	priv->rng.name = dev_driver_string(dev);
 	priv->rng.init = stm32_rng_init;
+	priv->rng.cleanup = stm32_rng_cleanup;
 	priv->rng.read = stm32_rng_read;
 	priv->rng.quality = 900;
 
@@ -592,7 +631,13 @@ static int stm32_rng_probe(struct platform_device *ofdev)
 	pm_runtime_use_autosuspend(dev);
 	pm_runtime_enable(dev);
 
-	return devm_hwrng_register(dev, &priv->rng);
+	ret = devm_hwrng_register(dev, &priv->rng);
+	if (ret) {
+		pm_runtime_disable(dev);
+		pm_runtime_set_suspended(dev);
+	}
+
+	return ret;
 }
 
 static struct platform_driver stm32_rng_driver = {
