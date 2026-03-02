@@ -14,12 +14,15 @@
 #include <linux/of.h>
 #include <linux/pinctrl/consumer.h>
 #include <linux/platform_device.h>
+#include <linux/pm_runtime.h>
 #include <linux/pwm.h>
 
 #define CCMR_CHANNEL_SHIFT 8
 #define CCMR_CHANNEL_MASK  0xFF
 #define MAX_BREAKINPUT 2
 #define STM32_MAX_PWM_OUTPUT 4
+
+#define STM32_SLEEP_DELAY_MS 50
 
 struct stm32_breakinput {
 	u32 index;
@@ -28,6 +31,7 @@ struct stm32_breakinput {
 };
 
 struct stm32_pwm {
+	struct device *dev;
 	struct mutex lock; /* protect pwm config/enable */
 	struct clk *clk;
 	struct regmap *regmap;
@@ -79,7 +83,7 @@ static int stm32_pwm_round_waveform_tohw(struct pwm_chip *chip,
 		return 0;
 	}
 
-	ret = clk_enable(priv->clk);
+	ret = pm_runtime_resume_and_get(priv->dev);
 	if (ret)
 		return ret;
 
@@ -188,7 +192,7 @@ out:
 		pwm->hwpwm, wf->duty_length_ns, wf->period_length_ns, wf->duty_offset_ns,
 		rate, wfhw->ccer, wfhw->psc, wfhw->arr, wfhw->ccr);
 
-	clk_disable(priv->clk);
+	pm_runtime_put_autosuspend(priv->dev);
 
 	return ret;
 }
@@ -261,7 +265,7 @@ static int stm32_pwm_read_waveform(struct pwm_chip *chip,
 	unsigned int ch = pwm->hwpwm;
 	int ret;
 
-	ret = clk_enable(priv->clk);
+	ret = pm_runtime_resume_and_get(priv->dev);
 	if (ret)
 		return ret;
 
@@ -290,7 +294,7 @@ static int stm32_pwm_read_waveform(struct pwm_chip *chip,
 	}
 
 out:
-	clk_disable(priv->clk);
+	pm_runtime_put_autosuspend(priv->dev);
 
 	return ret;
 }
@@ -304,7 +308,7 @@ static int stm32_pwm_write_waveform(struct pwm_chip *chip,
 	unsigned int ch = pwm->hwpwm;
 	int ret;
 
-	ret = clk_enable(priv->clk);
+	ret = pm_runtime_resume_and_get(priv->dev);
 	if (ret)
 		return ret;
 
@@ -382,9 +386,9 @@ static int stm32_pwm_write_waveform(struct pwm_chip *chip,
 		if (!(ccer & TIM_CCER_CCxE(ch + 1))) {
 			mask = TIM_CCER_CCxE(ch + 1) | TIM_CCER_CCxNE(ch + 1);
 
-			ret = clk_enable(priv->clk);
+			ret = pm_runtime_resume_and_get(priv->dev);
 			if (ret)
-				goto out;
+				return ret;
 
 			ccer = (ccer & ~mask) | (wfhw->ccer & mask);
 			regmap_write(priv->regmap, TIM_CCER, ccer);
@@ -422,12 +426,12 @@ static int stm32_pwm_write_waveform(struct pwm_chip *chip,
 					goto out;
 			}
 
-			clk_disable(priv->clk);
+			pm_runtime_put_autosuspend(priv->dev);
 		}
 	}
 
 out:
-	clk_disable(priv->clk);
+	pm_runtime_put_autosuspend(priv->dev);
 
 	return ret;
 }
@@ -549,16 +553,16 @@ static int stm32_pwm_capture(struct pwm_chip *chip, struct pwm_device *pwm,
 		goto unlock;
 	}
 
-	ret = clk_enable(priv->clk);
-	if (ret) {
-		dev_err(pwmchip_parent(chip), "failed to enable counter clock\n");
+	ret = pm_runtime_resume_and_get(priv->dev);
+	if (ret < 0) {
+		dev_err(priv->dev, "PM runtime resume returned %d", ret);
 		goto unlock;
 	}
 
 	rate = clk_get_rate(priv->clk);
 	if (!rate) {
 		ret = -EINVAL;
-		goto clk_dis;
+		goto suspend;
 	}
 
 	/* prescaler: fit timeout window provided by upper layer */
@@ -681,8 +685,8 @@ stop:
 	regmap_write(priv->regmap, TIM_CCER, 0);
 	regmap_write(priv->regmap, pwm->hwpwm < 2 ? TIM_CCMR1 : TIM_CCMR2, 0);
 	regmap_write(priv->regmap, TIM_PSC, 0);
-clk_dis:
-	clk_disable(priv->clk);
+suspend:
+	pm_runtime_put_autosuspend(priv->dev);
 unlock:
 	mutex_unlock(&priv->lock);
 
@@ -848,6 +852,7 @@ static int stm32_pwm_probe(struct platform_device *pdev)
 	if (IS_ERR(chip))
 		return PTR_ERR(chip);
 	priv = to_stm32_pwm_dev(chip);
+	priv->dev = dev;
 
 	mutex_init(&priv->lock);
 	priv->regmap = ddata->regmap;
@@ -880,18 +885,27 @@ static int stm32_pwm_probe(struct platform_device *pdev)
 	chip->ops = &stm32pwm_ops;
 
 	/* Initialize clock refcount to number of enabled PWM channels. */
-	for (i = 0; i < num_enabled; i++) {
+	if (num_enabled) {
+		for (i = 0; i < num_enabled; i++)
+			pm_runtime_get_noresume(dev);
+		pm_runtime_set_active(dev);
 		ret = clk_enable(priv->clk);
 		if (ret)
 			return ret;
 	}
 
+	platform_set_drvdata(pdev, chip);
+
+	pm_runtime_set_autosuspend_delay(dev, STM32_SLEEP_DELAY_MS);
+	pm_runtime_use_autosuspend(dev);
+	ret = devm_pm_runtime_enable(dev);
+	if (ret)
+		return ret;
+
 	ret = devm_pwmchip_add(dev, chip);
 	if (ret < 0)
 		return dev_err_probe(dev, ret,
 				     "Failed to register pwmchip\n");
-
-	platform_set_drvdata(pdev, chip);
 
 	return 0;
 }
@@ -902,6 +916,7 @@ static int stm32_pwm_suspend(struct device *dev)
 	struct stm32_pwm *priv = to_stm32_pwm_dev(chip);
 	unsigned int i;
 	u32 ccer, mask;
+	int ret;
 
 	/* Look for active channels */
 	ccer = active_channels(priv);
@@ -915,7 +930,11 @@ static int stm32_pwm_suspend(struct device *dev)
 		}
 	}
 
-	return pinctrl_pm_select_sleep_state(dev);
+	ret = pinctrl_pm_select_sleep_state(dev);
+	if (ret)
+		return ret;
+
+	return pm_runtime_force_suspend(dev);
 }
 
 static int stm32_pwm_resume(struct device *dev)
@@ -924,15 +943,56 @@ static int stm32_pwm_resume(struct device *dev)
 	struct stm32_pwm *priv = to_stm32_pwm_dev(chip);
 	int ret;
 
-	ret = pinctrl_pm_select_default_state(dev);
-	if (ret)
+	ret = pm_runtime_force_resume(dev);
+	if (ret < 0)
 		return ret;
 
+	ret = pinctrl_pm_select_default_state(dev);
+	if (ret)
+		goto suspend;
+
 	/* restore breakinput registers that may have been lost in low power */
-	return stm32_pwm_apply_breakinputs(priv);
+	ret = stm32_pwm_apply_breakinputs(priv);
+	if (ret)
+		goto sleep_state;
+
+	return 0;
+
+sleep_state:
+	pinctrl_pm_select_sleep_state(dev);
+suspend:
+	pm_runtime_force_suspend(dev);
+
+	return ret;
 }
 
-static DEFINE_SIMPLE_DEV_PM_OPS(stm32_pwm_pm_ops, stm32_pwm_suspend, stm32_pwm_resume);
+static int stm32_pwm_runtime_suspend(struct device *dev)
+{
+	struct pwm_chip *chip = dev_get_drvdata(dev);
+	struct stm32_pwm *priv = to_stm32_pwm_dev(chip);
+
+	clk_disable(priv->clk);
+
+	return 0;
+}
+
+static int stm32_pwm_runtime_resume(struct device *dev)
+{
+	struct pwm_chip *chip = dev_get_drvdata(dev);
+	struct stm32_pwm *priv = to_stm32_pwm_dev(chip);
+	int ret;
+
+	ret = clk_enable(priv->clk);
+	if (ret)
+		dev_err(dev, "failed to enable clock. Error [%d]\n", ret);
+
+	return ret;
+}
+
+static const struct dev_pm_ops stm32_pwm_pm_ops = {
+	SYSTEM_SLEEP_PM_OPS(stm32_pwm_suspend, stm32_pwm_resume)
+	RUNTIME_PM_OPS(stm32_pwm_runtime_suspend, stm32_pwm_runtime_resume, NULL)
+};
 
 static const struct of_device_id stm32_pwm_of_match[] = {
 	{ .compatible = "st,stm32-pwm",	},
