@@ -12,4 +12,15 @@ config STM32MP_PM_DOMAIN
 	  control the power state of devices and peripherals on STM32MP
 	  platforms. If unsure, say Y.
 
+config STM32_PM_DOMAINS
+	bool "STM32 PM domains"
+	depends on MACH_STM32MP157
+	select PM_GENERIC_DOMAINS
+	default y if MACH_STM32MP157
+	help
+	  Enable support for STM32 Power Management (PM) domains.
+	  This option allows the kernel to manage power domains on STM32MP157
+	  platforms, providing runtime power management for various hardware
+	  blocks. If unsure, say Y.
+
 endif # ARCH_STM32 || COMPILE_TEST
