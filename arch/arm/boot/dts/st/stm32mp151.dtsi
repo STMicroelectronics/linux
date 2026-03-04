@@ -223,6 +223,7 @@
 			#size-cells = <1>;
 			ranges = <0 0x50002000 0xa400>;
 			interrupt-parent = <&exti>;
+			hwlocks = <&hsem 0 0>;
 
 			gpioa: gpio@50002000 {
 				reg = <0x0 0x400>;
@@ -351,6 +352,8 @@
 			interrupt-controller;
 			#interrupt-cells = <2>;
 			reg = <0x5000d000 0x400>;
+			hwlocks = <&hsem 1 0>;
+
 			interrupts-extended =
 				<&intc GIC_SPI 6   IRQ_TYPE_LEVEL_HIGH>,	/* EXTI_0 */
 				<&intc GIC_SPI 7   IRQ_TYPE_LEVEL_HIGH>,
@@ -628,6 +631,7 @@
 			#size-cells = <1>;
 			ranges = <0 0x54004000 0x400>;
 			interrupt-parent = <&exti>;
+			hwlocks = <&hsem 0 1>;
 
 			gpioz: gpio@54004000 {
 				reg = <0 0x400>;
