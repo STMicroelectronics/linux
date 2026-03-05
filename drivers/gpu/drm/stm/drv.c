@@ -76,8 +76,6 @@ static int drv_load(struct drm_device *ddev)
 	struct ltdc_device *ldev;
 	int ret;
 
-	DRM_DEBUG("%s\n", __func__);
-
 	ldev = drmm_kzalloc(ddev, sizeof(*ldev), GFP_KERNEL);
 	if (!ldev)
 		return -ENOMEM;
@@ -114,8 +112,6 @@ static int drv_load(struct drm_device *ddev)
 
 static void drv_unload(struct drm_device *ddev)
 {
-	DRM_DEBUG("%s\n", __func__);
-
 	drm_kms_helper_poll_fini(ddev);
 	drm_atomic_helper_shutdown(ddev);
 	ltdc_unload(ddev);
@@ -162,7 +158,7 @@ static __maybe_unused int drv_runtime_suspend(struct device *dev)
 {
 	struct drm_device *ddev = dev_get_drvdata(dev);
 
-	DRM_DEBUG_DRIVER("\n");
+	drm_dbg_driver(ddev, "\n");
 	ltdc_suspend(ddev);
 
 	return 0;
@@ -172,7 +168,7 @@ static __maybe_unused int drv_runtime_resume(struct device *dev)
 {
 	struct drm_device *ddev = dev_get_drvdata(dev);
 
-	DRM_DEBUG_DRIVER("\n");
+	drm_dbg_driver(ddev, "\n");
 	return ltdc_resume(ddev);
 }
 
@@ -187,8 +183,6 @@ static int stm_drm_platform_probe(struct platform_device *pdev)
 	struct device *dev = &pdev->dev;
 	struct drm_device *ddev;
 	int ret;
-
-	DRM_DEBUG("%s\n", __func__);
 
 	ret = aperture_remove_all_conflicting_devices(drv_driver.name);
 	if (ret)
@@ -223,8 +217,6 @@ err_put:
 static void stm_drm_platform_remove(struct platform_device *pdev)
 {
 	struct drm_device *ddev = platform_get_drvdata(pdev);
-
-	DRM_DEBUG("%s\n", __func__);
 
 	drm_dev_unregister(ddev);
 	drv_unload(ddev);
