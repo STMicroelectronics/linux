@@ -24329,6 +24329,12 @@ F:	drivers/bus/stm32_etzpc.c
 F:	drivers/bus/stm32_firewall.c
 F:	drivers/bus/stm32_rifsc.c
 
+ST STM32 HARDWARE SPINLOCK DRIVER
+M:	Antonio Borneo <antonio.borneo@foss.st.com>
+S:	Maintained
+F:	Documentation/devicetree/bindings/hwlock/st,stm32-hwspinlock.yaml
+F:	drivers/hwspinlock/stm32_hwspinlock.c
+
 ST STM32 HDP PINCTRL DRIVER
 M:	Clément Le Goffic <legoffic.clement@gmail.com>
 S:	Maintained
