@@ -12,6 +12,20 @@
 };
 
 &rifsc {
+	dsi: dsi@48000000 {
+		compatible = "st,stm32mp255-dsi";
+		reg = <0x48000000 0x800>;
+		#clock-cells = <0>;
+		clocks = <&rcc CK_BUS_DSI>, <&rcc CK_KER_DSIPHY>,
+			 <&rcc CK_KER_LTDC>;
+		clock-names = "pclk", "ref", "px_clk";
+		resets = <&rcc DSI_R>;
+		reset-names = "apb";
+		access-controllers = <&rifsc 81>;
+		power-domains = <&d1_pd>;
+		status = "disabled";
+	};
+
 	lvds: lvds@48060000 {
 		compatible = "st,stm32mp255-lvds", "st,stm32mp25-lvds";
 		reg = <0x48060000 0x2000>;
