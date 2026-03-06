@@ -851,7 +851,7 @@ static int stm32_ospi_send(struct spi_device *spi, const struct spi_mem_op *op)
 	u64 addr = op->addr.val;
 	unsigned int nbytes = op->data.nbytes;
 	int timeout, err = 0, err_poll_status = 0;
-	u8 cs = spi->chip_select[ffs(spi->cs_index_mask) - 1];
+	u8 cs = spi_get_chipselect(spi, 0);
 
 	dev_dbg(common->dev, "cmd:%#x dtr:%d mode:%d.%d.%d.%d addr:%#llx len:%#x\n",
 		op->cmd.opcode, op->cmd.dtr, op->cmd.buswidth,
@@ -1494,7 +1494,7 @@ static int stm32_ospi_setup(struct spi_device *spi)
 	u32 clk_rate = common->clk_rate;
 	u32 bus_freq;
 	int ret;
-	u8 cs = spi->chip_select[ffs(spi->cs_index_mask) - 1];
+	u8 cs = spi_get_chipselect(spi, 0);
 
 	if (ctrl->busy)
 		return -EBUSY;
