@@ -1402,7 +1402,7 @@ static int stm32_ospi_transfer_one_message(struct spi_controller *ctrl,
 	struct spi_transfer *transfer;
 	struct spi_device *spi = msg->spi;
 	struct spi_mem_op op;
-	struct gpio_desc *cs_gpiod = spi->cs_gpiod[ffs(spi->cs_index_mask) - 1];
+	struct gpio_desc *cs_gpiod = spi_get_csgpiod(spi, 0);
 	int ret = 0;
 
 	if (!cs_gpiod)
