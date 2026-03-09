@@ -23,6 +23,7 @@
 		ethernet0 = &ethernet1;
 		serial0 = &usart2;
 		serial1 = &usart6;
+		serial2 = &usart1;
 	};
 
 	chosen {
@@ -407,6 +408,26 @@
 
 &syscfg {
 	bootph-all;
+};
+
+/* Bluetooth */
+&usart1 {
+	pinctrl-names = "default", "sleep", "idle";
+	pinctrl-0 = <&usart1_pins_a>;
+	pinctrl-1 = <&usart1_sleep_pins_a>;
+	pinctrl-2 = <&usart1_idle_pins_a>;
+	uart-has-rtscts;
+	status = "okay";
+
+	bluetooth {
+		shutdown-gpios = <&gpiog 4 GPIO_ACTIVE_HIGH>;
+		compatible = "brcm,bcm43438-bt";
+		clocks = <&rtc>;
+		clock-names = "lpo";
+		max-speed = <2000000>;
+		vbat-supply = <&scmi_v3v3>;
+		vddio-supply = <&scmi_v3v3>;
+	};
 };
 
 &usart2 {
