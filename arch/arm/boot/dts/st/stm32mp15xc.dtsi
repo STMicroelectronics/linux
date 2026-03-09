@@ -11,6 +11,9 @@
 		interrupts = <GIC_SPI 79 IRQ_TYPE_LEVEL_HIGH>;
 		clocks = <&rcc CRYP1>;
 		resets = <&rcc CRYP1_R>;
+		dmas = <&mdma1 29 0x0 0x400202 0x0 0x0>,
+		       <&mdma1 30 0x3 0x400808 0x0 0x0>;
+		dma-names = "mem2cryp", "cryp2mem";
 		access-controllers = <&etzpc 9>;
 		status = "disabled";
 	};
