@@ -2235,7 +2235,7 @@ static int stm32_cryp_dma_init(struct stm32_cryp *cryp)
 	dma_conf.dst_maxburst = CRYP_DMA_BURST_REG;
 	dma_conf.device_fc = false;
 
-	chan = dma_request_chan(cryp->dev, "in");
+	chan = dma_request_chan(cryp->dev, "mem2cryp");
 	if (IS_ERR(chan))
 		return PTR_ERR(chan);
 
@@ -2256,7 +2256,7 @@ static int stm32_cryp_dma_init(struct stm32_cryp *cryp)
 	dma_conf.src_maxburst = CRYP_DMA_BURST_REG;
 	dma_conf.device_fc = false;
 
-	chan = dma_request_chan(cryp->dev, "out");
+	chan = dma_request_chan(cryp->dev, "cryp2mem");
 	if (IS_ERR(chan)) {
 		dma_release_channel(cryp->dma_lch_in);
 		cryp->dma_lch_in = NULL;
