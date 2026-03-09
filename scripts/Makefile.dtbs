@@ -135,6 +135,17 @@ quiet_cmd_dtc = DTC $(quiet_dtb_check_tag) $@
 $(obj)/%.dtb: $(obj)/%.dts $(DTC) $(DT_TMP_SCHEMA) FORCE
 	$(call if_changed_dep,dtc)
 
+ifneq ($(wildcard $(KBUILD_EXTDTS)),)
+
+define EXTDTS_TEMPLATE
+$$(obj)/%.dtb: $(1)/%.dts $$(DTC) $$(DT_TMP_SCHEMA) FORCE
+	$$(call if_changed_dep,dtc)
+endef
+
+$(foreach ext,$(wildcard $(KBUILD_EXTDTS)),$(eval $(call EXTDTS_TEMPLATE,$(ext))))
+
+endif
+
 $(obj)/%.dtbo: $(src)/%.dtso $(DTC) FORCE
 	$(call if_changed_dep,dtc)
 
