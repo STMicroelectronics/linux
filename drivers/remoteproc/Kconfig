@@ -25,6 +25,7 @@ config REMOTEPROC_CDEV
 
 config REMOTEPROC_SRM_CORE
 	tristate "Remoteproc System Resource Manager core"
+	depends on RPMSG
 	help
 	  Say y here to enable the core driver of the remoteproc System Resource
 	  Manager (SRM).
