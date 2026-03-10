@@ -236,7 +236,7 @@ static int qcom_hwspinlock_probe(struct platform_device *pdev)
 	}
 
 	return devm_hwspin_lock_register(&pdev->dev, bank, &qcom_hwspinlock_ops,
-					 0, QCOM_MUTEX_NUM_LOCKS);
+					 0, QCOM_MUTEX_NUM_LOCKS, NULL);
 }
 
 static struct platform_driver qcom_hwspinlock_driver = {

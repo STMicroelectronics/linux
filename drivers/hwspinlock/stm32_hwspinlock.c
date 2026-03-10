@@ -110,7 +110,7 @@ static int stm32_hwspinlock_probe(struct platform_device *pdev)
 		hw->bank.lock[i].priv = io_base + i * sizeof(u32);
 
 	ret = devm_hwspin_lock_register(dev, &hw->bank, &stm32_hwspinlock_ops,
-					0, STM32_MUTEX_NUM_LOCKS);
+					0, STM32_MUTEX_NUM_LOCKS, NULL);
 
 	if (ret)
 		dev_err(dev, "Failed to register hwspinlock\n");

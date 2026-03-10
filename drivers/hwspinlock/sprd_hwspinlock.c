@@ -132,7 +132,7 @@ static int sprd_hwspinlock_probe(struct platform_device *pdev)
 
 	return devm_hwspin_lock_register(&pdev->dev, &sprd_hwlock->bank,
 					 &sprd_hwspinlock_ops, 0,
-					 SPRD_HWLOCKS_NUM);
+					 SPRD_HWLOCKS_NUM, NULL);
 }
 
 static const struct of_device_id sprd_hwspinlock_of_match[] = {

@@ -122,7 +122,7 @@ static int omap_hwspinlock_probe(struct platform_device *pdev)
 		bank->lock[i].priv = io_base + LOCK_BASE_OFFSET + sizeof(u32) * i;
 
 	return devm_hwspin_lock_register(&pdev->dev, bank, &omap_hwspinlock_ops,
-						base_id, num_locks);
+						base_id, num_locks, NULL);
 }
 
 static const struct of_device_id omap_hwspinlock_of_match[] = {
