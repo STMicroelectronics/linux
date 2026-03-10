@@ -717,52 +717,56 @@
 			usart2: serial@400e0000 {
 				compatible = "st,stm32h7-uart";
 				reg = <0x400e0000 0x400>;
-				interrupts = <GIC_SPI 115 IRQ_TYPE_LEVEL_HIGH>;
+				interrupts-extended = <&exti1 27 IRQ_TYPE_LEVEL_HIGH>;
 				clocks = <&rcc CK_KER_USART2>;
 				dmas = <&hpdma 11 0x20 0x10012>,
 				       <&hpdma 12 0x20 0x3021>;
 				dma-names = "rx", "tx";
 				access-controllers = <&rifsc 32>;
 				power-domains = <&d1_pd>;
+				wakeup-source;
 				status = "disabled";
 			};
 
 			usart3: serial@400f0000 {
 				compatible = "st,stm32h7-uart";
 				reg = <0x400f0000 0x400>;
-				interrupts = <GIC_SPI 116 IRQ_TYPE_LEVEL_HIGH>;
+				interrupts-extended = <&exti1 28 IRQ_TYPE_LEVEL_HIGH>;
 				clocks = <&rcc CK_KER_USART3>;
 				dmas = <&hpdma 13 0x20 0x10012>,
 				       <&hpdma 14 0x20 0x3021>;
 				dma-names = "rx", "tx";
 				access-controllers = <&rifsc 33>;
 				power-domains = <&d1_pd>;
+				wakeup-source;
 				status = "disabled";
 			};
 
 			uart4: serial@40100000 {
 				compatible = "st,stm32h7-uart";
 				reg = <0x40100000 0x400>;
-				interrupts = <GIC_SPI 126 IRQ_TYPE_LEVEL_HIGH>;
+				interrupts-extended = <&exti1 30 IRQ_TYPE_LEVEL_HIGH>;
 				clocks = <&rcc CK_KER_UART4>;
 				dmas = <&hpdma 15 0x20 0x10012>,
 				       <&hpdma 16 0x20 0x3021>;
 				dma-names = "rx", "tx";
 				access-controllers = <&rifsc 34>;
 				power-domains = <&d1_pd>;
+				wakeup-source;
 				status = "disabled";
 			};
 
 			uart5: serial@40110000 {
 				compatible = "st,stm32h7-uart";
 				reg = <0x40110000 0x400>;
-				interrupts = <GIC_SPI 127 IRQ_TYPE_LEVEL_HIGH>;
+				interrupts-extended = <&exti1 31 IRQ_TYPE_LEVEL_HIGH>;
 				clocks = <&rcc CK_KER_UART5>;
 				dmas = <&hpdma 17 0x20 0x10012>,
 				       <&hpdma 18 0x20 0x3021>;
 				dma-names = "rx", "tx";
 				access-controllers = <&rifsc 35>;
 				power-domains = <&d1_pd>;
+				wakeup-source;
 				status = "disabled";
 			};
 
@@ -956,13 +960,14 @@
 			usart6: serial@40220000 {
 				compatible = "st,stm32h7-uart";
 				reg = <0x40220000 0x400>;
-				interrupts = <GIC_SPI 136 IRQ_TYPE_LEVEL_HIGH>;
+				interrupts-extended = <&exti1 29 IRQ_TYPE_LEVEL_HIGH>;
 				clocks = <&rcc CK_KER_USART6>;
 				dmas = <&hpdma 19 0x20 0x10012>,
 				       <&hpdma 20 0x20 0x3021>;
 				dma-names = "rx", "tx";
 				access-controllers = <&rifsc 36>;
 				power-domains = <&d1_pd>;
+				wakeup-source;
 				status = "disabled";
 			};
 
@@ -1234,13 +1239,14 @@
 			usart1: serial@40330000 {
 				compatible = "st,stm32h7-uart";
 				reg = <0x40330000 0x400>;
-				interrupts = <GIC_SPI 114 IRQ_TYPE_LEVEL_HIGH>;
+				interrupts-extended = <&exti1 26 IRQ_TYPE_LEVEL_HIGH>;
 				clocks = <&rcc CK_KER_USART1>;
 				dmas = <&hpdma 9 0x20 0x10012>,
 				       <&hpdma 10 0x20 0x3021>;
 				dma-names = "rx", "tx";
 				access-controllers = <&rifsc 31>;
 				power-domains = <&d1_pd>;
+				wakeup-source;
 				status = "disabled";
 			};
 
@@ -1283,13 +1289,14 @@
 			uart7: serial@40370000 {
 				compatible = "st,stm32h7-uart";
 				reg = <0x40370000 0x400>;
-				interrupts = <GIC_SPI 148 IRQ_TYPE_LEVEL_HIGH>;
+				interrupts-extended = <&exti1 32 IRQ_TYPE_LEVEL_HIGH>;
 				clocks = <&rcc CK_KER_UART7>;
 				dmas = <&hpdma 21 0x20 0x10012>,
 				       <&hpdma 22 0x20 0x3021>;
 				dma-names = "rx", "tx";
 				access-controllers = <&rifsc 37>;
 				power-domains = <&d1_pd>;
+				wakeup-source;
 				status = "disabled";
 			};
 
