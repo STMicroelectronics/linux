@@ -16,6 +16,7 @@
 
 	aliases {
 		serial1 = &usart3;
+		serial4 = &usart1;
 		ethernet0 = &ethernet0;
 	};
 
@@ -399,6 +400,16 @@
 	timer@11 {
 		status = "okay";
 	};
+};
+
+&usart1 {
+	pinctrl-names = "default", "sleep", "idle";
+	pinctrl-0 = <&usart1_pins_a>;
+	pinctrl-1 = <&usart1_sleep_pins_a>;
+	pinctrl-2 = <&usart1_idle_pins_a>;
+	/delete-property/dmas;
+	/delete-property/dma-names;
+	status = "disabled";
 };
 
 &usart3 {
