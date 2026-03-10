@@ -297,6 +297,50 @@
 	};
 
 	/omit-if-no-ref/
+	m_can1_pins_a: m-can1-0 {
+		pins1 {
+			pinmux = <STM32_PINMUX('G', 11, AF7)>; /* CAN1_TX */
+			slew-rate = <1>;
+			drive-push-pull;
+			bias-disable;
+		};
+		pins2 {
+			pinmux = <STM32_PINMUX('G', 12, AF7)>; /* CAN1_RX */
+			bias-disable;
+		};
+	};
+
+	/omit-if-no-ref/
+	m_can1_sleep_pins_a: m-can1-sleep-0 {
+		pins {
+			pinmux = <STM32_PINMUX('G', 11, ANALOG)>, /* CAN3_TX */
+				 <STM32_PINMUX('G', 12, ANALOG)>; /* CAN3_RX */
+		};
+	};
+
+	/omit-if-no-ref/
+	m_can3_pins_a: m-can3-0 {
+		pins1 {
+			pinmux = <STM32_PINMUX('J', 14, AF7)>; /* CAN3_TX */
+			slew-rate = <1>;
+			drive-push-pull;
+			bias-disable;
+		};
+		pins2 {
+			pinmux = <STM32_PINMUX('I', 12, AF7)>; /* CAN3_RX */
+			bias-disable;
+		};
+	};
+
+	/omit-if-no-ref/
+	m_can3_sleep_pins_a: m-can3-sleep-0 {
+		pins {
+			pinmux = <STM32_PINMUX('J', 14, ANALOG)>, /* CAN3_TX */
+				 <STM32_PINMUX('I', 12, ANALOG)>; /* CAN3_RX */
+		};
+	};
+
+	/omit-if-no-ref/
 	ospi_port1_clk_pins_a: ospi-port1-clk-0 {
 		pins {
 			pinmux = <STM32_PINMUX('D', 0, AF10)>; /* OSPI1_CLK */
