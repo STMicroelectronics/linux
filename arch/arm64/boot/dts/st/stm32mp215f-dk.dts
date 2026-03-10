@@ -23,6 +23,7 @@
 		serial0 = &usart2;
 		serial1 = &usart6;
 		serial2 = &uart4;
+		serial3 = &usart1;
 	};
 
 	chosen {
@@ -362,6 +363,16 @@
 	pinctrl-2 = <&uart4_sleep_pins_a>;
 	/delete-property/dmas;
 	/delete-property/dma-names;
+	status = "disabled";
+};
+
+/* Bluetooth */
+&usart1 {
+	pinctrl-names = "default", "sleep", "idle";
+	pinctrl-0 = <&usart1_pins_a>;
+	pinctrl-1 = <&usart1_sleep_pins_a>;
+	pinctrl-2 = <&usart1_idle_pins_a>;
+	uart-has-rtscts;
 	status = "disabled";
 };
 
