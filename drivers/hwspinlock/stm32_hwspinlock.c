@@ -22,7 +22,6 @@
 
 struct stm32_hwspinlock {
 	struct clk *clk;
-	struct hwspinlock_device bank;
 };
 
 static int stm32_hwspinlock_trylock(struct hwspinlock *lock)
@@ -85,7 +84,7 @@ static int stm32_hwspinlock_probe(struct platform_device *pdev)
 	if (IS_ERR(io_base))
 		return PTR_ERR(io_base);
 
-	hw = devm_kzalloc(dev, struct_size(hw, bank.lock, STM32_MUTEX_NUM_LOCKS), GFP_KERNEL);
+	hw = devm_kzalloc(dev, sizeof(*hw), GFP_KERNEL);
 	if (!hw)
 		return -ENOMEM;
 
@@ -112,8 +111,8 @@ static int stm32_hwspinlock_probe(struct platform_device *pdev)
 		return ret;
 	}
 
-	ret = devm_hwspin_lock_register(dev, &hw->bank, &stm32_hwspinlock_ops,
-					0, STM32_MUTEX_NUM_LOCKS, io_base);
+	ret = devm_hwspin_lock_register_errno(dev, &stm32_hwspinlock_ops,
+					      0, STM32_MUTEX_NUM_LOCKS, io_base);
 
 	if (ret)
 		dev_err(dev, "Failed to register hwspinlock\n");

@@ -21,6 +21,7 @@
 #include <linux/pm_runtime.h>
 #include <linux/mutex.h>
 #include <linux/of.h>
+#include <linux/slab.h>
 
 #include "hwspinlock_internal.h"
 
@@ -502,7 +503,6 @@ out:
 
 /**
  * hwspin_lock_register() - register a new hw spinlock device
- * @bank: the hwspinlock device, which usually provides numerous hw locks
  * @dev: the backing device
  * @ops: hwspinlock handlers for this device
  * @base_id: id of the first hardware spinlock in this bank
@@ -514,20 +514,24 @@ out:
  *
  * Should be called from a process context (might sleep)
  *
- * Returns: %0 on success, or an appropriate error code on failure
+ * Returns: a pointer to the device (needed for unregistering), or an
+ * appropriate error pointer on failure
  */
-int hwspin_lock_register(struct hwspinlock_device *bank, struct device *dev,
-		const struct hwspinlock_ops *ops, int base_id, int num_locks,
-		void *init_data)
+struct hwspinlock_device *hwspin_lock_register(struct device *dev, const struct hwspinlock_ops *ops,
+					       int base_id, int num_locks, void *init_data)
 {
+	struct hwspinlock_device *bank;
 	struct hwspinlock *hwlock;
 	int ret, i;
 
-	if (!bank || !ops || !dev || !num_locks || !ops->trylock ||
-							!ops->unlock) {
+	if (!ops || !dev || !num_locks || !ops->trylock || !ops->unlock) {
 		pr_err("invalid parameters\n");
-		return -EINVAL;
+		return ERR_PTR(-EINVAL);
 	}
+
+	bank = kzalloc(struct_size(bank, lock, num_locks), GFP_KERNEL);
+	if (!bank)
+		return ERR_PTR(-ENOMEM);
 
 	bank->dev = dev;
 	bank->ops = ops;
@@ -553,12 +557,13 @@ int hwspin_lock_register(struct hwspinlock_device *bank, struct device *dev,
 			goto reg_failed;
 	}
 
-	return 0;
+	return bank;
 
 reg_failed:
 	while (--i >= 0)
 		hwspin_lock_unregister_single(base_id + i);
-	return ret;
+	kfree(bank);
+	return ERR_PTR(ret);
 }
 EXPORT_SYMBOL_GPL(hwspin_lock_register);
 
@@ -588,6 +593,8 @@ int hwspin_lock_unregister(struct hwspinlock_device *bank)
 		/* self-sanity check that should never fail */
 		WARN_ON(tmp != hwlock);
 	}
+
+	kfree(bank);
 
 	return 0;
 }
@@ -639,7 +646,6 @@ EXPORT_SYMBOL_GPL(devm_hwspin_lock_unregister);
  * devm_hwspin_lock_register() - register a new hw spinlock device for
  *				 a managed device
  * @dev: the backing device
- * @bank: the hwspinlock device, which usually provides numerous hw locks
  * @ops: hwspinlock handlers for this device
  * @base_id: id of the first hardware spinlock in this bank
  * @num_locks: number of hwspinlocks provided by this device
@@ -650,29 +656,27 @@ EXPORT_SYMBOL_GPL(devm_hwspin_lock_unregister);
  *
  * Should be called from a process context (might sleep)
  *
- * Returns: %0 on success, or an appropriate error code on failure
+ * Returns: a pointer to the device (usable for unregistering), or an
+ * appropriate error pointer on failure
  */
-int devm_hwspin_lock_register(struct device *dev,
-			      struct hwspinlock_device *bank,
-			      const struct hwspinlock_ops *ops,
-			      int base_id, int num_locks, void *init_data)
+struct hwspinlock_device *devm_hwspin_lock_register(struct device *dev, const struct hwspinlock_ops *ops,
+						    int base_id, int num_locks, void *init_data)
 {
-	struct hwspinlock_device **ptr;
-	int ret;
+	struct hwspinlock_device **ptr, *bank;
 
 	ptr = devres_alloc(devm_hwspin_lock_unreg, sizeof(*ptr), GFP_KERNEL);
 	if (!ptr)
-		return -ENOMEM;
+		return ERR_PTR(-ENOMEM);
 
-	ret = hwspin_lock_register(bank, dev, ops, base_id, num_locks, init_data);
-	if (!ret) {
+	bank = hwspin_lock_register(dev, ops, base_id, num_locks, init_data);
+	if (!IS_ERR(bank)) {
 		*ptr = bank;
 		devres_add(dev, ptr);
 	} else {
 		devres_free(ptr);
 	}
 
-	return ret;
+	return bank;
 }
 EXPORT_SYMBOL_GPL(devm_hwspin_lock_register);
 

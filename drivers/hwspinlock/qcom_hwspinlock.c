@@ -223,9 +223,7 @@ static struct regmap *qcom_hwspinlock_probe_mmio(struct platform_device *pdev,
 static int qcom_hwspinlock_probe(struct platform_device *pdev)
 {
 	struct qcom_hwspinlock_priv_init_data init;
-	struct hwspinlock_device *bank;
 	struct regmap *regmap;
-	size_t array_size;
 
 	regmap = qcom_hwspinlock_probe_syscon(pdev, &init.base, &init.stride);
 	if (IS_ERR(regmap) && PTR_ERR(regmap) == -ENODEV)
@@ -234,16 +232,11 @@ static int qcom_hwspinlock_probe(struct platform_device *pdev)
 	if (IS_ERR(regmap))
 		return PTR_ERR(regmap);
 
-	array_size = QCOM_MUTEX_NUM_LOCKS * sizeof(struct hwspinlock);
-	bank = devm_kzalloc(&pdev->dev, sizeof(*bank) + array_size, GFP_KERNEL);
-	if (!bank)
-		return -ENOMEM;
-
 	init.dev = &pdev->dev;
 	init.regmap = regmap;
 
-	return devm_hwspin_lock_register(&pdev->dev, bank, &qcom_hwspinlock_ops,
-					 0, QCOM_MUTEX_NUM_LOCKS, &init);
+	return devm_hwspin_lock_register_errno(&pdev->dev, &qcom_hwspinlock_ops,
+					       0, QCOM_MUTEX_NUM_LOCKS, &init);
 }
 
 static struct platform_driver qcom_hwspinlock_driver = {

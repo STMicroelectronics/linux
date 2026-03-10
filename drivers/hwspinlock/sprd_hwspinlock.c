@@ -33,15 +33,14 @@
 struct sprd_hwspinlock_dev {
 	void __iomem *base;
 	struct clk *clk;
-	struct hwspinlock_device bank;
 };
 
 /* try to lock the hardware spinlock */
 static int sprd_hwspinlock_trylock(struct hwspinlock *lock)
 {
-	struct sprd_hwspinlock_dev *sprd_hwlock =
-		dev_get_drvdata(hwspin_lock_get_dev(lock));
 	void __iomem *addr = hwspin_lock_get_priv(lock);
+	struct device *dev = hwspin_lock_get_dev(lock);
+	struct sprd_hwspinlock_dev *sprd_hwlock = dev_get_drvdata(dev);
 	int user_id, lock_id;
 
 	if (!readl(addr))
@@ -50,8 +49,7 @@ static int sprd_hwspinlock_trylock(struct hwspinlock *lock)
 	lock_id = hwlock_to_id(lock);
 	/* get the hardware spinlock master/user id */
 	user_id = readl(sprd_hwlock->base + HWSPINLOCK_MASTERID(lock_id));
-	dev_warn(sprd_hwlock->bank.dev,
-		 "hwspinlock [%d] lock failed and master/user id = %d!\n",
+	dev_warn(dev, "hwspinlock [%d] lock failed and master/user id = %d!\n",
 		 lock_id, user_id);
 	return 0;
 }
@@ -97,9 +95,7 @@ static int sprd_hwspinlock_probe(struct platform_device *pdev)
 	if (!pdev->dev.of_node)
 		return -ENODEV;
 
-	sprd_hwlock = devm_kzalloc(&pdev->dev,
-				   struct_size(sprd_hwlock, bank.lock, SPRD_HWLOCKS_NUM),
-				   GFP_KERNEL);
+	sprd_hwlock = devm_kzalloc(&pdev->dev, sizeof(*sprd_hwlock), GFP_KERNEL);
 	if (!sprd_hwlock)
 		return -ENOMEM;
 
@@ -130,9 +126,8 @@ static int sprd_hwspinlock_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, sprd_hwlock);
 
-	return devm_hwspin_lock_register(&pdev->dev, &sprd_hwlock->bank,
-					 &sprd_hwspinlock_ops, 0,
-					 SPRD_HWLOCKS_NUM, sprd_hwlock->base);
+	return devm_hwspin_lock_register_errno(&pdev->dev, &sprd_hwspinlock_ops, 0,
+					       SPRD_HWLOCKS_NUM, sprd_hwlock->base);
 }
 
 static const struct of_device_id sprd_hwspinlock_of_match[] = {
