@@ -1086,6 +1086,22 @@
 				status = "disabled";
 			};
 
+			ospi1: spi@40430000 {
+				compatible = "st,stm32mp25-ospi";
+				reg = <0x40430000 0x0 0x400>;
+				interrupts = <GIC_SPI 146 IRQ_TYPE_LEVEL_HIGH>;
+				dmas = <&hpdma 2 0x62 0x00003121>,
+				       <&hpdma 2 0x42 0x00003112>;
+				dma-names = "tx", "rx";
+				st,syscfg-dlyb = <&syscfg 0x1000>;
+				clocks = <&scmi_clk CK_SCMI_OSPI1>;
+				resets = <&scmi_reset RST_SCMI_OSPI1>,
+					 <&scmi_reset RST_SCMI_OSPI1DLL>;
+				access-controllers = <&rifsc 74>;
+				power-domains = <&d1_pd>;
+				status = "disabled";
+			};
+
 			iwdg1: watchdog@44010000 {
 				compatible = "st,stm32mp1-iwdg";
 				reg = <0x44010000 0x0 0x400>;
