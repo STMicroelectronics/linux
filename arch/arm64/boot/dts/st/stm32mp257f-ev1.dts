@@ -461,6 +461,20 @@
 	};
 };
 
+&m_can1 {
+	pinctrl-names = "default", "sleep";
+	pinctrl-0 = <&m_can1_pins_a>;
+	pinctrl-1 = <&m_can1_sleep_pins_a>;
+	status = "okay";
+};
+
+&m_can3 {
+	pinctrl-names = "default", "sleep";
+	pinctrl-0 = <&m_can3_pins_a>;
+	pinctrl-1 = <&m_can3_sleep_pins_a>;
+	status = "okay";
+};
+
 &ommanager {
 	memory-region = <&mm_ospi1>;
 	memory-region-names = "ospi1";
