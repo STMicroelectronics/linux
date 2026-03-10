@@ -764,7 +764,7 @@
 		compatible = "brcm,bcm43438-bt";
 		clocks = <&rtc>;
 		clock-names = "lpo";
-		max-speed = <3000000>;
+		max-speed = <2000000>;
 		vbat-supply = <&v3v3_ao>;
 		vddio-supply = <&v3v3_ao>;
 	};
