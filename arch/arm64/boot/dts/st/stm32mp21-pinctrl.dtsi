@@ -6,6 +6,7 @@
 #include <dt-bindings/pinctrl/stm32-pinfunc.h>
 
 &pinctrl {
+	/omit-if-no-ref/
 	eth1_rmii_pins_a: eth1-rmii-0 {
 		pins1 {
 			pinmux = <STM32_PINMUX('A', 15, AF10)>, /* ETH_RMII_TXD0 */
@@ -28,6 +29,7 @@
 
 	};
 
+	/omit-if-no-ref/
 	eth1_rmii_sleep_pins_a: eth1-rmii-sleep-0 {
 		pins1 {
 			pinmux = <STM32_PINMUX('A', 15, ANALOG)>, /* ETH_RMII_TXD0 */
@@ -42,12 +44,14 @@
 		};
 	};
 
+	/omit-if-no-ref/
 	rtc_rsvd_pins_a: rtc-rsvd-0 {
 		pins {
 			pinmux = <STM32_PINMUX('C', 13, ANALOG)>; /* RTC_OUT1 */
 		};
 	};
 
+	/omit-if-no-ref/
 	sdmmc1_b4_pins_a: sdmmc1-b4-0 {
 		pins1 {
 			pinmux = <STM32_PINMUX('E', 4, AF10)>, /* SDMMC1_D0 */
@@ -67,6 +71,7 @@
 		};
 	};
 
+	/omit-if-no-ref/
 	sdmmc1_b4_od_pins_a: sdmmc1-b4-od-0 {
 		pins1 {
 			pinmux = <STM32_PINMUX('E', 4, AF10)>, /* SDMMC1_D0 */
@@ -91,6 +96,7 @@
 		};
 	};
 
+	/omit-if-no-ref/
 	sdmmc1_b4_sleep_pins_a: sdmmc1-b4-sleep-0 {
 		pins {
 			pinmux = <STM32_PINMUX('E', 4, ANALOG)>, /* SDMMC1_D0 */
@@ -102,6 +108,7 @@
 		};
 	};
 
+	/omit-if-no-ref/
 	sdmmc2_b4_pins_a: sdmmc2-b4-0 {
 		pins1 {
 			pinmux = <STM32_PINMUX('E', 13, AF12)>, /* SDMMC2_D0 */
@@ -121,6 +128,7 @@
 		};
 	};
 
+	/omit-if-no-ref/
 	sdmmc2_b4_od_pins_a: sdmmc2-b4-od-0 {
 		pins1 {
 			pinmux = <STM32_PINMUX('E', 13, AF12)>, /* SDMMC2_D0 */
@@ -145,6 +153,7 @@
 		};
 	};
 
+	/omit-if-no-ref/
 	sdmmc2_b4_sleep_pins_a: sdmmc2-b4-sleep-0 {
 		pins {
 			pinmux = <STM32_PINMUX('E', 13, ANALOG)>, /* SDMMC2_D0 */
@@ -156,6 +165,7 @@
 		};
 	};
 
+	/omit-if-no-ref/
 	sdmmc2_d47_pins_a: sdmmc2-d47-0 {
 		pins {
 			pinmux = <STM32_PINMUX('E', 10, AF12)>, /* SDMMC2_D4 */
@@ -168,6 +178,7 @@
 		};
 	};
 
+	/omit-if-no-ref/
 	sdmmc2_d47_sleep_pins_a: sdmmc2-d47-sleep-0 {
 		pins {
 			pinmux = <STM32_PINMUX('E', 10, ANALOG)>, /* SDMMC2_D4 */
@@ -177,6 +188,7 @@
 		};
 	};
 
+	/omit-if-no-ref/
 	sdmmc3_b4_pins_a: sdmmc3-b4-0 {
 		pins1 {
 			pinmux = <STM32_PINMUX('B', 14, AF10)>, /* SDMMC3_D0 */
@@ -196,6 +208,7 @@
 		};
 	};
 
+	/omit-if-no-ref/
 	sdmmc3_b4_od_pins_a: sdmmc3-b4-od-0 {
 		pins1 {
 			pinmux = <STM32_PINMUX('B', 14, AF10)>, /* SDMMC3_D0 */
@@ -220,6 +233,7 @@
 		};
 	};
 
+	/omit-if-no-ref/
 	sdmmc3_b4_sleep_pins_a: sdmmc3-b4-sleep-0 {
 		pins {
 			pinmux = <STM32_PINMUX('B', 14, ANALOG)>, /* SDMMC1_D0 */
@@ -231,6 +245,7 @@
 		};
 	};
 
+	/omit-if-no-ref/
 	i2c2_pins_a: i2c2-0 {
 		pins {
 			pinmux = <STM32_PINMUX('B', 5, AF9)>, /* I2C2_SCL */
@@ -241,6 +256,7 @@
 		};
 	};
 
+	/omit-if-no-ref/
 	i2c2_sleep_pins_a: i2c2-sleep-0 {
 		pins {
 			pinmux = <STM32_PINMUX('B', 5, ANALOG)>, /* I2C2_SCL */
@@ -248,6 +264,7 @@
 		};
 	};
 
+	/omit-if-no-ref/
 	usart2_pins_a: usart2-0 {
 		pins1 {
 			pinmux = <STM32_PINMUX('A', 4, AF6)>; /* USART2_TX */
@@ -261,6 +278,7 @@
 		};
 	};
 
+	/omit-if-no-ref/
 	usart2_idle_pins_a: usart2-idle-0 {
 		pins1 {
 			pinmux = <STM32_PINMUX('A', 4, ANALOG)>; /* USART2_TX */
@@ -271,6 +289,7 @@
 		};
 	};
 
+	/omit-if-no-ref/
 	usart2_sleep_pins_a: usart2-sleep-0 {
 		pins {
 			pinmux = <STM32_PINMUX('A', 4, ANALOG)>, /* USART2_TX */
