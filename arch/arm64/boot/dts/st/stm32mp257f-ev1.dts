@@ -24,6 +24,7 @@
 		ethernet1 = &ethernet1;
 		serial0 = &usart2;
 		serial1 = &usart6;
+		serial2 = &lpuart1;
 	};
 
 	chosen {
@@ -409,6 +410,17 @@
 	timer {
 		status = "okay";
 	};
+};
+
+&lpuart1 {
+	pinctrl-names = "default", "idle", "sleep";
+	pinctrl-0 = <&lpuart1_pins_a>;
+	pinctrl-1 = <&lpuart1_idle_pins_a>;
+	pinctrl-2 = <&lpuart1_sleep_pins_a>;
+	/delete-property/dmas;
+	/delete-property/dma-names;
+	uart-has-rtscts;
+	status = "disabled";
 };
 
 &ltdc {
