@@ -22,6 +22,7 @@
 	aliases {
 		ethernet0 = &ethernet1;
 		serial0 = &usart2;
+		serial1 = &usart6;
 	};
 
 	chosen {
@@ -415,4 +416,13 @@
 	pins2 {
 		bootph-all;
 	};
+};
+
+&usart6 {
+	pinctrl-names = "default", "idle", "sleep";
+	pinctrl-0 = <&usart6_pins_a>;
+	pinctrl-1 = <&usart6_idle_pins_a>;
+	pinctrl-2 = <&usart6_sleep_pins_a>;
+	uart-has-rtscts;
+	status = "disabled";
 };
