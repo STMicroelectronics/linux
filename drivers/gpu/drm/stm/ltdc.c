@@ -1108,6 +1108,20 @@ static void ltdc_crtc_atomic_flush(struct drm_crtc *crtc,
 	}
 }
 
+static int ltdc_crtc_atomic_check(struct drm_crtc *crtc,
+				  struct drm_atomic_state *state)
+{
+	struct drm_crtc_state *crtc_state = drm_atomic_get_new_crtc_state(state, crtc);
+
+	drm_dbg_atomic(crtc->dev, "\n");
+
+	/* force a full mode set if active state changed */
+	if (crtc_state->active_changed)
+		crtc_state->mode_changed = true;
+
+	return 0;
+}
+
 static bool ltdc_crtc_get_scanout_position(struct drm_crtc *crtc,
 					   bool in_vblank_irq,
 					   int *vpos, int *hpos,
@@ -1165,6 +1179,7 @@ static const struct drm_crtc_helper_funcs ltdc_crtc_helper_funcs = {
 	.atomic_flush = ltdc_crtc_atomic_flush,
 	.atomic_enable = ltdc_crtc_atomic_enable,
 	.atomic_disable = ltdc_crtc_atomic_disable,
+	.atomic_check = ltdc_crtc_atomic_check,
 	.get_scanout_position = ltdc_crtc_get_scanout_position,
 };
 
