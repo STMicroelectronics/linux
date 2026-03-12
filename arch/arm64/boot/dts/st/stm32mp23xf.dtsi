@@ -4,5 +4,32 @@
  * Author: Alexandre Torgue <alexandre.torgue@foss.st.com> for STMicroelectronics.
  */
 
-/ {
+&rifsc {
+	cryp1: crypto@42030000 {
+		compatible = "st,stm32mp1-cryp";
+		reg = <0x42030000 0x1000>;
+		interrupts = <GIC_SPI 144 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&rcc CK_BUS_CRYP1>;
+		resets = <&rcc CRYP1_R>;
+		dmas = <&hpdma 4 0x40 0x3021>,
+		       <&hpdma 5 0x43 0x3012>;
+		dma-names = "mem2cryp", "cryp2mem";
+		access-controllers = <&rifsc 96>;
+		power-domains = <&d1_pd>;
+		status = "disabled";
+	};
+
+	cryp2: crypto@42040000 {
+		compatible = "st,stm32mp1-cryp";
+		reg = <0x42040000 0x1000>;
+		interrupts = <GIC_SPI 180 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&rcc CK_BUS_CRYP2>;
+		resets = <&rcc CRYP2_R>;
+		dmas = <&hpdma 140 0x40 0x3021>,
+		       <&hpdma 141 0x43 0x3012>;
+		dma-names = "mem2cryp", "cryp2mem";
+		access-controllers = <&rifsc 97>;
+		power-domains = <&d1_pd>;
+		status = "disabled";
+	};
 };
