@@ -1942,15 +1942,23 @@ static struct drm_plane *ltdc_plane_create(struct drm_device *ddev,
 			nb_fmt += ARRAY_SIZE(ltdc_drm_fmt_ycbcr_cp);
 		}
 
-		if (val & LXCR_C1R_YSPA) {
-			memcpy(&formats[nb_fmt], ltdc_drm_fmt_ycbcr_sp,
-			       ARRAY_SIZE(ltdc_drm_fmt_ycbcr_sp) * sizeof(*formats));
-			nb_fmt += ARRAY_SIZE(ltdc_drm_fmt_ycbcr_sp);
-		}
-		if (val & LXCR_C1R_YFPA) {
-			memcpy(&formats[nb_fmt], ltdc_drm_fmt_ycbcr_fp,
-			       ARRAY_SIZE(ltdc_drm_fmt_ycbcr_fp) * sizeof(*formats));
-			nb_fmt += ARRAY_SIZE(ltdc_drm_fmt_ycbcr_fp);
+		/*
+		 * Soc MP25 doesn't support YUV semiplanar and planar pixel formats on layer 1.
+		 * Soc MP21 doesn't support YUV semiplanar and planar pixel formats (all layers).
+		 */
+		if ((of_device_is_compatible(dev->of_node, "st,stm32mp251-ltdc") && index) ||
+		    (of_device_is_compatible(dev->of_node, "st,stm32mp255-ltdc") && index) ||
+		    (of_device_is_compatible(dev->of_node, "st,stm32-ltdc"))) {
+			if (val & LXCR_C1R_YSPA) {
+				memcpy(&formats[nb_fmt], ltdc_drm_fmt_ycbcr_sp,
+				       ARRAY_SIZE(ltdc_drm_fmt_ycbcr_sp) * sizeof(*formats));
+				nb_fmt += ARRAY_SIZE(ltdc_drm_fmt_ycbcr_sp);
+			}
+			if (val & LXCR_C1R_YFPA) {
+				memcpy(&formats[nb_fmt], ltdc_drm_fmt_ycbcr_fp,
+				       ARRAY_SIZE(ltdc_drm_fmt_ycbcr_fp) * sizeof(*formats));
+				nb_fmt += ARRAY_SIZE(ltdc_drm_fmt_ycbcr_fp);
+			}
 		}
 	}
 
