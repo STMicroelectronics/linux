@@ -16,6 +16,7 @@
 #include <linux/module.h>
 #include <linux/of.h>
 #include <linux/of_graph.h>
+#include <linux/of_reserved_mem.h>
 #include <linux/pinctrl/consumer.h>
 #include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
@@ -786,7 +787,7 @@ static void ltdc_crtc_atomic_enable(struct drm_crtc *crtc,
 	u32 bus_formats = MEDIA_BUS_FMT_RGB888_1X24;
 	u32 bus_flags = 0;
 	u32 val;
-	int ret;
+	int ret, idx;
 
 	drm_dbg_driver(crtc->dev, "\n");
 
@@ -821,10 +822,61 @@ static void ltdc_crtc_atomic_enable(struct drm_crtc *crtc,
 			bus_formats = connector->display_info.bus_formats[0];
 	}
 
-	if (!pm_runtime_active(ddev->dev)) {
-		ret = pm_runtime_get_sync(ddev->dev);
+	if (encoder->encoder_type == DRM_MODE_ENCODER_LVDS) {
+		if (ldev->lvds_clk) {
+			ret = clk_set_parent(ldev->pixel_clk, ldev->lvds_clk);
+			if (ret) {
+				drm_err(crtc->dev, "Could not set parent clock: %d\n", ret);
+				return;
+			}
+		}
+	} else {
+		if (ldev->ltdc_clk) {
+			ret = clk_set_parent(ldev->pixel_clk, ldev->ltdc_clk);
+			if (ret) {
+				drm_err(crtc->dev, "Could not set parent clock: %d\n", ret);
+				return;
+			}
+		}
+	}
+
+	if (clk_set_rate(ldev->pixel_clk, mode->clock * 1000) < 0) {
+		drm_err(crtc->dev, "Cannot set rate (%dHz) for pixel clk\n", mode->clock * 1000);
+		return;
+	}
+
+	/*
+	 * Set to default state the pinctrl only with DPI type.
+	 * Others types like DSI, don't need pinctrl due to
+	 * internal bridge (the signals do not come out of the chipset).
+	 */
+	if (encoder->encoder_type == DRM_MODE_ENCODER_DPI)
+		pinctrl_pm_select_default_state(ddev->dev);
+	else
+		pinctrl_pm_select_sleep_state(ddev->dev);
+
+	if (pm_runtime_active(ddev->dev)) {
+		/* Disable all layers */
+		for (idx = 0; idx < ldev->caps.nb_layers; idx++)
+			regmap_write_bits(ldev->regmap, LTDC_L1CR + idx * LAY_OFS,
+					  LXCR_MASK, 0);
+
+		/* immediately commit disable of layers before switching off LTDC */
+		if (!ldev->caps.plane_reg_shadow)
+			regmap_set_bits(ldev->regmap, LTDC_SRCR, SRCR_IMR);
+		else
+			for (idx = 0; idx < ldev->caps.nb_layers; idx++)
+				regmap_write_bits(ldev->regmap,
+						  LTDC_L1RCR + idx * LAY_OFS,
+						  LXRCR_IMR | LXRCR_VBR | LXRCR_GRMSK,
+						  LXRCR_IMR);
+
+		/* Disable display streaming */
+		regmap_clear_bits(ldev->regmap, LTDC_GCR, GCR_LTDCEN);
+	} else {
+		ret = pm_runtime_resume_and_get(ddev->dev);
 		if (ret) {
-			drm_err(crtc->dev, "Failed to set mode, cannot get sync\n");
+			drm_err(crtc->dev, "Failed to enable crtc, cannot resume pm\n");
 			return;
 		}
 	}
@@ -926,6 +978,13 @@ static void ltdc_crtc_atomic_enable(struct drm_crtc *crtc,
 		regmap_set_bits(ldev->regmap, LTDC_SRCR, SRCR_VBR);
 
 	drm_crtc_vblank_on(crtc);
+
+	/* set fifo underrun threshold register */
+	if (ldev->caps.fifo_threshold)
+		regmap_write(ldev->regmap, LTDC_FUT, ldev->fifo_threshold);
+
+	/* Enable LTDC */
+	regmap_set_bits(ldev->regmap, LTDC_GCR, GCR_LTDCEN);
 }
 
 static void ltdc_crtc_atomic_disable(struct drm_crtc *crtc,
@@ -934,6 +993,7 @@ static void ltdc_crtc_atomic_disable(struct drm_crtc *crtc,
 	struct ltdc_device *ldev = crtc_to_ltdc(crtc);
 	struct drm_device *ddev = crtc->dev;
 	int layer_index = 0;
+	int ret;
 
 	drm_dbg_driver(crtc->dev, "\n");
 
@@ -950,7 +1010,22 @@ static void ltdc_crtc_atomic_disable(struct drm_crtc *crtc,
 	if (!ldev->caps.plane_reg_shadow)
 		regmap_set_bits(ldev->regmap, LTDC_SRCR, SRCR_IMR);
 
-	pm_runtime_put_sync(ddev->dev);
+	/* Disable display streaming */
+	regmap_clear_bits(ldev->regmap, LTDC_GCR, GCR_LTDCEN);
+
+	/* Set to sleep state the pinctrl whatever type of encoder */
+	pinctrl_pm_select_sleep_state(ddev->dev);
+
+	pm_runtime_put_sync_suspend(ddev->dev);
+
+	/* restore to kernel ltdc clock as parent of pixel clock */
+	if (ldev->ltdc_clk) {
+		ret = clk_set_parent(ldev->pixel_clk, ldev->ltdc_clk);
+		if (ret) {
+			drm_err(crtc->dev, "Could not set parent clock: %d\n", ret);
+			return;
+		}
+	}
 
 	/*  clear interrupt error counters */
 	mutex_lock(&ldev->err_lock);
@@ -958,73 +1033,14 @@ static void ltdc_crtc_atomic_disable(struct drm_crtc *crtc,
 	ldev->fifo_err = 0;
 	ldev->fifo_warn = 0;
 	mutex_unlock(&ldev->err_lock);
-}
 
-#define CLK_TOLERANCE_HZ 50
-
-static enum drm_mode_status
-ltdc_crtc_mode_valid(struct drm_crtc *crtc,
-		     const struct drm_display_mode *mode)
-{
-	struct ltdc_device *ldev = crtc_to_ltdc(crtc);
-	int target = mode->clock * 1000;
-	int target_min = target - CLK_TOLERANCE_HZ;
-	int target_max = target + CLK_TOLERANCE_HZ;
-	int result;
-
-	if (ldev->lvds_clk) {
-		result = clk_round_rate(ldev->lvds_clk, target);
-		drm_dbg_driver(crtc->dev, "lvds pixclk rate target %d, available %d\n",
-			       target, result);
+	/* Flush remaining vblank event*/
+	if (crtc->state->event && !crtc->state->active) {
+		spin_lock_irq(&crtc->dev->event_lock);
+		drm_crtc_send_vblank_event(crtc, crtc->state->event);
+		spin_unlock_irq(&crtc->dev->event_lock);
+		crtc->state->event = NULL;
 	}
-
-	result = clk_round_rate(ldev->pixel_clk, target);
-
-	drm_dbg_driver(crtc->dev, "clk rate target %d, available %d\n", target, result);
-
-	/* Filter modes according to the max frequency supported by the pads */
-	if (result > ldev->caps.pad_max_freq_hz)
-		return MODE_CLOCK_HIGH;
-
-	/*
-	 * Accept all "preferred" modes:
-	 * - this is important for panels because panel clock tolerances are
-	 *   bigger than hdmi ones and there is no reason to not accept them
-	 *   (the fps may vary a little but it is not a problem).
-	 * - the hdmi preferred mode will be accepted too, but userland will
-	 *   be able to use others hdmi "valid" modes if necessary.
-	 */
-	if (mode->type & DRM_MODE_TYPE_PREFERRED)
-		return MODE_OK;
-
-	/*
-	 * Filter modes according to the clock value, particularly useful for
-	 * hdmi modes that require precise pixel clocks.
-	 */
-	if (result < target_min || result > target_max)
-		return MODE_CLOCK_RANGE;
-
-	return MODE_OK;
-}
-
-static bool ltdc_crtc_mode_fixup(struct drm_crtc *crtc,
-				 const struct drm_display_mode *mode,
-				 struct drm_display_mode *adjusted_mode)
-{
-	struct ltdc_device *ldev = crtc_to_ltdc(crtc);
-	int rate = mode->clock * 1000;
-
-	if (clk_set_rate(ldev->pixel_clk, rate) < 0) {
-		drm_err(crtc->dev, "Cannot set rate (%dHz) for pixel clk\n", rate);
-		return false;
-	}
-
-	adjusted_mode->clock = clk_get_rate(ldev->pixel_clk) / 1000;
-
-	drm_dbg_driver(crtc->dev, "requested clock %dkHz, adjusted clock %dkHz\n",
-		       mode->clock, adjusted_mode->clock);
-
-	return true;
 }
 
 static void ltdc_crtc_atomic_flush(struct drm_crtc *crtc,
@@ -1108,8 +1124,6 @@ static bool ltdc_crtc_get_scanout_position(struct drm_crtc *crtc,
 }
 
 static const struct drm_crtc_helper_funcs ltdc_crtc_helper_funcs = {
-	.mode_valid = ltdc_crtc_mode_valid,
-	.mode_fixup = ltdc_crtc_mode_fixup,
 	.atomic_flush = ltdc_crtc_atomic_flush,
 	.atomic_enable = ltdc_crtc_atomic_enable,
 	.atomic_disable = ltdc_crtc_atomic_disable,
@@ -1269,10 +1283,7 @@ static void ltdc_plane_atomic_update(struct drm_plane *plane,
 	u32 paddr, paddr1, paddr2;
 	enum ltdc_pix_fmt pf;
 
-	if (!newstate->crtc || !fb) {
-		drm_dbg_driver(plane->dev, "fb or crtc NULL");
-		return;
-	}
+	ltdc_resume(ldev);
 
 	/* convert src_ from 16:16 format */
 	src_x = newstate->src_x >> 16;
@@ -1496,6 +1507,8 @@ static void ltdc_plane_atomic_update(struct drm_plane *plane,
 		}
 	}
 	mutex_unlock(&ldev->err_lock);
+
+	ltdc_suspend(ldev);
 }
 
 static void ltdc_plane_atomic_disable(struct drm_plane *plane,
@@ -1599,6 +1612,7 @@ static struct drm_plane *ltdc_plane_create(struct drm_device *ddev,
 			       ARRAY_SIZE(ltdc_drm_fmt_ycbcr_cp) * sizeof(*formats));
 			nb_fmt += ARRAY_SIZE(ltdc_drm_fmt_ycbcr_cp);
 		}
+
 		if (val & LXCR_C1R_YSPA) {
 			memcpy(&formats[nb_fmt], ltdc_drm_fmt_ycbcr_sp,
 			       ARRAY_SIZE(ltdc_drm_fmt_ycbcr_sp) * sizeof(*formats));
@@ -1699,56 +1713,60 @@ static int ltdc_crtc_init(struct drm_device *ddev, struct drm_crtc *crtc)
 	return 0;
 }
 
-static void ltdc_encoder_disable(struct drm_encoder *encoder)
+#define CLK_TOLERANCE_HZ 50
+
+static enum drm_mode_status ltdc_encoder_mode_valid(struct drm_encoder *encoder,
+						    const struct drm_display_mode *mode)
 {
 	struct drm_device *ddev = encoder->dev;
-	struct ltdc_device *ldev = ddev->dev_private;
+	struct ltdc_device *ldev =  ddev->dev_private;
+	struct device *dev = ddev->dev;
+	int target = mode->clock * 1000;
+	int target_min = (mode->clock * 1000) - CLK_TOLERANCE_HZ;
+	int target_max = (mode->clock * 1000) + CLK_TOLERANCE_HZ;
+	int result;
 
-	drm_dbg_driver(encoder->dev, "\n");
+	if (of_device_is_compatible(dev->of_node, "st,stm32mp255-ltdc")) {
+		if (encoder->encoder_type == DRM_MODE_ENCODER_LVDS)
+			result = clk_round_rate(ldev->lvds_clk, target);
+		else
+			result = clk_round_rate(ldev->ltdc_clk, target);
+	} else {
+		result = clk_round_rate(ldev->pixel_clk, target);
+	}
 
-	/* Disable LTDC */
-	regmap_clear_bits(ldev->regmap, LTDC_GCR, GCR_LTDCEN);
+	drm_dbg_driver(encoder->dev, "clk rate target %d, available %d\n", target, result);
 
-	/* Set to sleep state the pinctrl whatever type of encoder */
-	pinctrl_pm_select_sleep_state(ddev->dev);
-}
-
-static void ltdc_encoder_enable(struct drm_encoder *encoder)
-{
-	struct drm_device *ddev = encoder->dev;
-	struct ltdc_device *ldev = ddev->dev_private;
-
-	drm_dbg_driver(encoder->dev, "\n");
-
-	/* set fifo underrun threshold register */
-	if (ldev->caps.fifo_threshold)
-		regmap_write(ldev->regmap, LTDC_FUT, ldev->fifo_threshold);
-
-	/* Enable LTDC */
-	regmap_set_bits(ldev->regmap, LTDC_GCR, GCR_LTDCEN);
-}
-
-static void ltdc_encoder_mode_set(struct drm_encoder *encoder,
-				  struct drm_display_mode *mode,
-				  struct drm_display_mode *adjusted_mode)
-{
-	struct drm_device *ddev = encoder->dev;
-
-	drm_dbg_driver(encoder->dev, "\n");
+	/* Filter modes according to the max frequency supported by the pads */
+	if (result > ldev->caps.pad_max_freq_hz)
+		return MODE_CLOCK_HIGH;
 
 	/*
-	 * Set to default state the pinctrl only with DPI type.
-	 * Others types like DSI, don't need pinctrl due to
-	 * internal bridge (the signals do not come out of the chipset).
+	 * Accept all "preferred" modes:
+	 * - this is important for panels because panel clock tolerances are
+	 *   bigger than hdmi ones and there is no reason to not accept them
+	 *   (the fps may vary a little but it is not a problem).
+	 * - the hdmi preferred mode will be accepted too, but userland will
+	 *   be able to use others hdmi "valid" modes if necessary.
 	 */
-	if (encoder->encoder_type == DRM_MODE_ENCODER_DPI)
-		pinctrl_pm_select_default_state(ddev->dev);
+	if (mode->type & DRM_MODE_TYPE_PREFERRED)
+		return MODE_OK;
+
+	/*
+	 * Filter modes according to the clock value, particularly useful for
+	 * hdmi modes that require precise pixel clocks.
+	 */
+	if (result < target_min)
+		return MODE_CLOCK_LOW;
+
+	if (result > target_max)
+		return MODE_CLOCK_HIGH;
+
+	return MODE_OK;
 }
 
 static const struct drm_encoder_helper_funcs ltdc_encoder_helper_funcs = {
-	.disable = ltdc_encoder_disable,
-	.enable = ltdc_encoder_enable,
-	.mode_set = ltdc_encoder_mode_set,
+	.mode_valid = ltdc_encoder_mode_valid,
 };
 
 static int ltdc_encoder_init(struct drm_device *ddev, struct drm_bridge *bridge)
@@ -1873,8 +1891,6 @@ void ltdc_suspend(struct ltdc_device *ldev)
 	clk_disable_unprepare(ldev->pixel_clk);
 	if (ldev->bus_clk)
 		clk_disable_unprepare(ldev->bus_clk);
-	if (ldev->lvds_clk)
-		clk_disable_unprepare(ldev->lvds_clk);
 }
 
 int ltdc_resume(struct ltdc_device *ldev)
@@ -1891,9 +1907,6 @@ int ltdc_resume(struct ltdc_device *ldev)
 			return -ENODEV;
 	}
 
-	if (ldev->lvds_clk)
-		ret = clk_prepare_enable(ldev->lvds_clk);
-
 	return ret;
 }
 
@@ -1909,6 +1922,7 @@ int ltdc_load(struct drm_device *ddev)
 	struct reset_control *rstc;
 	int irq, i, nb_endpoints;
 	int ret = -ENODEV;
+	u32 gcr;
 
 	drm_dbg_driver(ddev, "\n");
 
@@ -1930,14 +1944,14 @@ int ltdc_load(struct drm_device *ddev)
 		if (ret == -ENODEV)
 			continue;
 		else if (ret)
-			goto err;
+			return ret;
 
 		if (panel) {
 			bridge = drmm_panel_bridge_add(ddev, panel);
 			if (IS_ERR(bridge)) {
 				drm_err(ddev, "panel-bridge endpoint %d\n", i);
 				ret = PTR_ERR(bridge);
-				goto err;
+				return ret;
 			}
 		}
 
@@ -1946,7 +1960,7 @@ int ltdc_load(struct drm_device *ddev)
 			if (ret) {
 				if (ret != -EPROBE_DEFER)
 					drm_err(ddev, "init encoder endpoint %d\n", i);
-				goto err;
+				return ret;
 			}
 		}
 	}
@@ -1954,12 +1968,6 @@ int ltdc_load(struct drm_device *ddev)
 	rstc = devm_reset_control_get_exclusive(dev, NULL);
 
 	mutex_init(&ldev->err_lock);
-
-	if (!IS_ERR(rstc)) {
-		reset_control_assert(rstc);
-		usleep_range(10, 20);
-		reset_control_deassert(rstc);
-	}
 
 	ldev->regs = devm_platform_ioremap_resource(pdev, 0);
 	if (IS_ERR(ldev->regs)) {
@@ -1973,6 +1981,21 @@ int ltdc_load(struct drm_device *ddev)
 		drm_err(ddev, "Unable to regmap ltdc registers\n");
 		ret = PTR_ERR(ldev->regmap);
 		goto err;
+	}
+
+	/*
+	 * To obtain a continuous display after the probe, the clocks must
+	 * remain activated and reset shouldn't be done
+	 */
+	regmap_read(ldev->regmap, LTDC_GCR, &gcr);
+
+	/* Check if the ltdc has been activated */
+	if (!(gcr & GCR_LTDCEN)) {
+		if (!IS_ERR(rstc)) {
+			reset_control_assert(rstc);
+			usleep_range(10, 20);
+			reset_control_deassert(rstc);
+		}
 	}
 
 	ret = ltdc_get_caps(ddev);
@@ -2028,18 +2051,52 @@ int ltdc_load(struct drm_device *ddev)
 		goto err;
 	}
 
-	pinctrl_pm_select_sleep_state(ddev->dev);
+	/* Check if the ltdc has been activated */
+	if (gcr & GCR_LTDCEN) {
+		/* keep runtime active after the probe */
+		pm_runtime_set_active(ddev->dev);
+		pm_runtime_enable(ddev->dev);
 
-	pm_runtime_enable(ddev->dev);
+		ret = pm_runtime_resume_and_get(ddev->dev);
+		if (ret) {
+			drm_err(ddev, "Failed to load driver, cannot resume pm\n");
+			return ret;
+		}
+	} else {
+		/* suspend device to disable the clocks */
+		ltdc_suspend(ldev);
+
+		/* set to sleep state the pinctrl to stop data trasfert */
+		pinctrl_pm_select_sleep_state(ddev->dev);
+
+		/*
+		 * Parent of the pixel clock should default to the reference clock (rcc clock).
+		 * If the driver has already been started, this action is not necessary and
+		 *  may cause an issue on register reading/writing.
+		 */
+		if (of_device_is_compatible(dev->of_node, "st,stm32mp255-ltdc")) {
+			ret = clk_set_parent(ldev->pixel_clk, ldev->ltdc_clk);
+			if (ret)
+				return dev_err_probe(dev, PTR_ERR(ldev->lvds_clk),
+						     "Could not set parent clock\n");
+		}
+
+		pm_runtime_enable(ddev->dev);
+	}
 
 	return 0;
 err:
+	of_reserved_mem_device_release(dev);
+
 	return ret;
 }
 
 void ltdc_unload(struct drm_device *ddev)
 {
 	drm_dbg_driver(ddev, "\n");
+
+	if (pm_runtime_active(ddev->dev))
+		pm_runtime_put_sync_suspend(ddev->dev);
 
 	pm_runtime_disable(ddev->dev);
 }
@@ -2079,14 +2136,6 @@ int ltdc_get_clk(struct device *dev, struct ltdc_device *ldev)
 {
 	struct device_node *node;
 
-	ldev->pixel_clk = devm_clk_get(dev, "lcd");
-	if (IS_ERR(ldev->pixel_clk)) {
-		if (PTR_ERR(ldev->pixel_clk) != -EPROBE_DEFER)
-			dev_err_probe(dev, PTR_ERR(ldev->pixel_clk),
-				      "Unable to get lcd clock\n");
-		return PTR_ERR(ldev->pixel_clk);
-	}
-
 	if (of_device_is_compatible(dev->of_node, "st,stm32mp251-ltdc") ||
 	    of_device_is_compatible(dev->of_node, "st,stm32mp255-ltdc")) {
 		ldev->bus_clk = devm_clk_get(dev, "bus");
@@ -2112,6 +2161,22 @@ int ltdc_get_clk(struct device *dev, struct ltdc_device *ldev)
 			}
 			of_node_put(node);
 		}
+
+		ldev->pixel_clk = devm_clk_get(dev, "ref");
+		if (IS_ERR(ldev->pixel_clk))
+			return dev_err_probe(dev, PTR_ERR(ldev->pixel_clk),
+					     "Unable to get lcd clock\n");
+
+		ldev->ltdc_clk = devm_clk_get(dev, "lcd");
+		if (IS_ERR(ldev->ltdc_clk))
+			return dev_err_probe(dev, PTR_ERR(ldev->ltdc_clk),
+					     "Unable to get ltdc clock\n");
+	} else {
+		ldev->pixel_clk = devm_clk_get(dev, "lcd");
+		if (IS_ERR(ldev->pixel_clk))
+			if (PTR_ERR(ldev->pixel_clk) != -EPROBE_DEFER)
+				return dev_err_probe(dev, PTR_ERR(ldev->pixel_clk),
+						     "Unable to get lcd clock\n");
 	}
 
 	return 0;
