@@ -40,12 +40,21 @@
 
 #define RSC_TBL_SIZE		1024
 
-#define M4_STATE_OFF		0
-#define M4_STATE_INI		1
-#define M4_STATE_CRUN		2
-#define M4_STATE_CSTOP		3
-#define M4_STATE_STANDBY	4
-#define M4_STATE_CRASH		5
+#define CM_STATE_OFF		0
+#define CM_STATE_INI		1
+#define CM_STATE_CRUN		2
+#define CM_STATE_CSTOP		3
+#define CM_STATE_STANDBY	4
+#define CM_STATE_CRASH		5
+
+/* PWR_CPU2D2SR register definitions */
+#define M33_STATE_FIELD_SHIFT   2
+#define M33_STATE_FIELD_MASK    0x3
+
+#define M33_STATE_OFF		0
+#define M33_STATE_CRUN		1
+#define M33_STATE_CSLEEP	2
+#define M33_STATE_CSTOP		3
 
 /* Remote processor unique identifier aligned with the Trusted Execution Environment definitions */
 #define STM32_MP1_M4_PROC_ID    0
@@ -84,7 +93,7 @@ struct stm32_rproc {
 	struct reset_control *hold_boot_rst;
 	struct stm32_syscon hold_boot;
 	struct stm32_syscon pdds;
-	struct stm32_syscon m4_state;
+	struct stm32_syscon cm_state;
 	struct stm32_syscon rsctbl;
 	int wdg_irq;
 	u32 nb_rmems;
@@ -265,11 +274,11 @@ static int stm32_rproc_release(struct rproc *rproc)
 	}
 
 	/* Update coprocessor state to OFF if available. */
-	if (ddata->m4_state.map) {
-		err = regmap_update_bits(ddata->m4_state.map,
-					 ddata->m4_state.reg,
-					 ddata->m4_state.mask,
-					 M4_STATE_OFF);
+	if (ddata->desc->proc_id == STM32_MP1_M4_PROC_ID && ddata->cm_state.map) {
+		err = regmap_update_bits(ddata->cm_state.map,
+					 ddata->cm_state.reg,
+					 ddata->cm_state.mask,
+					 CM_STATE_OFF);
 		if (err) {
 			dev_err(&rproc->dev, "failed to set copro state\n");
 			return err;
@@ -799,12 +808,68 @@ static const struct rproc_ops st_rproc_tee_ops = {
 	.load		= stm32_rproc_tee_elf_load,
 };
 
+static int stm32_rproc_get_m4_status(struct stm32_rproc *ddata,
+				     unsigned int *state)
+{
+	/* See stm32_rproc_parse_dt() */
+	if (!ddata->cm_state.map) {
+		/*
+		 * We couldn't get the coprocessor's state, assume
+		 * it is not running.
+		 */
+		*state = CM_STATE_OFF;
+		return 0;
+	}
+
+	return regmap_read(ddata->cm_state.map, ddata->cm_state.reg, state);
+}
+
+static int stm32_rproc_get_m33_status(struct stm32_rproc *ddata,
+				      unsigned int *state)
+{
+	int ret;
+	unsigned int cm_state;
+
+	if (!ddata->cm_state.map) {
+		/*
+		 * We couldn't get the coprocessor's state, assume
+		 * it is not running.
+		 */
+		*state = CM_STATE_OFF;
+		return 0;
+	}
+
+	ret = regmap_read(ddata->cm_state.map, ddata->cm_state.reg, &cm_state);
+	if (ret)
+		return ret;
+
+	switch ((cm_state >> M33_STATE_FIELD_SHIFT) & M33_STATE_FIELD_MASK) {
+	case M33_STATE_OFF:
+		*state = CM_STATE_OFF;
+		break;
+	case M33_STATE_CRUN:
+		*state = CM_STATE_CRUN;
+		break;
+	case M33_STATE_CSLEEP:
+		*state = CM_STATE_STANDBY;
+		break;
+	case M33_STATE_CSTOP:
+		*state = CM_STATE_CSTOP;
+		break;
+	default:
+		return -EINVAL;
+	}
+
+	return 0;
+}
 static const struct stm32_rproc_data stm32_rproc_stm32pm15 = {
 	.proc_id = STM32_MP1_M4_PROC_ID,
+	.get_status = stm32_rproc_get_m4_status,
 };
 
 static const struct stm32_rproc_data stm32_rproc_stm32pm25 = {
 	.proc_id = STM32_MP2_M33_PROC_ID,
+	.get_status = stm32_rproc_get_m33_status,
 };
 
 static const struct of_device_id stm32_rproc_match[] = {
@@ -925,11 +990,11 @@ static int stm32_rproc_parse_dt(struct platform_device *pdev,
 	 * See if we can check the M4 status, i.e if it was started
 	 * from the boot loader or not.
 	 */
-	err = stm32_rproc_get_syscon(np, "st,syscfg-m4-state",
-				     &ddata->m4_state);
+	err = stm32_rproc_get_syscon(np, "st,syscfg-cm-state",
+				     &ddata->cm_state);
 	if (err) {
 		/* remember this */
-		ddata->m4_state.map = NULL;
+		ddata->cm_state.map = NULL;
 		/* no coprocessor state syscon (optional) */
 		dev_warn(dev, "m4 state not supported\n");
 
@@ -946,22 +1011,6 @@ static int stm32_rproc_parse_dt(struct platform_device *pdev,
 	}
 
 	return 0;
-}
-
-static int stm32_rproc_get_m4_status(struct stm32_rproc *ddata,
-				     unsigned int *state)
-{
-	/* See stm32_rproc_parse_dt() */
-	if (!ddata->m4_state.map) {
-		/*
-		 * We couldn't get the coprocessor's state, assume
-		 * it is not running.
-		 */
-		*state = M4_STATE_OFF;
-		return 0;
-	}
-
-	return regmap_read(ddata->m4_state.map, ddata->m4_state.reg, state);
 }
 
 static int stm32_rproc_probe(struct platform_device *pdev)
@@ -1028,11 +1077,11 @@ static int stm32_rproc_probe(struct platform_device *pdev)
 	if (ret)
 		goto free_rproc;
 
-	ret = stm32_rproc_get_m4_status(ddata, &state);
+	ret = ddata->desc->get_status(ddata, &state);
 	if (ret)
 		goto free_rproc;
 
-	if (state == M4_STATE_CRUN)
+	if (state != CM_STATE_OFF)
 		rproc->state = RPROC_DETACHED;
 
 	rproc->has_iommu = false;
