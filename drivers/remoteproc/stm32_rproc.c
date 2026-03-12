@@ -83,6 +83,7 @@ struct stm32_rproc_mem {
 struct stm32_rproc_data {
 	int proc_id;
 	int (*get_info)(struct rproc *rproc);
+	int (*get_reset)(struct rproc *rproc);
 };
 
 struct stm32_mbox {
@@ -1006,24 +1007,6 @@ static int stm32_rproc_get_m33_info(struct rproc *rproc)
 
 	return 0;
 }
-static const struct stm32_rproc_data stm32_rproc_stm32pm15 = {
-	.proc_id = STM32_MP1_M4_PROC_ID,
-	.get_info = stm32_rproc_get_m4_info,
-};
-
-static const struct stm32_rproc_data stm32_rproc_stm32pm25 = {
-	.proc_id = STM32_MP2_M33_PROC_ID,
-	.get_info = stm32_rproc_get_m33_info,
-};
-
-static const struct of_device_id stm32_rproc_match[] = {
-	{.compatible = "st,stm32mp1-m4", .data = &stm32_rproc_stm32pm15},
-	{.compatible = "st,stm32mp1-m4-tee", .data = &stm32_rproc_stm32pm15},
-	{.compatible = "st,stm32mp2-m33", .data = &stm32_rproc_stm32pm25},
-	{.compatible = "st,stm32mp2-m33-tee", .data = &stm32_rproc_stm32pm25},
-	{},
-};
-MODULE_DEVICE_TABLE(of, stm32_rproc_match);
 
 static int stm32_rproc_get_syscon(struct device_node *np, const char *prop,
 				  struct stm32_syscon *syscon)
@@ -1047,13 +1030,105 @@ out:
 	return err;
 }
 
-static int stm32_rproc_parse_dt(struct platform_device *pdev,
-				struct stm32_rproc *ddata, bool *auto_boot)
+static int stm32_rproc_get_m4_reset(struct rproc *rproc)
 {
-	struct device *dev = &pdev->dev;
+	struct stm32_rproc *ddata = rproc->priv;
+	struct device *dev = rproc->dev.parent;
 	struct device_node *np = dev->of_node;
 	struct stm32_syscon tz;
 	unsigned int tzen;
+	int err = 0;
+
+	ddata->rst = devm_reset_control_get_optional(dev, "mcu_rst");
+	if (!ddata->rst) {
+		/* Try legacy fallback method: get it by index */
+		ddata->rst = devm_reset_control_get_by_index(dev, 0);
+	}
+	if (IS_ERR(ddata->rst)) {
+		if (PTR_ERR(ddata->rst) != -ENOENT)
+			return dev_err_probe(dev, PTR_ERR(ddata->rst),
+					     "failed to get mcu_reset\n");
+		ddata->rst = NULL;
+	}
+
+	if (!ddata->rst)
+		return 0;
+
+	/*
+	 * Three ways to manage the hold boot
+	 * - using SCMI: the hold boot is managed as a reset
+	 *    The DT "reset-mames" property should be defined with 2 items:
+	 *        reset-names = "mcu_rst", "hold_boot";
+	 * - using SMC call (deprecated): use SMC reset interface
+	 *    The DT "reset-mames" property is optional, "st,syscfg-tz" is required
+	 * - default(no SCMI, no SMC): the hold boot is managed as a syscon register
+	 *    The DT "reset-mames" property is optional, "st,syscfg-holdboot" is required
+	 */
+	ddata->hold_boot_rst = devm_reset_control_get_optional(dev, "hold_boot");
+	if (IS_ERR(ddata->hold_boot_rst))
+		return dev_err_probe(dev, PTR_ERR(ddata->hold_boot_rst),
+				"failed to get hold_boot reset\n");
+
+	if (!ddata->hold_boot_rst && IS_ENABLED(CONFIG_HAVE_ARM_SMCCC)) {
+		/* Manage the MCU_BOOT using SMC call */
+		err = stm32_rproc_get_syscon(np, "st,syscfg-tz", &tz);
+		if (!err) {
+			err = regmap_read(tz.map, tz.reg, &tzen);
+			if (err) {
+				dev_err(dev, "failed to read tzen\n");
+				return err;
+			}
+			ddata->hold_boot_smc = tzen & tz.mask;
+		}
+	}
+
+	if (!ddata->hold_boot_rst && !ddata->hold_boot_smc) {
+		/* Default: hold boot manage it through the syscon controller */
+		err = stm32_rproc_get_syscon(np, "st,syscfg-holdboot",
+					     &ddata->hold_boot);
+	}
+
+	return err;
+}
+
+static int stm32_rproc_get_m33_reset(struct rproc *rproc)
+{
+	struct stm32_rproc *ddata = rproc->priv;
+	struct device *dev = rproc->dev.parent;
+
+	ddata->rst = devm_reset_control_get_optional(dev, "mcu_rst");
+	ddata->hold_boot_rst = devm_reset_control_get_optional(dev, "hold_boot");
+
+	return 0;
+}
+
+static const struct stm32_rproc_data stm32_rproc_stm32pm15 = {
+	.proc_id = STM32_MP1_M4_PROC_ID,
+	.get_info = stm32_rproc_get_m4_info,
+	.get_reset = stm32_rproc_get_m4_reset,
+};
+
+static const struct stm32_rproc_data stm32_rproc_stm32pm25 = {
+	.proc_id = STM32_MP2_M33_PROC_ID,
+	.get_info = stm32_rproc_get_m33_info,
+	.get_reset = stm32_rproc_get_m33_reset,
+};
+
+static const struct of_device_id stm32_rproc_match[] = {
+	{.compatible = "st,stm32mp1-m4", .data = &stm32_rproc_stm32pm15},
+	{.compatible = "st,stm32mp1-m4-tee", .data = &stm32_rproc_stm32pm15},
+	{.compatible = "st,stm32mp2-m33", .data = &stm32_rproc_stm32pm25},
+	{.compatible = "st,stm32mp2-m33-tee", .data = &stm32_rproc_stm32pm25},
+	{},
+};
+MODULE_DEVICE_TABLE(of, stm32_rproc_match);
+
+static int stm32_rproc_parse_dt(struct platform_device *pdev,
+				struct rproc *rproc, bool *auto_boot)
+{
+	struct device *dev = &pdev->dev;
+	struct device_node *np = dev->of_node;
+	struct stm32_rproc *ddata = rproc->priv;
 	int err, irq;
 
 	irq = platform_get_irq_optional(pdev, 0);
@@ -1075,50 +1150,10 @@ static int stm32_rproc_parse_dt(struct platform_device *pdev,
 		dev_info(dev, "wdg irq registered\n");
 	}
 
-	ddata->rst = devm_reset_control_get_optional(dev, "mcu_rst");
-	if (!ddata->rst) {
-		/* Try legacy fallback method: get it by index */
-		ddata->rst = devm_reset_control_get_by_index(dev, 0);
-	}
-	if (IS_ERR(ddata->rst)) {
-		if (PTR_ERR(ddata->rst) != -ENOENT)
-			return dev_err_probe(dev, PTR_ERR(ddata->rst),
-					     "failed to get mcu_reset\n");
-		ddata->rst = NULL;
-	}
-
-	/*
-	 * Three ways to manage the hold boot
-	 * - using SCMI: the hold boot is managed as a reset
-	 *    The DT "reset-mames" property should be defined with 2 items:
-	 *        reset-names = "mcu_rst", "hold_boot";
-	 * - using SMC call (deprecated): use SMC reset interface
-	 *    The DT "reset-mames" property is optional, "st,syscfg-tz" is required
-	 * - default(no SCMI, no SMC): the hold boot is managed as a syscon register
-	 *    The DT "reset-mames" property is optional, "st,syscfg-holdboot" is required
-	 */
-
-	ddata->hold_boot_rst = devm_reset_control_get_optional(dev, "hold_boot");
-	if (IS_ERR(ddata->hold_boot_rst))
-		return dev_err_probe(dev, PTR_ERR(ddata->hold_boot_rst),
-				     "failed to get hold_boot reset\n");
-
-	if (!ddata->hold_boot_rst && IS_ENABLED(CONFIG_HAVE_ARM_SMCCC)) {
-		/* Manage the MCU_BOOT using SMC call */
-		err = stm32_rproc_get_syscon(np, "st,syscfg-tz", &tz);
-		if (!err) {
-			err = regmap_read(tz.map, tz.reg, &tzen);
-			if (err) {
-				dev_err(dev, "failed to read tzen\n");
-				return err;
-			}
-			ddata->hold_boot_smc = tzen & tz.mask;
-		}
-	}
-
-	if (!ddata->hold_boot_rst && !ddata->hold_boot_smc) {
-		/* Default: hold boot manage it through the syscon controller */
-		stm32_rproc_get_syscon(np, "st,syscfg-holdboot",  &ddata->hold_boot);
+	if (!ddata->trproc) {
+		err = ddata->desc->get_reset(rproc);
+		if (err)
+			return err;
 	}
 
 	err = stm32_rproc_get_syscon(np, "st,syscfg-pdds", &ddata->pdds);
@@ -1244,7 +1279,7 @@ static int stm32_rproc_probe(struct platform_device *pdev)
 	ddata->desc = desc;
 	ddata->trproc = trproc;
 
-	ret = stm32_rproc_parse_dt(pdev, ddata, &rproc->auto_boot);
+	ret = stm32_rproc_parse_dt(pdev, rproc, &rproc->auto_boot);
 	if (ret)
 		goto free_rproc;
 
