@@ -1474,7 +1474,7 @@ static void stm32_usart_set_termios(struct uart_port *port,
 	unsigned long flags;
 	int brr_fit = 0, ret;
 
-	pm_runtime_get(port->dev);
+	pm_runtime_get_sync(port->dev);
 
 	if (!stm32_port->hw_flow_control)
 		cflag &= ~CRTSCTS;
@@ -1710,7 +1710,7 @@ static void stm32_usart_set_termios(struct uart_port *port,
 		stm32_usart_disable_ms(port);
 
 	pm_runtime_mark_last_busy(port->dev);
-	pm_runtime_put_autosuspend(port->dev);
+	pm_runtime_put_sync_autosuspend(port->dev);
 }
 
 static const char *stm32_usart_type(struct uart_port *port)
