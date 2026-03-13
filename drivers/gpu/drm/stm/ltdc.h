@@ -12,6 +12,9 @@
 #define _LTDC_H_
 
 #define LTDC_MAX_LAYER	4
+#define LTDC_MAX_FIREWALL	4
+
+#include <linux/bus/stm32_firewall_device.h>
 
 struct ltdc_caps {
 	u32 hw_version;		/* hardware version */
@@ -66,6 +69,7 @@ struct ltdc_device {
 	int crc_skip_count;
 	bool crc_active;
 	struct reserved_mem *rot_mem;
+	struct stm32_firewall firewall[LTDC_MAX_FIREWALL];
 	bool plane_enabled[LTDC_MAX_LAYER];
 };
 
