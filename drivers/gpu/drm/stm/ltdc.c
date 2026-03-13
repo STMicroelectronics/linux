@@ -742,7 +742,7 @@ static inline void ltdc_set_ycbcr_coeffs(struct drm_plane *plane)
 		ran = DRM_COLOR_YCBCR_LIMITED_RANGE;
 	}
 
-	drm_err(plane->dev, "Color encoding=%d, range=%d\n", enc, ran);
+	drm_dbg_driver(plane->dev, "Color encoding=%d, range=%d\n", enc, ran);
 	regmap_write(ldev->regmap, LTDC_L1CYR0R + lofs,
 		     ltdc_ycbcr2rgb_coeffs[enc][ran][0]);
 	regmap_write(ldev->regmap, LTDC_L1CYR1R + lofs,
