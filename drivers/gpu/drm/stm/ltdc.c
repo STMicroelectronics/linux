@@ -1376,6 +1376,7 @@ static void ltdc_plane_update(struct drm_plane *plane, struct drm_atomic_state *
 {
 	struct ltdc_device *ldev = plane_to_ltdc(plane);
 	struct drm_device *ddev = plane->dev;
+	struct device *dev = ddev->dev;
 	struct drm_plane_state *newstate = drm_atomic_get_new_plane_state(state, plane);
 	struct drm_framebuffer *fb = newstate->fb;
 	u32 lofs = plane->index * LAY_OFS;
@@ -1691,6 +1692,11 @@ static void ltdc_plane_update(struct drm_plane *plane, struct drm_atomic_state *
 			regmap_write(ldev->regmap, LTDC_L1PCR + lofs, 0);
 		}
 	}
+
+	/* Configure burst length */
+	if (of_device_is_compatible(dev->of_node, "st,stm32mp251-ltdc") ||
+	    of_device_is_compatible(dev->of_node, "st,stm32mp255-ltdc"))
+		regmap_write(ldev->regmap, LTDC_L1BLCR + lofs, ldev->max_burst_length);
 
 	/* set color look-up table */
 	if (fb->format->format == DRM_FORMAT_C8)
@@ -2345,7 +2351,7 @@ int ltdc_load(struct drm_device *ddev)
 	struct reset_control *rstc;
 	int irq, i, nb_endpoints;
 	int ret = -ENODEV;
-	u32 gcr;
+	u32 mbl, gcr;
 
 	drm_dbg_driver(ddev, "\n");
 
@@ -2354,6 +2360,16 @@ int ltdc_load(struct drm_device *ddev)
 	if (!nb_endpoints)
 		return -ENODEV;
 
+	if (of_device_is_compatible(np, "st,stm32mp251-ltdc") ||
+	    of_device_is_compatible(np, "st,stm32mp255-ltdc")) {
+		/* Get max burst length */
+		ret = of_property_read_u32(np, "st,burstlen", &mbl);
+		if (ret)
+			/* set to max burst length value */
+			ldev->max_burst_length = 0;
+		else
+			ldev->max_burst_length = mbl / 8;
+	}
 
 	/* Get endpoints if any */
 	for (i = 0; i < nb_endpoints; i++) {

@@ -71,6 +71,7 @@ struct ltdc_device {
 	bool crc_active;
 	bool vblank_active;
 	u32 crc;
+	u32 max_burst_length;
 	struct reserved_mem *rot_mem;
 	struct stm32_firewall firewall[LTDC_MAX_FIREWALL];
 	bool plane_enabled[LTDC_MAX_LAYER];
