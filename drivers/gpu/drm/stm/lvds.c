@@ -1090,6 +1090,7 @@ static int lvds_probe(struct platform_device *pdev)
 	struct reset_control *rstc;
 	struct stm_lvds *lvds;
 	int ret, dual_link;
+	u32 cr;
 
 	dev_dbg(dev, "Probing LVDS driver...\n");
 
@@ -1138,10 +1139,6 @@ static int lvds_probe(struct platform_device *pdev)
 		dev_err_probe(dev, ret, "Failed to request regulator\n");
 		return  PTR_ERR(lvds->vdda18_supply);
 	}
-
-	reset_control_assert(rstc);
-	usleep_range(10, 20);
-	reset_control_deassert(rstc);
 
 	port1 = of_graph_get_port_by_id(dev->of_node, 1);
 	port2 = of_graph_get_port_by_id(dev->of_node, 2);
@@ -1216,6 +1213,18 @@ static int lvds_probe(struct platform_device *pdev)
 	if (ret) {
 		dev_err(dev, "Failed to register LVDS pixel clock: %d\n", ret);
 		return ret;
+	}
+
+	/*
+	 * Check if the lvds has been activated by another software
+	 * component to determine if it needs to be reset.
+	 */
+	cr = lvds_read(lvds, LVDS_CR);
+
+	if (!(cr & CR_LVDSEN)) {
+		reset_control_assert(rstc);
+		usleep_range(10, 20);
+		reset_control_deassert(rstc);
 	}
 
 	lvds->lvds_bridge.of_node = dev->of_node;
