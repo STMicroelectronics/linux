@@ -1943,7 +1943,9 @@ static int stm32_cryp_aead_one_req(struct crypto_engine *engine, void *areq)
 	if (!stm32_cryp_get_input_text_len(cryp) && !cryp->header_in &&
 	    !(cryp->flags & FLG_HEADER_DMA)) {
 		/* No input data to process: get tag and finish */
+		local_bh_disable();
 		stm32_cryp_finish_req(cryp, 0);
+		local_bh_enable();
 		return 0;
 	}
 
