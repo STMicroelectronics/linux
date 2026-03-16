@@ -778,8 +778,8 @@
 				clocks = <&rcc CK_BUS_SPI2>, <&rcc CK_KER_SPI2>;
 				clock-names = "pclk", "i2sclk";
 				resets = <&rcc SPI2_R>;
-				dmas = <&hpdma 51 0x43 0x12>,
-					<&hpdma 52 0x43 0x21>;
+				dmas = <&hpdma 51 0x43 0x40012>,
+					<&hpdma 52 0x43 0x40021>;
 				dma-names = "rx", "tx";
 				access-controllers = <&rifsc 23>;
 				power-domains = <&d1_pd>;
@@ -810,8 +810,8 @@
 				clocks = <&rcc CK_BUS_SPI3>, <&rcc CK_KER_SPI3>;
 				clock-names = "pclk", "i2sclk";
 				resets = <&rcc SPI3_R>;
-				dmas = <&hpdma 53 0x43 0x12>,
-					<&hpdma 54 0x43 0x21>;
+				dmas = <&hpdma 53 0x43 0x40012>,
+					<&hpdma 54 0x43 0x40021>;
 				dma-names = "rx", "tx";
 				access-controllers = <&rifsc 24>;
 				power-domains = <&d1_pd>;
@@ -841,8 +841,8 @@
 				clocks = <&rcc CK_KER_SPDIFRX>;
 				clock-names = "kclk";
 				interrupts = <GIC_SPI 170 IRQ_TYPE_LEVEL_HIGH>;
-				dmas = <&hpdma 71 0x43 0x212>,
-					<&hpdma 72 0x43 0x212>;
+				dmas = <&hpdma 71 0x43 0x40212>,
+					<&hpdma 72 0x43 0x40212>;
 				dma-names = "rx", "rx-ctrl";
 				access-controllers = <&rifsc 30>;
 				status = "disabled";
@@ -1136,8 +1136,8 @@
 				clocks = <&rcc CK_BUS_SPI1>, <&rcc CK_KER_SPI1>;
 				clock-names = "pclk", "i2sclk";
 				resets = <&rcc SPI1_R>;
-				dmas = <&hpdma 49 0x43 0x12>,
-					<&hpdma 50 0x43 0x21>;
+				dmas = <&hpdma 49 0x43 0x40012>,
+					<&hpdma 50 0x43 0x40021>;
 				dma-names = "rx", "tx";
 				access-controllers = <&rifsc 22>;
 				power-domains = <&d1_pd>;
@@ -1304,7 +1304,7 @@
 					#sound-dai-cells = <0>;
 					clocks = <&rcc CK_KER_SAI1>;
 					clock-names = "sai_ck";
-					dmas = <&hpdma 73 0x43 0x21>;
+					dmas = <&hpdma 73 0x43 0x40021>;
 					power-domains = <&d1_pd>;
 					status = "disabled";
 				};
@@ -1315,7 +1315,7 @@
 					#sound-dai-cells = <0>;
 					clocks = <&rcc CK_KER_SAI1>;
 					clock-names = "sai_ck";
-					dmas = <&hpdma 74 0x43 0x12>;
+					dmas = <&hpdma 74 0x43 0x40012>;
 					power-domains = <&d1_pd>;
 					status = "disabled";
 				};
@@ -1340,7 +1340,7 @@
 					#sound-dai-cells = <0>;
 					clocks = <&rcc CK_KER_SAI2>;
 					clock-names = "sai_ck";
-					dmas = <&hpdma 75 0x43 0x21>;
+					dmas = <&hpdma 75 0x43 0x40021>;
 					power-domains = <&d1_pd>;
 					status = "disabled";
 				};
@@ -1351,7 +1351,7 @@
 					#sound-dai-cells = <0>;
 					clocks = <&rcc CK_KER_SAI2>;
 					clock-names = "sai_ck";
-					dmas = <&hpdma 76 0x43 0x12>;
+					dmas = <&hpdma 76 0x43 0x40012>;
 					power-domains = <&d1_pd>;
 					status = "disabled";
 				};
@@ -1376,7 +1376,7 @@
 					#sound-dai-cells = <0>;
 					clocks = <&rcc CK_KER_SAI3>;
 					clock-names = "sai_ck";
-					dmas = <&hpdma 77 0x43 0x21>;
+					dmas = <&hpdma 77 0x43 0x40021>;
 					power-domains = <&d1_pd>;
 					status = "disabled";
 				};
@@ -1387,7 +1387,7 @@
 					#sound-dai-cells = <0>;
 					clocks = <&rcc CK_KER_SAI3>;
 					clock-names = "sai_ck";
-					dmas = <&hpdma 78 0x43 0x12>;
+					dmas = <&hpdma 78 0x43 0x40012>;
 					power-domains = <&d1_pd>;
 					status = "disabled";
 				};
@@ -1426,7 +1426,7 @@
 					#sound-dai-cells = <0>;
 					clocks = <&rcc CK_KER_SAI4>;
 					clock-names = "sai_ck";
-					dmas = <&hpdma 79 0x63 0x21>;
+					dmas = <&hpdma 79 0x63 0x40021>;
 					power-domains = <&d1_pd>;
 					status = "disabled";
 				};
@@ -1437,7 +1437,7 @@
 					#sound-dai-cells = <0>;
 					clocks = <&rcc CK_KER_SAI4>;
 					clock-names = "sai_ck";
-					dmas = <&hpdma 80 0x43 0x12>;
+					dmas = <&hpdma 80 0x43 0x40012>;
 					power-domains = <&d1_pd>;
 					status = "disabled";
 				};
@@ -1592,7 +1592,7 @@
 					reg = <0x84 0x70>;
 					#io-channel-cells = <1>;
 					interrupts = <GIC_SPI 184 IRQ_TYPE_LEVEL_HIGH>;
-					dmas = <&hpdma 63 0x63 0x12>;
+					dmas = <&hpdma 63 0x63 0x40012>;
 					dma-names = "rx";
 					status = "disabled";
 				};
@@ -1602,7 +1602,7 @@
 					reg = <0x104 0x70>;
 					#io-channel-cells = <1>;
 					interrupts = <GIC_SPI 185 IRQ_TYPE_LEVEL_HIGH>;
-					dmas = <&hpdma 64 0x63 0x12>;
+					dmas = <&hpdma 64 0x63 0x40012>;
 					dma-names = "rx";
 					status = "disabled";
 				};
@@ -1612,7 +1612,7 @@
 					reg = <0x184 0x70>;
 					#io-channel-cells = <1>;
 					interrupts = <GIC_SPI 186 IRQ_TYPE_LEVEL_HIGH>;
-					dmas = <&hpdma 65 0x63 0x12>;
+					dmas = <&hpdma 65 0x63 0x40012>;
 					dma-names = "rx";
 					status = "disabled";
 				};
@@ -1622,7 +1622,7 @@
 					reg = <0x204 0x70>;
 					#io-channel-cells = <1>;
 					interrupts = <GIC_SPI 187 IRQ_TYPE_LEVEL_HIGH>;
-					dmas = <&hpdma 66 0x63 0x12>;
+					dmas = <&hpdma 66 0x63 0x40012>;
 					dma-names = "rx";
 					status = "disabled";
 				};
