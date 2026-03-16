@@ -413,6 +413,7 @@
 			#interrupt-cells = <2>;
 			reg = <0x5000d000 0x400>;
 			wakeup-parent = <&pwr_irq>;
+			hwlocks = <&hsem 1 1>;
 			interrupts-extended =
 				<&intc GIC_SPI 6   IRQ_TYPE_LEVEL_HIGH>,	/* EXTI_0 */
 				<&intc GIC_SPI 7   IRQ_TYPE_LEVEL_HIGH>,
