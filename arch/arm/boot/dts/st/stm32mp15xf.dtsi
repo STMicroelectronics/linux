@@ -4,6 +4,8 @@
  * Author: Alexandre Torgue <alexandre.torgue@foss.st.com> for STMicroelectronics.
  */
 
+#include "stm32mp15xd.dtsi"
+
 &etzpc {
 	cryp1: cryp@54001000 {
 		compatible = "st,stm32mp1-cryp";

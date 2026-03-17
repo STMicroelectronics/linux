@@ -144,10 +144,12 @@
 
 &cpu0 {
 	clocks = <&scmi_clk CK_SCMI_MPU>;
+	cpu-supply = <&vddcore>;
 };
 
 &cpu1 {
 	clocks = <&scmi_clk CK_SCMI_MPU>;
+	cpu-supply = <&vddcore>;
 };
 
 &crc1 {

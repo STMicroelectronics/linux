@@ -6,6 +6,7 @@
 /dts-v1/;
 
 #include "stm32mp157.dtsi"
+#include "stm32mp15xd.dtsi"
 #include "stm32mp15-pinctrl.dtsi"
 #include "stm32mp15xxaa-pinctrl.dtsi"
 #include "stm32mp15-scmi.dtsi"
@@ -143,10 +144,12 @@
 
 &cpu0 {
 	clocks = <&scmi_clk CK_SCMI_MPU>;
+	cpu-supply = <&vddcore>;
 };
 
 &cpu1 {
 	clocks = <&scmi_clk CK_SCMI_MPU>;
+	cpu-supply = <&vddcore>;
 };
 
 &crc1 {
