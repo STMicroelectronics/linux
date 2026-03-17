@@ -652,7 +652,7 @@ static int spi_nor_parse_bfpt(struct spi_nor *nor,
 
 	/* Byte order in 8D-8D-8D mode */
 	if (bfpt.dwords[SFDP_DWORD(18)] & BFPT_DWORD18_BYTE_ORDER_SWAPPED)
-		nor->flags |= SNOR_F_DTR_SWAB16;
+		nor->flags |= SNOR_F_SWAP16;
 
 	return spi_nor_post_bfpt_fixups(nor, bfpt_header, &bfpt);
 }

@@ -815,12 +815,13 @@ bool kgd2kfd_device_init(struct kfd_dev *kfd,
 			dev_err(kfd_device, "Error initializing KFD node\n");
 			goto node_init_error;
 		}
+
+		spin_lock_init(&node->watch_points_lock);
+
 		kfd->nodes[i] = node;
 	}
 
 	svm_range_set_max_pages(kfd->adev);
-
-	spin_lock_init(&kfd->watch_points_lock);
 
 	kfd->init_complete = true;
 	dev_info(kfd_device, "added device %x:%x\n", kfd->adev->pdev->vendor,
@@ -1017,7 +1018,15 @@ void kgd2kfd_interrupt(struct kfd_dev *kfd, const void *ih_ring_entry)
 	}
 
 	for (i = 0; i < kfd->num_nodes; i++) {
-		node = kfd->nodes[i];
+		/* Race if another thread in b/w
+		 * kfd_cleanup_nodes and kfree(kfd),
+		 * when kfd->nodes[i] = NULL
+		 */
+		if (kfd->nodes[i])
+			node = kfd->nodes[i];
+		else
+			return;
+
 		spin_lock_irqsave(&node->interrupt_lock, flags);
 
 		if (node->interrupts_active

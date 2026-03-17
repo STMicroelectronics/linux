@@ -4065,7 +4065,9 @@ cifs_setup_session(const unsigned int xid, struct cifs_ses *ses,
 		ses->ses_status = SES_IN_SETUP;
 
 		/* force iface_list refresh */
+		spin_lock(&ses->iface_lock);
 		ses->iface_last_update = 0;
+		spin_unlock(&ses->iface_lock);
 	}
 	spin_unlock(&ses->ses_lock);
 
@@ -4224,6 +4226,7 @@ cifs_construct_tcon(struct cifs_sb_info *cifs_sb, kuid_t fsuid)
 
 out:
 	kfree(ctx->username);
+	kfree(ctx->domainname);
 	kfree_sensitive(ctx->password);
 	kfree(origin_fullpath);
 	kfree(ctx);

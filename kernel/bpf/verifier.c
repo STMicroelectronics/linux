@@ -7839,7 +7839,7 @@ static int widen_imprecise_scalars(struct bpf_verifier_env *env,
 				   struct bpf_verifier_state *cur)
 {
 	struct bpf_func_state *fold, *fcur;
-	int i, fr;
+	int i, fr, num_slots;
 
 	reset_idmap_scratch(env);
 	for (fr = old->curframe; fr >= 0; fr--) {
@@ -7852,7 +7852,9 @@ static int widen_imprecise_scalars(struct bpf_verifier_env *env,
 					&fcur->regs[i],
 					&env->idmap_scratch);
 
-		for (i = 0; i < fold->allocated_stack / BPF_REG_SIZE; i++) {
+		num_slots = min(fold->allocated_stack / BPF_REG_SIZE,
+				fcur->allocated_stack / BPF_REG_SIZE);
+		for (i = 0; i < num_slots; i++) {
 			if (!is_spilled_reg(&fold->stack[i]) ||
 			    !is_spilled_reg(&fcur->stack[i]))
 				continue;
@@ -13134,21 +13136,17 @@ static void __scalar64_min_max_lsh(struct bpf_reg_state *dst_reg,
 				   u64 umin_val, u64 umax_val)
 {
 	/* Special case <<32 because it is a common compiler pattern to sign
-	 * extend subreg by doing <<32 s>>32. In this case if 32bit bounds are
-	 * positive we know this shift will also be positive so we can track
-	 * bounds correctly. Otherwise we lose all sign bit information except
-	 * what we can pick up from var_off. Perhaps we can generalize this
-	 * later to shifts of any length.
+	 * extend subreg by doing <<32 s>>32. smin/smax assignments are correct
+	 * because s32 bounds don't flip sign when shifting to the left by
+	 * 32bits.
 	 */
-	if (umin_val == 32 && umax_val == 32 && dst_reg->s32_max_value >= 0)
+	if (umin_val == 32 && umax_val == 32) {
 		dst_reg->smax_value = (s64)dst_reg->s32_max_value << 32;
-	else
-		dst_reg->smax_value = S64_MAX;
-
-	if (umin_val == 32 && umax_val == 32 && dst_reg->s32_min_value >= 0)
 		dst_reg->smin_value = (s64)dst_reg->s32_min_value << 32;
-	else
+	} else {
+		dst_reg->smax_value = S64_MAX;
 		dst_reg->smin_value = S64_MIN;
+	}
 
 	/* If we might shift our top bit out, then we know nothing */
 	if (dst_reg->umax_value > 1ULL << (63 - umax_val)) {
