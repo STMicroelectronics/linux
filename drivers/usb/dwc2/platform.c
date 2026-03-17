@@ -561,18 +561,8 @@ static void dwc2_driver_shutdown(struct platform_device *dev)
 {
 	struct dwc2_hsotg *hsotg = platform_get_drvdata(dev);
 
-	/*
-	 * The low level HW may have been left disabled from the probe,
-	 * or disabled later on, enable it before turning off interrupts
-	 */
-	if (!hsotg->ll_hw_enabled)
-		__dwc2_lowlevel_hw_enable(hsotg);
-
 	dwc2_disable_global_interrupts(hsotg);
 	synchronize_irq(hsotg->irq);
-
-	if (!hsotg->ll_hw_enabled)
-		__dwc2_lowlevel_hw_disable(hsotg);
 }
 
 /**
