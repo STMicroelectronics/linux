@@ -18,6 +18,8 @@ properties:
     enum:
       - st,stm32-rng
       - st,stm32mp13-rng
+      - st,stm32mp21-rng
+      - st,stm32mp23-rng
       - st,stm32mp25-rng
 
   reg:
@@ -47,6 +49,9 @@ properties:
   access-controllers:
     minItems: 1
     maxItems: 2
+
+  power-domains:
+    maxItems: 1
 
 required:
   - compatible
