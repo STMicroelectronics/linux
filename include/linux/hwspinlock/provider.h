@@ -15,6 +15,7 @@
 struct device;
 struct hwspinlock;
 struct hwspinlock_device;
+struct of_phandle_args;
 
 /**
  * struct hwspinlock_ops - platform-specific hwspinlock handlers
@@ -27,6 +28,8 @@ struct hwspinlock_device;
  * @relax:	optional, platform-specific relax handler, called by hwspinlock
  *		core while spinning on a lock, between two successive
  *		invocations of @trylock. may _not_ sleep.
+ * @xlate:	optional, platform-specific translate hwlock_spec to return a
+ *		lock id.
  * @init_priv:	optional, callback used when registering the hwspinlock device.
  *		Its return value will be used to fill the per-lock 'priv' data.
  */
@@ -35,6 +38,7 @@ struct hwspinlock_ops {
 	void (*unlock)(struct hwspinlock *lock);
 	int (*bust)(struct hwspinlock *lock, unsigned int id);
 	void (*relax)(struct hwspinlock *lock);
+	int (*xlate)(const struct of_phandle_args *hwlock_spec);
 	void *(*init_priv)(int local_id, void *init_data);
 };
 

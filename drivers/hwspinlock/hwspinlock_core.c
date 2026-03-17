@@ -366,17 +366,24 @@ EXPORT_SYMBOL_GPL(hwspin_lock_bust);
 
 /**
  * of_hwspin_lock_simple_xlate - translate hwlock_spec to return a lock id
+ * @bank: the hwspinlock device, which usually provides numerous hw locks
  * @hwlock_spec: hwlock specifier as found in the device tree
  *
  * This is a simple translation function, suitable for hwspinlock platform
  * drivers that only has a lock specifier length of 1.
+ * Custom translations are forwarded and handled by the driver specific
+ * callback xlate().
  *
  * Returns: a relative index of the lock within a specified bank on success,
  * or -EINVAL on invalid specifier cell count.
  */
 static inline int
-of_hwspin_lock_simple_xlate(const struct of_phandle_args *hwlock_spec)
+of_hwspin_lock_simple_xlate(const struct hwspinlock_device *bank,
+			    const struct of_phandle_args *hwlock_spec)
 {
+	if (bank->ops->xlate)
+		return bank->ops->xlate(hwlock_spec);
+
 	if (WARN_ON(hwlock_spec->args_count != 1))
 		return -EINVAL;
 
@@ -438,7 +445,7 @@ int of_hwspin_lock_get_id(struct device_node *np, int index)
 	if (ret < 0)
 		goto out;
 
-	id = of_hwspin_lock_simple_xlate(&args);
+	id = of_hwspin_lock_simple_xlate(hwlock->bank, &args);
 	if (id < 0 || id >= hwlock->bank->num_locks) {
 		ret = -EINVAL;
 		goto out;
