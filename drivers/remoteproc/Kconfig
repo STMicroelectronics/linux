@@ -345,6 +345,21 @@ config STM32_RPROC
 
 	  This can be either built-in or a loadable module.
 
+config STM32_M0_RPROC
+	tristate "STM32 remoteproc support for CM0+"
+	depends on ARCH_STM32 || COMPILE_TEST
+	depends on REMOTEPROC
+	select MAILBOX
+	help
+	  Say y here to support STM32 MCU CM0+ processors via the
+	  remote processor framework.
+
+	  You want to say y here in order to enable Low Power
+	  use-cases to run on your platform (dedicated firmware could be
+	  offloaded to remote MCU M0+ processors using this framework).
+
+	  This can be either built-in or a loadable module.
+
 config TI_K3_DSP_REMOTEPROC
 	tristate "TI K3 DSP remoteproc support"
 	depends on ARCH_K3 || COMPILE_TEST
