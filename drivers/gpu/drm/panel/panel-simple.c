@@ -687,11 +687,18 @@ static struct panel_simple *panel_simple_probe(struct device *dev)
 	if (IS_ERR(panel->supply))
 		return ERR_CAST(panel->supply);
 
-	panel->enable_gpio = devm_gpiod_get_optional(dev, "enable",
-						     GPIOD_OUT_LOW);
+	panel->enable_gpio = devm_gpiod_get_optional(dev, "enable", GPIOD_ASIS);
 	if (IS_ERR(panel->enable_gpio))
 		return dev_err_cast_probe(dev, panel->enable_gpio,
 					  "failed to request GPIO\n");
+
+	if (panel->enable_gpio) {
+		err = gpiod_get_direction(panel->enable_gpio);
+		if (err != 0)
+			gpiod_direction_output(panel->enable_gpio, 0);
+		else
+			gpiod_direction_output(panel->enable_gpio, 1);
+	}
 
 	err = of_drm_get_panel_orientation(dev->of_node, &panel->orientation);
 	if (err) {
