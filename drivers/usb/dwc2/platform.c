@@ -571,7 +571,8 @@ static void dwc2_driver_shutdown(struct platform_device *dev)
 	dwc2_disable_global_interrupts(hsotg);
 	synchronize_irq(hsotg->irq);
 
-	__dwc2_lowlevel_hw_disable(hsotg);
+	if (!hsotg->ll_hw_enabled)
+		__dwc2_lowlevel_hw_disable(hsotg);
 }
 
 /**
