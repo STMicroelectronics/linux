@@ -1194,6 +1194,7 @@ __dw_mipi_dsi_probe(struct platform_device *pdev,
 	struct reset_control *apb_rst;
 	struct dw_mipi_dsi *dsi;
 	int ret;
+	u32 pwr;
 
 	dsi = devm_drm_bridge_alloc(dev, struct dw_mipi_dsi, bridge,
 				    &dw_mipi_dsi_bridge_funcs);
@@ -1229,28 +1230,35 @@ __dw_mipi_dsi_probe(struct platform_device *pdev,
 	 * Note that the reset was not defined in the initial device tree, so
 	 * we have to be prepared for it not being found.
 	 */
-	apb_rst = devm_reset_control_get_optional_exclusive(dev, "apb");
-	if (IS_ERR(apb_rst)) {
-		ret = PTR_ERR(apb_rst);
+	pwr = dsi_read(dsi, DSI_PWR_UP);
+	/*
+	 * To obtain a continuous display after the probe,
+	 * do not reset the DSI bridge if it is powered on.
+	 */
+	if (pwr != POWERUP) {
+		apb_rst = devm_reset_control_get_optional_exclusive(dev, "apb");
+		if (IS_ERR(apb_rst)) {
+			ret = PTR_ERR(apb_rst);
 
-		if (ret != -EPROBE_DEFER)
-			dev_err(dev, "Unable to get reset control: %d\n", ret);
+			if (ret != -EPROBE_DEFER)
+				dev_err(dev, "Unable to get reset control: %d\n", ret);
 
-		return ERR_PTR(ret);
-	}
-
-	if (apb_rst) {
-		ret = clk_prepare_enable(dsi->pclk);
-		if (ret) {
-			dev_err(dev, "%s: Failed to enable pclk\n", __func__);
 			return ERR_PTR(ret);
 		}
 
-		reset_control_assert(apb_rst);
-		usleep_range(10, 20);
-		reset_control_deassert(apb_rst);
+		if (apb_rst) {
+			ret = clk_prepare_enable(dsi->pclk);
+			if (ret) {
+				dev_err(dev, "%s: Failed to enable pclk\n", __func__);
+				return ERR_PTR(ret);
+			}
 
-		clk_disable_unprepare(dsi->pclk);
+			reset_control_assert(apb_rst);
+			usleep_range(10, 20);
+			reset_control_deassert(apb_rst);
+
+			clk_disable_unprepare(dsi->pclk);
+		}
 	}
 
 	dw_mipi_dsi_debugfs_init(dsi);
