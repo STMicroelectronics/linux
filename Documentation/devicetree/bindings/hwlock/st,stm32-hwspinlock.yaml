@@ -8,10 +8,16 @@ title: STMicroelectronics STM32 Hardware Spinlock
 
 maintainers:
   - Fabien Dessenne <fabien.dessenne@foss.st.com>
+  - Antonio Borneo <antonio.borneo@foss.st.com>
 
 properties:
   "#hwlock-cells":
-    const: 1
+    const: 2
+    description:
+      Multiple consumers of the STM32 Hardware Spinlock can share the same
+      hwlock; each consumer has to use a unique ProcID for that hwlock.
+      The first cell is the index of the hwlock in the device.
+      The second cell is the ProcID of the consumer for such hwlock.
 
   compatible:
     const: st,stm32-hwspinlock
@@ -40,10 +46,26 @@ examples:
     #include <dt-bindings/clock/stm32mp1-clks.h>
     hwspinlock@4c000000 {
         compatible = "st,stm32-hwspinlock";
-        #hwlock-cells = <1>;
+        #hwlock-cells = <2>;
         reg = <0x4c000000 0x400>;
         clocks = <&rcc HSEM>;
         clock-names = "hsem";
+    };
+
+    pinctrl@50002000 {
+        compatible = "st,stm32mp157-pinctrl";
+        #address-cells = <1>;
+        #size-cells = <1>;
+        ranges = <0 0x50002000 0xa400>;
+        hwlocks = <&hsem 0 0>;
+    };
+
+    pinctrl@54004000 {
+        compatible = "st,stm32mp157-z-pinctrl";
+        #address-cells = <1>;
+        #size-cells = <1>;
+        ranges = <0 0x54004000 0x400>;
+        hwlocks = <&hsem 0 1>;
     };
 
 ...
