@@ -318,6 +318,27 @@
 	};
 
 	/omit-if-no-ref/
+	i2s2_pins_b: i2s2-1 {
+		pins {
+			pinmux = <STM32_PINMUX('B', 2, AF2)>, /* I2S2_SDO */
+				<STM32_PINMUX('B', 3, AF2)>, /* I2S2_WS */
+				<STM32_PINMUX('B', 0, AF2)>; /* I2S2_CK */
+			slew-rate = <1>;
+			drive-push-pull;
+			bias-disable;
+		};
+	};
+
+	/omit-if-no-ref/
+	i2s2_sleep_pins_b: i2s2-sleep-1 {
+		pins {
+			pinmux = <STM32_PINMUX('B', 2, ANALOG)>, /* I2S2_SDO */
+				<STM32_PINMUX('B', 3, ANALOG)>, /* I2S2_WS */
+				<STM32_PINMUX('B', 0, ANALOG)>; /* I2S2_CK */
+		};
+	};
+
+	/omit-if-no-ref/
 	mdf_cck0_pins_a: mdf-cck0-0 {
 		pins1 {
 			pinmux = <STM32_PINMUX('A', 7, AF5)>; /* MDF1_CCK */
