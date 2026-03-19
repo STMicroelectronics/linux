@@ -1739,11 +1739,13 @@
 				compatible = "st,stm32h7-uart";
 				reg = <0x46030000 0x400>;
 				interrupts-extended = <&exti2 26 IRQ_TYPE_LEVEL_HIGH>;
-				clocks = <&rcc CK_KER_LPUART1>;
+				clocks = <&rcc CK_KER_LPUART1>,
+					 <&rcc CK_LPUART1_AM>;
 				dmas = <&hpdma 166 0x20 0x10012>,
 				       <&hpdma 167 0x20 0x3021>;
 				dma-names = "rx", "tx";
 				access-controllers = <&rifsc 40>;
+				power-domains = <&d1_pd>;
 				wakeup-source;
 				status = "disabled";
 			};

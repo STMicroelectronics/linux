@@ -2006,6 +2006,7 @@
 				       <&hpdma 167 0x20 0x3021>;
 				dma-names = "rx", "tx";
 				access-controllers = <&rifsc 40>;
+				power-domains = <&d1_pd>;
 				wakeup-source;
 				status = "disabled";
 			};
