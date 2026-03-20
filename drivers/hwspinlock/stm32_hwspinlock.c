@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) STMicroelectronics SA 2018
+ * Copyright (C) STMicroelectronics 2018-2026
  * Author: Benjamin Gaignard <benjamin.gaignard@st.com> for STMicroelectronics.
  */
 
@@ -14,11 +14,23 @@
 #include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
 
-#define STM32_MUTEX_COREID	BIT(8)
-#define STM32_MUTEX_LOCK_BIT	BIT(31)
-#define STM32_MUTEX_NUM_LOCKS	32
+#define STM32_MUTEX_COREID		1
+#define STM32_MUTEX_COREID_MASK		GENMASK(11, 8)
+#define STM32_MUTEX_PROCID_MASK		GENMASK(7, 0)
+#define STM32_MUTEX_LOCK_BIT		BIT(31)
+#define STM32_MUTEX_NUM_LOCKS		32
 
-#define STM32_MUTEX_REG_RX_OFFSET(id)	(4 * (id))
+/*
+ * While the peripheral has 8 bit for ProcID, currently there are no use cases
+ * that require more than 2 values for ProcID.
+ * Supporting a wide range of ProcID impacts the memory allocated by this
+ * driver.
+ * Let's limit the memory use by restricting the max value for ProcID.
+ */
+#define STM32_MUTEX_NUM_PROCID		3
+
+#define STM32_MUTEX_PROCID(id)		((id) / STM32_MUTEX_NUM_LOCKS)
+#define STM32_MUTEX_REG_RX_OFFSET(id)	(4 * ((id) % STM32_MUTEX_NUM_LOCKS))
 
 struct stm32_hwspinlock {
 	void __iomem *base;
@@ -30,14 +42,17 @@ static int stm32_hwspinlock_trylock(struct hwspinlock *lock)
 	struct stm32_hwspinlock *hw = hwspin_lock_get_priv(lock);
 	int id = hwlock_to_id(lock);
 	void __iomem *lock_addr;
-	u32 status;
+	u32 val, status;
 
 	lock_addr = hw->base + STM32_MUTEX_REG_RX_OFFSET(id);
+	val = STM32_MUTEX_LOCK_BIT |
+	      FIELD_PREP(STM32_MUTEX_COREID_MASK, STM32_MUTEX_COREID) |
+	      FIELD_PREP(STM32_MUTEX_PROCID_MASK, STM32_MUTEX_PROCID(id));
 
-	writel(STM32_MUTEX_LOCK_BIT | STM32_MUTEX_COREID, lock_addr);
+	writel(val, lock_addr);
 	status = readl(lock_addr);
 
-	return status == (STM32_MUTEX_LOCK_BIT | STM32_MUTEX_COREID);
+	return status == val;
 }
 
 static void stm32_hwspinlock_unlock(struct hwspinlock *lock)
@@ -45,15 +60,33 @@ static void stm32_hwspinlock_unlock(struct hwspinlock *lock)
 	struct stm32_hwspinlock *hw = hwspin_lock_get_priv(lock);
 	int id = hwlock_to_id(lock);
 	void __iomem *lock_addr;
+	u32 val;
 
 	lock_addr = hw->base + STM32_MUTEX_REG_RX_OFFSET(id);
+	val = FIELD_PREP(STM32_MUTEX_COREID_MASK, STM32_MUTEX_COREID) |
+	      FIELD_PREP(STM32_MUTEX_PROCID_MASK, STM32_MUTEX_PROCID(id));
 
-	writel(STM32_MUTEX_COREID, lock_addr);
+	writel(val, lock_addr);
 }
 
 static void stm32_hwspinlock_relax(struct hwspinlock *lock)
 {
 	ndelay(50);
+}
+
+static int stm32_hwspinlock_xlate(const struct of_phandle_args *hwlock_spec)
+{
+	u32 arg0;
+
+	if (WARN_ON(hwlock_spec->args_count != 2))
+		return -EINVAL;
+
+	arg0 = hwlock_spec->args[0];
+
+	if (arg0 >= STM32_MUTEX_NUM_LOCKS)
+		return -EINVAL;
+
+	return arg0 + STM32_MUTEX_NUM_LOCKS * hwlock_spec->args[1];
 }
 
 static void *stm32_hwspinlock_init_priv(int local_id, void *init_data)
@@ -65,6 +98,7 @@ static const struct hwspinlock_ops stm32_hwspinlock_ops = {
 	.trylock	= stm32_hwspinlock_trylock,
 	.unlock		= stm32_hwspinlock_unlock,
 	.relax		= stm32_hwspinlock_relax,
+	.xlate		= stm32_hwspinlock_xlate,
 	.init_priv	= stm32_hwspinlock_init_priv,
 };
 
@@ -86,7 +120,7 @@ static int stm32_hwspinlock_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 	struct stm32_hwspinlock *hw;
-	int ret;
+	int ret, num_locks;
 
 	hw = devm_kzalloc(dev, sizeof(*hw), GFP_KERNEL);
 	if (!hw)
@@ -119,8 +153,9 @@ static int stm32_hwspinlock_probe(struct platform_device *pdev)
 		return ret;
 	}
 
+	num_locks = STM32_MUTEX_NUM_LOCKS * STM32_MUTEX_NUM_PROCID;
 	ret = devm_hwspin_lock_register_errno(dev, &stm32_hwspinlock_ops,
-					      0, STM32_MUTEX_NUM_LOCKS, hw);
+					      0, num_locks, hw);
 
 	if (ret)
 		dev_err(dev, "Failed to register hwspinlock\n");
