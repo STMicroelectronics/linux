@@ -1336,7 +1336,7 @@ static int stm32_usart_startup(struct uart_port *port)
 	u32 val;
 	int ret;
 
-	pm_runtime_get(port->dev);
+	pm_runtime_get_sync(port->dev);
 
 	ret = request_irq(port->irq, stm32_usart_interrupt, 0, name, port);
 	if (ret)
@@ -1365,6 +1365,8 @@ static int stm32_usart_startup(struct uart_port *port)
 	val = stm32_port->cr1_irq | USART_CR1_RE | BIT(cfg->uart_enable_bit);
 	stm32_usart_set_bits(port, ofs->cr1, val);
 
+	stm32_port->started = true;
+
 out:
 	pm_runtime_put_sync_autosuspend(port->dev);
 
@@ -1379,7 +1381,9 @@ static void stm32_usart_shutdown(struct uart_port *port)
 	u32 val, isr;
 	int ret;
 
-	pm_runtime_get(port->dev);
+	pm_runtime_get_sync(port->dev);
+
+	stm32_port->started = false;
 
 	ret = readl_relaxed_poll_timeout(port->membase + ofs->isr,
 					 isr, (isr & USART_SR_TC),
@@ -1419,8 +1423,7 @@ static void stm32_usart_shutdown(struct uart_port *port)
 
 	stm32_usart_clr_bits(port, ofs->cr1, val);
 
-	pm_runtime_mark_last_busy(port->dev);
-	pm_runtime_put_autosuspend(port->dev);
+	pm_runtime_put_sync_suspend(port->dev);
 
 	free_irq(port->irq, port);
 }
@@ -2213,7 +2216,6 @@ static void stm32_usart_serial_remove(struct platform_device *pdev)
 
 	pm_runtime_disable(&pdev->dev);
 	pm_runtime_set_suspended(&pdev->dev);
-	pm_runtime_put_noidle(&pdev->dev);
 
 	stm32_usart_clr_bits(port, ofs->cr1, USART_CR1_PEIE);
 
@@ -2405,7 +2407,7 @@ static int __maybe_unused stm32_usart_serial_en_wakeup(struct uart_port *port,
 	unsigned int size = 0;
 	unsigned long flags;
 
-	if (!device_can_wakeup(port->dev) || !tty_port_initialized(tport))
+	if (!device_can_wakeup(port->dev) || !stm32_port->started)
 		return 0;
 
 	/*
