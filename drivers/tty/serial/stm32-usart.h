@@ -240,6 +240,7 @@ struct stm32_port {
 	unsigned int tx_dma_bytes;
 	bool tx_dma_busy;	 /* dma tx transaction in progress */
 	bool rx_dma_busy;	 /* dma rx transaction in progress */
+	bool started;		/* to enable runtime_resume/suspend between startup and shutdown */
 	bool throttled;		 /* port throttled            */
 	bool hw_flow_control;
 	bool swap;		 /* swap RX & TX pins */
