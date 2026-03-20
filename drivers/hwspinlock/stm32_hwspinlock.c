@@ -18,14 +18,21 @@
 #define STM32_MUTEX_LOCK_BIT	BIT(31)
 #define STM32_MUTEX_NUM_LOCKS	32
 
+#define STM32_MUTEX_REG_RX_OFFSET(id)	(4 * (id))
+
 struct stm32_hwspinlock {
+	void __iomem *base;
 	struct clk *clk;
 };
 
 static int stm32_hwspinlock_trylock(struct hwspinlock *lock)
 {
-	void __iomem *lock_addr = hwspin_lock_get_priv(lock);
+	struct stm32_hwspinlock *hw = hwspin_lock_get_priv(lock);
+	int id = hwlock_to_id(lock);
+	void __iomem *lock_addr;
 	u32 status;
+
+	lock_addr = hw->base + STM32_MUTEX_REG_RX_OFFSET(id);
 
 	writel(STM32_MUTEX_LOCK_BIT | STM32_MUTEX_COREID, lock_addr);
 	status = readl(lock_addr);
@@ -35,7 +42,11 @@ static int stm32_hwspinlock_trylock(struct hwspinlock *lock)
 
 static void stm32_hwspinlock_unlock(struct hwspinlock *lock)
 {
-	void __iomem *lock_addr = hwspin_lock_get_priv(lock);
+	struct stm32_hwspinlock *hw = hwspin_lock_get_priv(lock);
+	int id = hwlock_to_id(lock);
+	void __iomem *lock_addr;
+
+	lock_addr = hw->base + STM32_MUTEX_REG_RX_OFFSET(id);
 
 	writel(STM32_MUTEX_COREID, lock_addr);
 }
@@ -47,7 +58,7 @@ static void stm32_hwspinlock_relax(struct hwspinlock *lock)
 
 static void *stm32_hwspinlock_init_priv(int local_id, void *init_data)
 {
-	return init_data + local_id * sizeof(u32);
+	return init_data;
 }
 
 static const struct hwspinlock_ops stm32_hwspinlock_ops = {
@@ -75,16 +86,15 @@ static int stm32_hwspinlock_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 	struct stm32_hwspinlock *hw;
-	void __iomem *io_base;
 	int ret;
-
-	io_base = devm_platform_ioremap_resource(pdev, 0);
-	if (IS_ERR(io_base))
-		return PTR_ERR(io_base);
 
 	hw = devm_kzalloc(dev, sizeof(*hw), GFP_KERNEL);
 	if (!hw)
 		return -ENOMEM;
+
+	hw->base = devm_platform_ioremap_resource(pdev, 0);
+	if (IS_ERR(hw->base))
+		return PTR_ERR(hw->base);
 
 	hw->clk = devm_clk_get(dev, "hsem");
 	if (IS_ERR(hw->clk))
@@ -110,7 +120,7 @@ static int stm32_hwspinlock_probe(struct platform_device *pdev)
 	}
 
 	ret = devm_hwspin_lock_register_errno(dev, &stm32_hwspinlock_ops,
-					      0, STM32_MUTEX_NUM_LOCKS, io_base);
+					      0, STM32_MUTEX_NUM_LOCKS, hw);
 
 	if (ret)
 		dev_err(dev, "Failed to register hwspinlock\n");
