@@ -82,6 +82,8 @@ static const struct dcmipp_pipeline_config stm32mp13_pipe_cfg = {
 #define	ID_AUX_CAPTURE 7
 #define	ID_ISP_STAT_CAPTURE 8
 #define	ID_ISP_PARAMS_OUTPUT 9
+#define ID_TPG 10
+
 static const struct dcmipp_ent_config stm32mp25_ent_config[] = {
 	{
 		.name = "dcmipp_input",
@@ -133,9 +135,15 @@ static const struct dcmipp_ent_config stm32mp25_ent_config[] = {
 		.init = dcmipp_isp_params_ent_init,
 		.release = dcmipp_isp_params_ent_release,
 	},
+	{
+		.name = "dcmipp_tpg",
+		.init = dcmipp_tpg_ent_init,
+		.release = dcmipp_tpg_ent_release,
+	},
 };
 
 static const struct dcmipp_ent_link stm32mp25_ent_links[] = {
+	DCMIPP_ENT_LINK(ID_TPG, 0, ID_INPUT, 0, 0),
 	DCMIPP_ENT_LINK(ID_INPUT, 1, ID_DUMP_BYTEPROC, 0, 0),
 	DCMIPP_ENT_LINK(ID_DUMP_BYTEPROC, 1, ID_DUMP_CAPTURE,  0,
 			MEDIA_LNK_FL_ENABLED | MEDIA_LNK_FL_IMMUTABLE),
@@ -163,8 +171,24 @@ static const struct dcmipp_pipeline_config stm32mp25_pipe_cfg = {
 	.hw_revision    = DCMIPP_STM32MP25_VERR,
 	.has_csi2	= true,
 	.needs_mclk	= true,
-	.has_swapyuv	= true
+	.has_swapyuv	= true,
+	.has_tpg	= true
 };
+
+bool dcmipp_is_input_csi(struct dcmipp_device *dcmipp)
+{
+	/* Only valid for DCMIPP having CSI input */
+	if (!dcmipp->pipe_cfg->has_csi2)
+		return false;
+
+	/* Check if input is connected to a TPG */
+	if (dcmipp->pipe_cfg->has_tpg &&
+	    media_pad_remote_pad_first(&dcmipp->entity[ID_INPUT]->pads[0]) ==
+	    &dcmipp->entity[ID_TPG]->pads[0])
+		return false;
+
+	return (dcmipp->entity[ID_INPUT]->bus_type == V4L2_MBUS_CSI2_DPHY);
+}
 
 #define LINK_FLAG_TO_STR(f) ((f) == 0 ? "" :\
 			     (f) == MEDIA_LNK_FL_ENABLED ? "ENABLED" :\
@@ -306,6 +330,7 @@ static int dcmipp_graph_notify_bound(struct v4l2_async_notifier *notifier,
 	enum v4l2_mbus_type supported_types[] = {
 		V4L2_MBUS_PARALLEL, V4L2_MBUS_BT656, V4L2_MBUS_CSI2_DPHY
 	};
+	u32 media_flags = 0;
 
 	dev_dbg(dcmipp->dev, "Subdev \"%s\" bound\n", subdev->name);
 
@@ -367,9 +392,16 @@ static int dcmipp_graph_notify_bound(struct v4l2_async_notifier *notifier,
 		sink->bus.data_shift = vep.bus.parallel.data_shift;
 	}
 	sink->bus_type = vep.bus_type;
+
+	/*
+	 * If a TPG is available, link between dcmipp_input and
+	 * bridge or sensor should not be IMMUTABLE
+	 */
+	if (!dcmipp->pipe_cfg->has_tpg)
+		media_flags = MEDIA_LNK_FL_IMMUTABLE;
+
 	ret = media_create_pad_link(&subdev->entity, src_pad, sink->ent, 0,
-				    MEDIA_LNK_FL_IMMUTABLE |
-				    MEDIA_LNK_FL_ENABLED);
+				    media_flags | MEDIA_LNK_FL_ENABLED);
 	if (ret) {
 		dev_err(dcmipp->dev, "Failed to create media pad link with subdev \"%s\"\n",
 			subdev->name);

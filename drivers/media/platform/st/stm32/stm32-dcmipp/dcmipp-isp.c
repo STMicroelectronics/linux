@@ -147,6 +147,8 @@ static int dcmipp_isp_set_fmt(struct v4l2_subdev *sd,
 			      struct v4l2_subdev_state *state,
 			      struct v4l2_subdev_format *fmt)
 {
+	struct dcmipp_isp_device *isp = v4l2_get_subdevdata(sd);
+
 	if (v4l2_subdev_is_streaming(sd))
 		return -EBUSY;
 
@@ -169,6 +171,15 @@ static int dcmipp_isp_set_fmt(struct v4l2_subdev *sd,
 		/* Forward format to SRC pads */
 		*src_fmt = fmt->format;
 		src_fmt->code = dcmipp_pixelpipe_src_format(fmt->format.code);
+
+		/* Need to consider ISP output as RGB in case of CSI Yxx input */
+		if (dcmipp_is_input_csi(isp->ved.dcmipp) &&
+		    (fmt->format.code == MEDIA_BUS_FMT_Y8_1X8 ||
+		     fmt->format.code == MEDIA_BUS_FMT_Y10_1X10 ||
+		     fmt->format.code == MEDIA_BUS_FMT_Y12_1X12 ||
+		     fmt->format.code == MEDIA_BUS_FMT_Y14_1X14))
+			src_fmt->code = MEDIA_BUS_FMT_RGB888_1X24;
+
 		*v4l2_subdev_state_get_format(state, 2) = *src_fmt;
 	} else {
 		struct v4l2_mbus_framefmt *sink_fmt =
@@ -178,6 +189,15 @@ static int dcmipp_isp_set_fmt(struct v4l2_subdev *sd,
 
 		fmt->format = *sink_fmt;
 		fmt->format.code = dcmipp_pixelpipe_src_format(sink_fmt->code);
+
+		/* Need to consider ISP output as RGB in case of CSI Yxx input */
+		if (dcmipp_is_input_csi(isp->ved.dcmipp) &&
+		    (sink_fmt->code == MEDIA_BUS_FMT_Y8_1X8 ||
+		     sink_fmt->code == MEDIA_BUS_FMT_Y10_1X10 ||
+		     sink_fmt->code == MEDIA_BUS_FMT_Y12_1X12 ||
+		     sink_fmt->code == MEDIA_BUS_FMT_Y14_1X14))
+			fmt->format.code = MEDIA_BUS_FMT_RGB888_1X24;
+
 		if (compose->width && compose->height) {
 			fmt->format.width = compose->width;
 			fmt->format.height = compose->height;

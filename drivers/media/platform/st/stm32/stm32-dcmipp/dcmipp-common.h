@@ -128,6 +128,7 @@ struct dcmipp_pipeline_config {
 	size_t num_links;
 	u32 hw_revision;
 	bool has_csi2;
+	bool has_tpg;
 	bool needs_mclk;
 	bool has_swapyuv;
 	bool has_histo;
@@ -282,6 +283,8 @@ static inline void __reg_clear(struct device *dev, void __iomem *base, u32 reg,
 	__reg_write(dev, base, reg, readl_relaxed(base + reg) & ~mask);
 }
 
+bool dcmipp_is_input_csi(struct dcmipp_device *dcmipp);
+
 /* DCMIPP subdev init / release entry points */
 struct dcmipp_ent_device *dcmipp_inp_ent_init(const char *entity_name,
 					      struct dcmipp_device *dcmipp);
@@ -308,5 +311,8 @@ struct dcmipp_ent_device *
 dcmipp_isp_params_ent_init(const char *entity_name,
 			   struct dcmipp_device *dcmipp);
 void dcmipp_isp_params_ent_release(struct dcmipp_ent_device *ved);
+struct dcmipp_ent_device *dcmipp_tpg_ent_init(const char *entity_name,
+					      struct dcmipp_device *dcmipp);
+void dcmipp_tpg_ent_release(struct dcmipp_ent_device *ved);
 
 #endif
