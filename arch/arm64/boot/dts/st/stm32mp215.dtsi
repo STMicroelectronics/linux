@@ -19,3 +19,28 @@
 		status = "disabled";
 	};
 };
+
+&soc1 {
+	ltdc: display-controller@48010000 {
+		compatible = "st,stm32mp251-ltdc";
+		reg = <0x48010000 0x400>;
+		interrupts = <GIC_SPI 141 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 142 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&rcc CK_KER_LTDC>, <&rcc CK_BUS_LTDC>;
+		clock-names = "lcd", "bus";
+		resets = <&rcc LTDC_R>;
+		power-domains = <&d1_pd>;
+		status = "disabled";
+		access-controllers = <&rifsc 80>;
+		access-controller-names = "cmn";
+
+		l1l2 {
+			access-controllers = <&rifsc 119>;
+			access-controller-names = "l1l2";
+		};
+		l3 {
+			access-controllers = <&rifsc 120>;
+			access-controller-names = "l3";
+		};
+	};
+};

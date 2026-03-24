@@ -2376,7 +2376,7 @@
 		};
 	};
 
-	soc@1 {
+	soc1: soc@1 {
 		compatible = "simple-bus";
 		ranges = <0x0 0x0 0x0 0x80000000>;
 		interrupt-parent = <&intc>;
