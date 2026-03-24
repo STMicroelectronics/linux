@@ -512,9 +512,6 @@ static int lan874x_set_wol(struct phy_device *phydev,
 		}
 	}
 
-	/* Enable wakeup on PHY device if at least one WoL feature is configured */
-	device_set_wakeup_enable(&phydev->mdio.dev, !!(val_wucsr & MII_LAN874X_PHY_WOL_MASK));
-
 	rc = phy_write_mmd(phydev, MDIO_MMD_PCS, MII_LAN874X_PHY_MMD_WOL_WUCSR, val_wucsr);
 	if (rc < 0)
 		return rc;
