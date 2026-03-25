@@ -25,6 +25,8 @@
 #define MDF_MAX_PERIOD_SIZE	(PAGE_SIZE / 2)
 #define MDF_MAX_PERIODS	6
 
+static char stm32_amdf_chan_nb_buf[STM32_MDF_EXT_INFO_BUZ_SZ] __aligned(PAGE_SIZE);
+
 struct stm32_amdf_priv {
 	struct snd_soc_dai_driver dai_drv;
 	struct snd_pcm_substream *substream;
@@ -299,7 +301,6 @@ static int stm32_amdf_probe(struct platform_device *pdev)
 {
 	struct stm32_amdf_priv *priv;
 	struct snd_soc_component *component;
-	char chan_nb[STM32_MDF_EXT_INFO_BUZ_SZ];
 	long channels_max;
 	ssize_t size;
 	int ret;
@@ -334,10 +335,15 @@ static int stm32_amdf_probe(struct platform_device *pdev)
 		return ret;
 	}
 
-	size = iio_read_channel_ext_info(priv->iio_ch, "sub_channels_nb", chan_nb);
+	size = iio_read_channel_ext_info(priv->iio_ch, "sub_channels_nb", stm32_amdf_chan_nb_buf);
+	if (size < 0) {
+		dev_err(&pdev->dev, "Failed to read ext_info sub_channels_nb (%zd)\n", size);
+		return size;
+	}
+
 	if (size >= STM32_MDF_EXT_INFO_BUZ_SZ)
 		return -EINVAL;
-	ret = kstrtol(chan_nb, 10, &channels_max);
+	ret = kstrtol(stm32_amdf_chan_nb_buf, 10, &channels_max);
 	if (ret < 0) {
 		dev_err(&pdev->dev, "Failed to get channels number\n");
 		return ret;
