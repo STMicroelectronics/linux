@@ -984,10 +984,16 @@ static int __maybe_unused dwc2_suspend(struct device *dev)
 	if (!ll_hw_enabled)
 		ret = __dwc2_lowlevel_hw_disable(dwc2);
 
-	if (dwc2->ll_hw_enabled &&
-	    (dwc2_gadget_can_poweroff_phy(dwc2) || dwc2_host_can_poweroff_phy(dwc2))) {
-		ret = __dwc2_lowlevel_hw_disable(dwc2);
-		dwc2->phy_off_for_suspend = true;
+	if (dwc2->ll_hw_enabled) {
+		if (dwc2_gadget_can_poweroff_phy(dwc2) || dwc2_host_can_poweroff_phy(dwc2)) {
+			ret = __dwc2_lowlevel_hw_disable(dwc2);
+			dwc2->phy_off_for_suspend = true;
+		} else {
+			if (dwc2->clk)
+				clk_disable_unprepare(dwc2->clk);
+			if (dwc2->utmi_clk)
+				clk_disable_unprepare(dwc2->utmi_clk);
+		}
 	}
 
 	/* If HW has been kept enabled for wakeup, enable wake irq */
@@ -1018,11 +1024,28 @@ static int __maybe_unused dwc2_resume(struct device *dev)
 				STM32_SYSCFG_OTGARCR_OFFSET_AREN_MASK);
 	}
 
-	if (dwc2->phy_off_for_suspend && dwc2->ll_hw_enabled) {
-		ret = __dwc2_lowlevel_hw_enable(dwc2);
-		if (ret)
-			return ret;
+	if (dwc2->ll_hw_enabled) {
+		if (dwc2->phy_off_for_suspend) {
+			ret = __dwc2_lowlevel_hw_enable(dwc2);
+			if (ret)
+				return ret;
+		} else {
+			if (dwc2->utmi_clk) {
+				ret = clk_prepare_enable(dwc2->utmi_clk);
+				if (ret)
+					return ret;
+			}
+			if (dwc2->clk) {
+				ret = clk_prepare_enable(dwc2->clk);
+				if (ret) {
+					if (dwc2->utmi_clk)
+						clk_disable_unprepare(dwc2->utmi_clk);
+					return ret;
+				}
+			}
+		}
 	}
+
 	dwc2->phy_off_for_suspend = false;
 
 	pm_runtime_disable(dev);
