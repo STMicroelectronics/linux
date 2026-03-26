@@ -30,6 +30,16 @@
 
 	chosen {
 		stdout-path = "serial0:115200n8";
+		#address-cells = <2>;
+		#size-cells = <2>;
+		ranges;
+
+		framebuffer {
+			compatible = "simple-framebuffer";
+			clocks = <&rcc CK_BUS_LTDC>, <&rcc CK_KER_LTDC>,
+				 <&rcc CK_BUS_LVDS>, <&rcc CK_KER_LVDSPHY>;
+			status = "disabled";
+		};
 	};
 
 	clock-hog {
@@ -38,6 +48,12 @@
 	};
 
 	clocks {
+		cec_clock: cec-clock {
+			compatible = "fixed-clock";
+			#clock-cells = <0>;
+			clock-frequency = <12000000>;
+		};
+
 		clk_ext_camera: clk-ext-camera {
 			#clock-cells = <0>;
 			compatible = "fixed-clock";
@@ -74,6 +90,18 @@
 			interrupts-extended = <&optee 0>;
 			wakeup-source;
 			status = "okay";
+		};
+	};
+
+	hdmi: connector {
+		compatible = "hdmi-connector";
+		label = "hdmi";
+		type = "a";
+
+		port {
+			hdmi_connector_in: endpoint {
+				remote-endpoint = <&adv753x_out>;
+			};
 		};
 	};
 
@@ -262,6 +290,31 @@
 	};
 };
 
+&dsi {
+	vdd-supply =  <&scmi_vddcore>;
+	vdda18-supply = <&scmi_v1v8>;
+	status = "disabled";
+
+	ports {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		port@0 {
+			reg = <0>;
+			dsi_in: endpoint {
+				remote-endpoint = <&ltdc_ep0_out>;
+			};
+		};
+
+		port@1 {
+			reg = <1>;
+			dsi_out1: endpoint {
+				remote-endpoint = <&adv753x_in>;
+			};
+		};
+	};
+};
+
 &ethernet1 {
 	pinctrl-0 = <&eth1_rgmii_pins_a &eth1_mdio_pins_a>;
 	pinctrl-1 = <&eth1_rgmii_sleep_pins_a &eth1_mdio_sleep_pins_a>;
@@ -407,12 +460,53 @@
 		};
 	};
 
+	adv753x: hdmi@3d {
+		/*
+		 * With MB1232 board, use "adi,adv7533" (1080p30)
+		 * With MB1752 board, use "adi,adv7535" (1080p60)
+		 */
+		compatible = "adi,adv7533";
+		reg = <0x3d>, <0x3f>, <0x3c>, <0x38>;
+		reg-names = "main", "edid", "cec", "packet";
+		clocks = <&cec_clock>;
+		clock-names = "cec";
+		interrupt-parent = <&gpiod>;
+		interrupts = <10 IRQ_TYPE_EDGE_FALLING>;
+		pd-gpios = <&gpiog 14 GPIO_ACTIVE_LOW>;
+		status = "disabled";
+		adi,dsi-lanes = <4>;
+		avdd-supply = <&scmi_v1v8>;
+		dvdd-supply = <&scmi_v1v8>;
+		pvdd-supply = <&scmi_v1v8>;
+		a2vdd-supply = <&scmi_v1v8>;
+		v3p3-supply = <&scmi_v3v3>;
+		v1p2-supply = <&scmi_v1v8>;
+
+		ports {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			port@0 {
+				reg = <0>;
+				adv753x_in: endpoint {
+					remote-endpoint = <&dsi_out1>;
+				};
+			};
+
+			port@1 {
+				reg = <1>;
+				adv753x_out: endpoint {
+					remote-endpoint = <&hdmi_connector_in>;
+				};
+			};
+		};
+	};
+
 	ili2511: ili2511@41 {
 		compatible = "ilitek,ili251x";
 		reg = <0x41>;
 		interrupt-parent = <&gpioi>;
 		interrupts = <13 IRQ_TYPE_EDGE_FALLING>;
-		reset-gpios = <&gpiog 14 GPIO_ACTIVE_LOW>;
 		status = "okay";
 	};
 };
@@ -475,10 +569,21 @@
 };
 
 &ltdc {
-	bootph-all;
+	bootph-some-ram;
+	rotation-memory = <&ltdc_sec_rotation>;
 	status = "okay";
+
 	port {
-		ltdc_ep0_out: endpoint {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		ltdc_ep0_out: endpoint@0 {
+			reg = <0>;
+			remote-endpoint = <&dsi_in>;
+		};
+
+		ltdc_ep1_out: endpoint@1 {
+			reg = <1>;
 			remote-endpoint = <&lvds_in>;
 		};
 	};
@@ -486,7 +591,10 @@
 
 &lvds {
 	bootph-all;
+	vdd-supply =  <&scmi_vddcore>;
+	vdda18-supply = <&scmi_v1v8>;
 	status = "okay";
+
 	ports {
 		#address-cells = <1>;
 		#size-cells = <0>;
@@ -494,7 +602,7 @@
 		port@0 {
 			reg = <0>;
 			lvds_in: endpoint {
-				remote-endpoint = <&ltdc_ep0_out>;
+				remote-endpoint = <&ltdc_ep1_out>;
 			};
 		};
 
