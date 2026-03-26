@@ -372,6 +372,21 @@
 			};
 		};
 	};
+
+	goodix: goodix-ts@5d {
+		compatible = "goodix,gt911";
+		reg = <0x5d>;
+		pinctrl-names = "default", "sleep";
+		pinctrl-0 = <&goodix_pins_a>;
+		pinctrl-1 = <&goodix_sleep_pins_a>;
+		interrupt-parent = <&gpiof>;
+		interrupts = <4 IRQ_TYPE_EDGE_FALLING>;
+		AVDD28-supply = <&scmi_v3v3>;
+		VDDIO-supply = <&scmi_v3v3>;
+		touchscreen-size-x = <480>;
+		touchscreen-size-y = <272>;
+		status = "okay" ;
+	};
 };
 
 &i3c1 {
