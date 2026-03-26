@@ -824,10 +824,13 @@ static int dcmipp_pixelproc_disable_streams(struct v4l2_subdev *sd,
 static const struct v4l2_subdev_pad_ops dcmipp_pixelproc_pad_ops = {
 	.enum_mbus_code		= dcmipp_pixelproc_enum_mbus_code,
 	.enum_frame_size	= dcmipp_pixelproc_enum_frame_size,
+	.enum_frame_interval	= dcmipp_enum_frame_interval,
 	.get_fmt		= v4l2_subdev_get_fmt,
 	.set_fmt		= dcmipp_pixelproc_set_fmt,
 	.get_selection		= dcmipp_pixelpipe_get_selection,
 	.set_selection		= dcmipp_pixelproc_set_selection,
+	.get_frame_interval	= v4l2_subdev_get_frame_interval,
+	.set_frame_interval	= dcmipp_set_frame_interval,
 	.enable_streams		= dcmipp_pixelproc_enable_streams,
 	.disable_streams	= dcmipp_pixelproc_disable_streams,
 };

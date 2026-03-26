@@ -109,3 +109,81 @@ dcmipp_ent_sd_unregister(struct dcmipp_ent_device *ved, struct v4l2_subdev *sd)
 	media_entity_cleanup(ved->ent);
 	v4l2_device_unregister_subdev(sd);
 }
+
+static const unsigned int dcmipp_frates[] = {1, 2, 4, 8};
+
+int dcmipp_enum_frame_interval(struct v4l2_subdev *sd,
+			       struct v4l2_subdev_state *sd_state,
+			       struct v4l2_subdev_frame_interval_enum *fie)
+{
+	struct v4l2_fract *sink_interval =
+		v4l2_subdev_state_get_interval(sd_state, 0);
+	unsigned int ratio;
+
+	if (fie->pad > 1 ||
+	    fie->index >= (fie->pad == 1 ? ARRAY_SIZE(dcmipp_frates) : 1) ||
+	    fie->width > DCMIPP_FRAME_MAX_WIDTH ||
+	    fie->height > DCMIPP_FRAME_MAX_HEIGHT)
+		return -EINVAL;
+
+	if (!fie->pad) {
+		fie->interval = *sink_interval;
+		return 0;
+	}
+
+	ratio = dcmipp_frates[fie->index];
+
+	fie->interval.numerator = sink_interval->numerator * ratio;
+	fie->interval.denominator = sink_interval->denominator;
+
+	return 0;
+}
+
+int dcmipp_set_frame_interval(struct v4l2_subdev *sd,
+			      struct v4l2_subdev_state *sd_state,
+			      struct v4l2_subdev_frame_interval *fi)
+{
+	struct v4l2_fract *interval;
+
+	if (v4l2_subdev_is_streaming(sd))
+		return -EBUSY;
+
+	if (fi->interval.numerator == 0 || fi->interval.denominator == 0)
+		fi->interval = *v4l2_subdev_state_get_interval(sd_state, 0);
+
+	interval = v4l2_subdev_state_get_interval(sd_state, fi->pad);
+
+	if (!fi->pad) {
+		/*
+		 * Setting sink frame interval resets frame skipping.
+		 * Sink frame interval is propagated to src.
+		 */
+		*v4l2_subdev_state_get_interval(sd_state, 1) = fi->interval;
+	} else {
+		struct v4l2_fract *sink_interval =
+			v4l2_subdev_state_get_interval(sd_state, 0);
+		unsigned int ratio;
+
+		/* Normalize ratio */
+		ratio = (sink_interval->denominator * fi->interval.numerator) /
+			(sink_interval->numerator * fi->interval.denominator);
+
+		/* Hardware can skip 1 frame over 2, 4 or 8 */
+		if (ratio >= 8)
+			ratio = 8;
+		else if (ratio >= 4)
+			ratio = 4;
+		else if (ratio >= 2)
+			ratio = 2;
+		else
+			ratio = 1;
+
+		/* Adjust src frame interval to what hardware can really do */
+		fi->interval.numerator = sink_interval->numerator * ratio;
+		fi->interval.denominator = sink_interval->denominator;
+	}
+
+	*interval = fi->interval;
+
+	return 0;
+}

@@ -285,6 +285,13 @@ static inline void __reg_clear(struct device *dev, void __iomem *base, u32 reg,
 
 bool dcmipp_is_input_csi(struct dcmipp_device *dcmipp);
 
+int dcmipp_enum_frame_interval(struct v4l2_subdev *sd,
+			       struct v4l2_subdev_state *sd_state,
+			       struct v4l2_subdev_frame_interval_enum *fie);
+int dcmipp_set_frame_interval(struct v4l2_subdev *sd,
+			      struct v4l2_subdev_state *sd_state,
+			      struct v4l2_subdev_frame_interval *fi);
+
 /* DCMIPP subdev init / release entry points */
 struct dcmipp_ent_device *dcmipp_inp_ent_init(const char *entity_name,
 					      struct dcmipp_device *dcmipp);

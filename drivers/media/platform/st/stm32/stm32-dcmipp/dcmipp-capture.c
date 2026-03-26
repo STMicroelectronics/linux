@@ -64,6 +64,7 @@
 #define DCMIPP_PxFSCR(id)	(0x404 + ((id) * 0x400))
 #define DCMIPP_PxFSCR_PIPEN	BIT(31)
 #define DCMIPP_PxFCTCR(id)	(0x500 + ((id) * 0x400))
+#define DCMIPP_PxFCTCR_FRATE_MASK	GENMASK(1, 0)
 #define DCMIPP_PxFCTCR_CPTREQ	BIT(3)
 #define DCMIPP_P0DCCNTR		0x5b0
 #define DCMIPP_P0DCLMTR		0x5b4
@@ -236,6 +237,9 @@ struct dcmipp_capture_device {
 		u32 underrun;
 		u32 nactive;
 	} count;
+
+	u32 vsync_frame_refresh_cnt;
+	u32 frame_skip_ratio;
 };
 
 static const struct dcmipp_capture_pix_map *
@@ -558,6 +562,9 @@ static void dcmipp_start_capture(struct dcmipp_capture_device *vcap,
 			reg_write(vcap, DCMIPP_P1PPM2AR1, buf->addrs[2]);
 	}
 
+	/* It takes 1 VSYNCs to actually start */
+	vcap->vsync_frame_refresh_cnt = 1;
+
 	/* Capture request */
 	reg_set(vcap, DCMIPP_PxFCTCR(vcap->pipe_id), DCMIPP_PxFCTCR_CPTREQ);
 }
@@ -571,6 +578,41 @@ static void dcmipp_capture_all_buffers_done(struct dcmipp_capture_device *vcap,
 		list_del_init(&buf->list);
 		vb2_buffer_done(&buf->vb.vb2_buf, state);
 	}
+}
+
+static int dcmipp_capture_get_frame_skip_rate(struct v4l2_subdev *source,
+					      u32 *frame_skip_rate)
+{
+	struct v4l2_subdev_frame_interval sink_fi = { .pad = 0, };
+	struct v4l2_subdev_frame_interval source_fi = { .pad = 1, };
+	u32 ratio = 1;
+	int ret;
+
+	/*
+	 * Retrieve the frame rate adjustment info from postproc subdev
+	 * if frame_interval are not available, rate will be 1
+	 */
+	ret = v4l2_subdev_call_state_active(source, pad, get_frame_interval,
+					    &sink_fi);
+	if (ret < 0)
+		goto end;
+
+	ret = v4l2_subdev_call_state_active(source, pad, get_frame_interval,
+					    &source_fi);
+	if (ret < 0)
+		goto end;
+
+	if (!sink_fi.interval.numerator || !sink_fi.interval.denominator ||
+	    !source_fi.interval.numerator || !source_fi.interval.denominator)
+		goto end;
+
+	ratio = (sink_fi.interval.denominator * source_fi.interval.numerator) /
+		(sink_fi.interval.numerator * source_fi.interval.denominator);
+
+end:
+	*frame_skip_rate = ratio;
+
+	return 0;
 }
 
 static int dcmipp_capture_start_streaming(struct vb2_queue *vq,
@@ -610,6 +652,17 @@ static int dcmipp_capture_start_streaming(struct vb2_queue *vq,
 			__func__, ret);
 		goto err_pm_put;
 	}
+
+	/* Configure frame control */
+	ret = dcmipp_capture_get_frame_skip_rate(vcap->s_subdev,
+						 &vcap->frame_skip_ratio);
+	if (ret < 0)
+		return ret;
+
+	reg_clear(vcap, DCMIPP_PxFCTCR(vcap->pipe_id),
+		  DCMIPP_PxFCTCR_FRATE_MASK);
+	reg_set(vcap, DCMIPP_PxFCTCR(vcap->pipe_id),
+		__ffs(vcap->frame_skip_ratio));
 
 	ret = v4l2_subdev_enable_streams(vcap->s_subdev,
 					 vcap->s_subdev_pad_nb, BIT_ULL(0));
@@ -1032,11 +1085,15 @@ static irqreturn_t dcmipp_capture_irq_thread(int irq, void *arg)
 		 * most of the cases, since a FRAMEEND has already come,
 		 * pointer next is NULL since active is reset during the
 		 * FRAMEEND handling. However, in case of framerate adjustment,
-		 * there are more VSYNC than FRAMEEND. Thus we recycle the
-		 * active (but not used) buffer and put it back into next.
+		 * there are more VSYNC than FRAMEEND. To tackle with those
+		 * cases, the driver needs to count vsync in order to apply
+		 * updates only when really necessary.
 		 */
-		swap(vcap->active, vcap->next);
-		dcmipp_capture_set_next_frame_or_stop(vcap);
+		if (--vcap->vsync_frame_refresh_cnt == 0) {
+			vcap->vsync_frame_refresh_cnt = vcap->frame_skip_ratio;
+			swap(vcap->active, vcap->next);
+			dcmipp_capture_set_next_frame_or_stop(vcap);
+		}
 	}
 
 out:
