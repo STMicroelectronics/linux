@@ -232,6 +232,51 @@
 	};
 
 	/omit-if-no-ref/
+	dfsdm_clkout_pins_a: dfsdm-clkout-pins-0 {
+		pins {
+			pinmux = <STM32_PINMUX('B', 13, AF3)>; /* DFSDM_CKOUT */
+			bias-disable;
+			drive-push-pull;
+			slew-rate = <0>;
+		};
+	};
+
+	/omit-if-no-ref/
+	dfsdm_clkout_sleep_pins_a: dfsdm-clkout-sleep-pins-0 {
+		pins {
+			pinmux = <STM32_PINMUX('B', 13, ANALOG)>; /* DFSDM_CKOUT */
+		};
+	};
+
+	/omit-if-no-ref/
+	dfsdm_data1_pins_a: dfsdm-data1-pins-0 {
+		pins {
+			pinmux = <STM32_PINMUX('C', 3, AF3)>; /* DFSDM_DATA1 */
+		};
+	};
+
+	/omit-if-no-ref/
+	dfsdm_data1_sleep_pins_a: dfsdm-data1-sleep-pins-0 {
+		pins {
+			pinmux = <STM32_PINMUX('C', 3, ANALOG)>; /* DFSDM_DATA1 */
+		};
+	};
+
+	/omit-if-no-ref/
+	dfsdm_data3_pins_a: dfsdm-data3-pins-0 {
+		pins {
+			pinmux = <STM32_PINMUX('F', 13, AF6)>; /* DFSDM_DATA3 */
+		};
+	};
+
+	/omit-if-no-ref/
+	dfsdm_data3_sleep_pins_a: dfsdm-data3-sleep-pins-0 {
+		pins {
+			pinmux = <STM32_PINMUX('F', 13, ANALOG)>; /* DFSDM_DATA3 */
+		};
+	};
+
+	/omit-if-no-ref/
 	ethernet0_rgmii_pins_a: rgmii-0 {
 		pins1 {
 			pinmux = <STM32_PINMUX('G', 5, AF11)>, /* ETH_RGMII_CLK125 */
