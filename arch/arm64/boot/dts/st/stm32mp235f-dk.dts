@@ -29,10 +29,27 @@
 
 	chosen {
 		stdout-path = "serial0:115200n8";
+		#address-cells = <2>;
+		#size-cells = <2>;
+		ranges;
+
+		framebuffer {
+			compatible = "simple-framebuffer";
+			clocks = <&rcc CK_BUS_LTDC>, <&rcc CK_KER_LTDC>,
+				 <&rcc CK_BUS_LVDS>, <&rcc CK_KER_LVDSPHY>,
+				 <&rcc CK_KER_TIM3>;
+			status = "disabled";
+		};
 	};
 
 	clocks {
 		clk_ext_camera: clk-ext-camera {
+			#clock-cells = <0>;
+			compatible = "fixed-clock";
+			clock-frequency = <24000000>;
+		};
+
+		clk_ext_cec: clk-ext-cec {
 			#clock-cells = <0>;
 			compatible = "fixed-clock";
 			clock-frequency = <24000000>;
@@ -77,9 +94,61 @@
 		};
 	};
 
+	hdmi: connector {
+		compatible = "hdmi-connector";
+		label = "hdmi";
+		type = "a";
+		hdmi-pwr-supply = <&scmi_v5v_hdmi>;
+
+		port {
+			hdmi_connector_in: endpoint {
+				remote-endpoint = <&adv7535_out>;
+			};
+		};
+	};
+
 	memory@80000000 {
 		device_type = "memory";
 		reg = <0x0 0x80000000 0x0 0x80000000>;
+	};
+
+	panel_lvds: panel-lvds {
+		compatible = "edt,etml0700z9ndha", "panel-lvds";
+		enable-gpios = <&gpioi 4 GPIO_ACTIVE_HIGH>;
+		backlight = <&panel_lvds_backlight>;
+		power-supply = <&scmi_v3v3>;
+		status = "okay";
+
+		width-mm = <156>;
+		height-mm = <92>;
+		data-mapping = "vesa-24";
+
+		panel-timing {
+			clock-frequency = <54000000>;
+			hactive = <1024>;
+			vactive = <600>;
+			hfront-porch = <150>;
+			hback-porch = <150>;
+			hsync-len = <21>;
+			vfront-porch = <24>;
+			vback-porch = <24>;
+			vsync-len = <21>;
+		};
+
+		port {
+			lvds_panel_in: endpoint {
+				remote-endpoint = <&lvds_out0>;
+			};
+		};
+	};
+
+	panel_lvds_backlight: panel-lvds-backlight {
+		compatible = "pwm-backlight";
+		pwms = <&pwm3 1 1000000 0>;
+		brightness-levels = <0 16 22 30 40 55 75 102 138 188 255>;
+		default-brightness-level = <10>;
+		power-supply = <&scmi_v3v3>;
+		status = "okay";
 	};
 
 	wifi_pwrseq: wifi-pwrseq {
@@ -190,6 +259,31 @@
 		dcmipp_0: endpoint {
 			remote-endpoint = <&csi_source>;
 			bus-type = <MEDIA_BUS_TYPE_CSI2_DPHY>;
+		};
+	};
+};
+
+&dsi {
+	vdd-supply =  <&scmi_vddcore>;
+	vdda18-supply = <&scmi_v1v8>;
+	status = "okay";
+
+	ports {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		port@0 {
+			reg = <0>;
+			dsi_in: endpoint {
+				remote-endpoint = <&ltdc_ep0_out>;
+			};
+		};
+
+		port@1 {
+			reg = <1>;
+			dsi_out1: endpoint {
+				remote-endpoint = <&adv7535_in>;
+			};
 		};
 	};
 };
@@ -307,6 +401,53 @@
 			};
 		};
 	};
+
+	adv7535: hdmi@3d {
+		compatible = "adi,adv7535";
+		reg = <0x3d>, <0x3f>, <0x3c>, <0x38>;
+		reg-names = "main", "edid", "cec", "packet";
+		status = "okay";
+		adi,dsi-lanes = <4>;
+		clocks = <&clk_ext_cec>;
+		clock-names = "cec";
+		interrupt-parent = <&gpiob>;
+		interrupts = <4 IRQ_TYPE_EDGE_FALLING>;
+		pd-gpios = <&gpiob 6 GPIO_ACTIVE_LOW>;
+		avdd-supply = <&scmi_v1v8>;
+		dvdd-supply = <&scmi_v1v8>;
+		pvdd-supply = <&scmi_v1v8>;
+		a2vdd-supply = <&scmi_v1v8>;
+		v3p3-supply = <&scmi_v3v3>;
+		v1p2-supply = <&scmi_v1v8>;
+
+		ports {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			port@0 {
+				reg = <0>;
+				adv7535_in: endpoint {
+					remote-endpoint = <&dsi_out1>;
+				};
+			};
+
+			port@1 {
+				reg = <1>;
+				adv7535_out: endpoint {
+					remote-endpoint = <&hdmi_connector_in>;
+				};
+			};
+		};
+	};
+
+	ili2511: ili2511@41 {
+		compatible = "ilitek,ili251x";
+		reg = <0x41>;
+		interrupt-parent = <&gpioi>;
+		interrupts = <6 IRQ_TYPE_EDGE_FALLING>;
+		reset-gpios = <&gpioi 0 GPIO_ACTIVE_LOW>;
+		status = "okay";
+	};
 };
 
 &i2c8 {
@@ -332,6 +473,51 @@
 
 &ipcc1 {
 	status = "okay";
+};
+
+&ltdc {
+	bootph-some-ram;
+	status = "okay";
+
+	port {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		ltdc_ep0_out: endpoint@0 {
+			reg = <0>;
+			remote-endpoint = <&dsi_in>;
+		};
+
+		ltdc_ep1_out: endpoint@1 {
+			reg = <1>;
+			remote-endpoint = <&lvds_in>;
+		};
+	};
+};
+
+&lvds {
+	vdd-supply =  <&scmi_vddcore>;
+	vdda18-supply = <&scmi_v1v8>;
+	status = "okay";
+
+	ports {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		port@0 {
+			reg = <0>;
+			lvds_in: endpoint {
+				remote-endpoint = <&ltdc_ep1_out>;
+			};
+		};
+
+		port@1 {
+			reg = <1>;
+			lvds_out0: endpoint {
+				remote-endpoint = <&lvds_panel_in>;
+			};
+		};
+	};
 };
 
 &m33_rproc {
@@ -511,6 +697,16 @@
 
 &syscfg {
 	bootph-all;
+};
+
+&timers3 {
+	status = "okay";
+	pwm3: pwm {
+		pinctrl-0 = <&pwm3_ch2_pins_a>;
+		pinctrl-1 = <&pwm3_ch2_sleep_pins_a>;
+		pinctrl-names = "default", "sleep";
+		status = "okay";
+	};
 };
 
 /* Bluetooth */
