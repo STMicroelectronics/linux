@@ -1097,26 +1097,16 @@ static int stm32_rtc_probe(struct platform_device *pdev)
 
 	if (!rtc->data->has_pclk) {
 		rtc->pclk = NULL;
-		rtc->rtc_ck = devm_clk_get(&pdev->dev, NULL);
+		rtc->rtc_ck = devm_clk_get_enabled(&pdev->dev, NULL);
 	} else {
-		rtc->pclk = devm_clk_get(&pdev->dev, "pclk");
+		rtc->pclk = devm_clk_get_enabled(&pdev->dev, "pclk");
 		if (IS_ERR(rtc->pclk))
 			return dev_err_probe(&pdev->dev, PTR_ERR(rtc->pclk), "no pclk clock");
 
-		rtc->rtc_ck = devm_clk_get(&pdev->dev, "rtc_ck");
+		rtc->rtc_ck = devm_clk_get_enabled(&pdev->dev, "rtc_ck");
 	}
 	if (IS_ERR(rtc->rtc_ck))
 		return dev_err_probe(&pdev->dev, PTR_ERR(rtc->rtc_ck), "no rtc_ck clock");
-
-	if (rtc->data->has_pclk) {
-		ret = clk_prepare_enable(rtc->pclk);
-		if (ret)
-			return ret;
-	}
-
-	ret = clk_prepare_enable(rtc->rtc_ck);
-	if (ret)
-		goto err_no_rtc_ck;
 
 	if (rtc->data->need_dbp)
 		regmap_update_bits(rtc->dbp, rtc->dbp_reg,
@@ -1210,11 +1200,6 @@ static int stm32_rtc_probe(struct platform_device *pdev)
 	return 0;
 
 err:
-	clk_disable_unprepare(rtc->rtc_ck);
-err_no_rtc_ck:
-	if (rtc->data->has_pclk)
-		clk_disable_unprepare(rtc->pclk);
-
 	if (rtc->data->need_dbp)
 		regmap_update_bits(rtc->dbp, rtc->dbp_reg, rtc->dbp_mask, 0);
 
@@ -1236,10 +1221,6 @@ static void stm32_rtc_remove(struct platform_device *pdev)
 	cr &= ~STM32_RTC_CR_ALRAIE;
 	writel_relaxed(cr, rtc->base + regs->cr);
 	stm32_rtc_wpr_lock(rtc);
-
-	clk_disable_unprepare(rtc->rtc_ck);
-	if (rtc->data->has_pclk)
-		clk_disable_unprepare(rtc->pclk);
 
 	/* Enable backup domain write protection if needed */
 	if (rtc->data->need_dbp)
