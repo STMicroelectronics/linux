@@ -251,9 +251,9 @@ struct stm32_rtc_pinmux_func {
 static int stm32_rtc_pinmux_action_alarm(struct pinctrl_dev *pctldev, unsigned int pin)
 {
 	struct stm32_rtc *rtc = pinctrl_dev_get_drvdata(pctldev);
-	struct stm32_rtc_registers regs = rtc->data->regs;
-	unsigned int cr = readl_relaxed(rtc->base + regs.cr);
-	unsigned int cfgr = readl_relaxed(rtc->base + regs.cfgr);
+	const struct stm32_rtc_registers *regs = &rtc->data->regs;
+	unsigned int cr = readl_relaxed(rtc->base + regs->cr);
+	unsigned int cfgr = readl_relaxed(rtc->base + regs->cfgr);
 
 	if (!rtc->data->has_alarm_out)
 		return -EPERM;
@@ -282,8 +282,8 @@ static int stm32_rtc_pinmux_action_alarm(struct pinctrl_dev *pctldev, unsigned i
 	}
 
 	stm32_rtc_wpr_unlock(rtc);
-	writel_relaxed(cr, rtc->base + regs.cr);
-	writel_relaxed(cfgr, rtc->base + regs.cfgr);
+	writel_relaxed(cr, rtc->base + regs->cr);
+	writel_relaxed(cfgr, rtc->base + regs->cfgr);
 	stm32_rtc_wpr_lock(rtc);
 
 	return 0;
@@ -292,9 +292,9 @@ static int stm32_rtc_pinmux_action_alarm(struct pinctrl_dev *pctldev, unsigned i
 static int stm32_rtc_pinmux_lsco_available(struct pinctrl_dev *pctldev, unsigned int pin)
 {
 	struct stm32_rtc *rtc = pinctrl_dev_get_drvdata(pctldev);
-	struct stm32_rtc_registers regs = rtc->data->regs;
-	unsigned int cr = readl_relaxed(rtc->base + regs.cr);
-	unsigned int cfgr = readl_relaxed(rtc->base + regs.cfgr);
+	const struct stm32_rtc_registers *regs = &rtc->data->regs;
+	unsigned int cr = readl_relaxed(rtc->base + regs->cr);
+	unsigned int cfgr = readl_relaxed(rtc->base + regs->cfgr);
 	unsigned int calib = STM32_RTC_CR_COE;
 	unsigned int tampalrm = STM32_RTC_CR_TAMPOE | STM32_RTC_CR_OSEL;
 
@@ -324,7 +324,7 @@ static int stm32_rtc_pinmux_lsco_available(struct pinctrl_dev *pctldev, unsigned
 static int stm32_rtc_pinmux_action_lsco(struct pinctrl_dev *pctldev, unsigned int pin)
 {
 	struct stm32_rtc *rtc = pinctrl_dev_get_drvdata(pctldev);
-	struct stm32_rtc_registers regs = rtc->data->regs;
+	const struct stm32_rtc_registers *regs = &rtc->data->regs;
 	struct device *dev = rtc->rtc_dev->dev.parent;
 	unsigned long flags = 0;
 	u8 lscoen;
@@ -347,7 +347,7 @@ static int stm32_rtc_pinmux_action_lsco(struct pinctrl_dev *pctldev, unsigned in
 		flags = CLK_IGNORE_UNUSED | CLK_IS_CRITICAL;
 
 	rtc->clk_lsco = clk_register_gate(dev, "rtc_lsco", __clk_get_name(rtc->rtc_ck), flags,
-					  rtc->base + regs.cfgr, lscoen, 0, NULL);
+					  rtc->base + regs->cfgr, lscoen, 0, NULL);
 	if (IS_ERR(rtc->clk_lsco))
 		return PTR_ERR(rtc->clk_lsco);
 
@@ -864,10 +864,10 @@ static const struct stm32_rtc_data stm32h7_rtc_data = {
 static void stm32mp1_rtc_clear_events(struct stm32_rtc *rtc,
 				      unsigned int flags)
 {
-	struct stm32_rtc_registers regs = rtc->data->regs;
+	const struct stm32_rtc_registers *regs = &rtc->data->regs;
 
 	/* Flags are cleared by writing 1 in RTC_SCR */
-	writel_relaxed(flags, rtc->base + regs.scr);
+	writel_relaxed(flags, rtc->base + regs->scr);
 }
 
 static const struct stm32_rtc_data stm32mp1_data = {
@@ -933,8 +933,8 @@ MODULE_DEVICE_TABLE(of, stm32_rtc_of_match);
 
 static void stm32_rtc_clean_outs(struct stm32_rtc *rtc)
 {
-	struct stm32_rtc_registers regs = rtc->data->regs;
-	unsigned int cr = readl_relaxed(rtc->base + regs.cr);
+	const struct stm32_rtc_registers *regs = &rtc->data->regs;
+	unsigned int cr = readl_relaxed(rtc->base + regs->cr);
 
 	cr &= ~STM32_RTC_CR_OSEL;
 	cr &= ~STM32_RTC_CR_TAMPOE;
@@ -943,15 +943,15 @@ static void stm32_rtc_clean_outs(struct stm32_rtc *rtc)
 	cr &= ~STM32_RTC_CR_OUT2EN;
 
 	stm32_rtc_wpr_unlock(rtc);
-	writel_relaxed(cr, rtc->base + regs.cr);
+	writel_relaxed(cr, rtc->base + regs->cr);
 	stm32_rtc_wpr_lock(rtc);
 
-	if (regs.cfgr != UNDEF_REG) {
-		unsigned int cfgr = readl_relaxed(rtc->base + regs.cfgr);
+	if (regs->cfgr != UNDEF_REG) {
+		unsigned int cfgr = readl_relaxed(rtc->base + regs->cfgr);
 
 		cfgr &= ~STM32_RTC_CFGR_LSCOEN;
 		cfgr &= ~STM32_RTC_CFGR_OUT2_RMP;
-		writel_relaxed(cfgr, rtc->base + regs.cfgr);
+		writel_relaxed(cfgr, rtc->base + regs->cfgr);
 	}
 }
 
