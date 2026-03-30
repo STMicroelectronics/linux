@@ -24,6 +24,7 @@
 			enable-method = "psci";
 			power-domains = <&cpu0_pd>, <&scmi_perf 0>;
 			power-domain-names = "psci", "perf";
+			#cooling-cells = <2>;
 		};
 
 		idle-states {
@@ -184,6 +185,49 @@
 		ret_pd: power-domain-retention {
 			#power-domain-cells = <0>;
 			domain-idle-states = <&lplv_stop1>;
+		};
+	};
+
+	thermal-zones {
+		cpu-thermal {
+			polling-delay-passive = <250>;
+			polling-delay = <1000>;
+			thermal-sensors = <&dts 1>;
+
+			trips {
+				cpu_alert: cpu-alert {
+					temperature = <110000>;
+					hysteresis = <10000>;
+					type = "passive";
+				};
+
+				cpu-crit {
+					temperature = <122000>;
+					hysteresis = <1000>;
+					type = "critical";
+				};
+			};
+
+			cooling-maps {
+				map0 {
+					trip = <&cpu_alert>;
+					cooling-device = <&cpu0 1 1>;
+				};
+			};
+		};
+
+		soc-thermal {
+			polling-delay-passive = <250>;
+			polling-delay = <1000>;
+			thermal-sensors = <&dts 0>;
+
+			trips {
+				soc-crit {
+					temperature = <122000>;
+					hysteresis = <1000>;
+					type = "critical";
+				};
+			};
 		};
 	};
 
