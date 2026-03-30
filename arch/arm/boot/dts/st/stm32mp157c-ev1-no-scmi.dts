@@ -32,6 +32,58 @@
 		};
 	};
 
+	dmic0: dmic-0 {
+		compatible = "dmic-codec";
+		#sound-dai-cells = <0>;
+		sound-name-prefix = "dmic0";
+		status = "okay";
+
+		port {
+			dmic0_endpoint: endpoint {
+				remote-endpoint = <&dfsdm_endpoint0>;
+			};
+		};
+	};
+
+	dmic1: dmic-1 {
+		compatible = "dmic-codec";
+		#sound-dai-cells = <0>;
+		sound-name-prefix = "dmic1";
+		status = "okay";
+
+		port {
+			dmic1_endpoint: endpoint {
+				remote-endpoint = <&dfsdm_endpoint1>;
+			};
+		};
+	};
+
+	dmic2: dmic-2 {
+		compatible = "dmic-codec";
+		#sound-dai-cells = <0>;
+		sound-name-prefix = "dmic2";
+		status = "okay";
+
+		port {
+			dmic2_endpoint: endpoint {
+				remote-endpoint = <&dfsdm_endpoint2>;
+			};
+		};
+	};
+
+	dmic3: dmic-3 {
+		compatible = "dmic-codec";
+		#sound-dai-cells = <0>;
+		sound-name-prefix = "dmic3";
+		status = "okay";
+
+		port {
+			dmic3_endpoint: endpoint {
+				remote-endpoint = <&dfsdm_endpoint3>;
+			};
+		};
+	};
+
 	joystick {
 		compatible = "gpio-keys";
 		pinctrl-0 = <&joystick_pins>;
@@ -74,6 +126,44 @@
 		default-on;
 		status = "okay";
 	};
+
+	sound: sound {
+		compatible = "audio-graph-card";
+		label = "STM32MP15-EV";
+		routing =
+			"AIF1CLK" , "MCLK1",
+			"AIF2CLK" , "MCLK1",
+			"IN1LN" , "MICBIAS2",
+			"DMIC2DAT" , "MICBIAS1",
+			"DMIC1DAT" , "MICBIAS1";
+		dais = <&sai2a_port &sai2b_port &sai4a_port &spdifrx_port
+			&dfsdm0_port &dfsdm1_port &dfsdm2_port &dfsdm3_port>;
+		status = "okay";
+	};
+
+	spdif_in: spdif-in {
+		#sound-dai-cells = <0>;
+		compatible = "linux,spdif-dir";
+		status = "okay";
+
+		spdif_in_port: port {
+			spdif_in_endpoint: endpoint {
+				remote-endpoint = <&spdifrx_endpoint>;
+			};
+		};
+	};
+
+	spdif_out: spdif-out {
+		#sound-dai-cells = <0>;
+		compatible = "linux,spdif-dit";
+		status = "okay";
+
+		spdif_out_port: port {
+			spdif_out_endpoint: endpoint {
+				remote-endpoint = <&sai4a_endpoint>;
+			};
+		};
+	};
 };
 
 &cec {
@@ -105,6 +195,113 @@
 			vsync-active = <0>;
 			pclk-sample = <1>;
 			pclk-max-frequency = <77000000>;
+		};
+	};
+};
+
+&dfsdm {
+	pinctrl-names = "default", "sleep";
+	pinctrl-0 = <&dfsdm_clkout_pins_a
+		     &dfsdm_data1_pins_a &dfsdm_data3_pins_a>;
+	pinctrl-1 = <&dfsdm_clkout_sleep_pins_a
+		     &dfsdm_data1_sleep_pins_a &dfsdm_data3_sleep_pins_a>;
+	spi-max-frequency = <2048000>;
+
+	clocks = <&rcc DFSDM_K>, <&rcc ADFSDM_K>;
+	clock-names = "dfsdm", "audio";
+	status = "okay";
+
+	dfsdm0: filter@0 {
+		compatible = "st,stm32-dfsdm-dmic";
+		st,adc-channels = <3>;
+		st,adc-channel-names = "dmic_u1";
+		st,adc-channel-types = "SPI_R";
+		st,adc-channel-clk-src = "CLKOUT";
+		st,filter-order = <3>;
+		status = "okay";
+
+		asoc_pdm0: dfsdm-dai {
+			compatible = "st,stm32h7-dfsdm-dai";
+			#sound-dai-cells = <0>;
+			io-channels = <&dfsdm0 0>;
+			status = "okay";
+
+			dfsdm0_port: port {
+				dfsdm_endpoint0: endpoint {
+					remote-endpoint = <&dmic0_endpoint>;
+				};
+			};
+		};
+	};
+
+	dfsdm1: filter@1 {
+		compatible = "st,stm32-dfsdm-dmic";
+		st,adc-channels = <0>;
+		st,adc-channel-names = "dmic_u2";
+		st,adc-channel-types = "SPI_F";
+		st,adc-channel-clk-src = "CLKOUT";
+		st,filter-order = <3>;
+		st,adc-alt-channel = <1>;
+		status = "okay";
+
+		asoc_pdm1: dfsdm-dai {
+			compatible = "st,stm32h7-dfsdm-dai";
+			#sound-dai-cells = <0>;
+			io-channels = <&dfsdm1 0>;
+			status = "okay";
+
+			dfsdm1_port: port {
+				dfsdm_endpoint1: endpoint {
+					remote-endpoint = <&dmic1_endpoint>;
+				};
+			};
+		};
+	};
+
+	dfsdm2: filter@2 {
+		compatible = "st,stm32-dfsdm-dmic";
+		st,adc-channels = <2>;
+		st,adc-channel-names = "dmic_u3";
+		st,adc-channel-types = "SPI_F";
+		st,adc-channel-clk-src = "CLKOUT";
+		st,adc-alt-channel = <1>;
+		st,filter-order = <3>;
+		status = "okay";
+
+		asoc_pdm2: dfsdm-dai {
+			compatible = "st,stm32h7-dfsdm-dai";
+			#sound-dai-cells = <0>;
+			io-channels = <&dfsdm2 0>;
+			status = "okay";
+
+			dfsdm2_port: port {
+				dfsdm_endpoint2: endpoint {
+					remote-endpoint = <&dmic2_endpoint>;
+				};
+			};
+		};
+	};
+
+	dfsdm3: filter@3 {
+		compatible = "st,stm32-dfsdm-dmic";
+		st,adc-channels = <1>;
+		st,adc-channel-names = "dmic_u4";
+		st,adc-channel-types = "SPI_R";
+		st,adc-channel-clk-src = "CLKOUT";
+		st,filter-order = <3>;
+		status = "okay";
+
+		asoc_pdm3: dfsdm-dai {
+			compatible = "st,stm32h7-dfsdm-dai";
+			#sound-dai-cells = <0>;
+			io-channels = <&dfsdm3 0>;
+			status = "okay";
+
+			dfsdm3_port: port {
+				dfsdm_endpoint3: endpoint {
+					remote-endpoint = <&dmic3_endpoint>;
+				};
+			};
 		};
 	};
 };
@@ -186,6 +383,49 @@
 	/delete-property/dmas;
 	/delete-property/dma-names;
 	status = "okay";
+
+	wm8994: wm8994@1b {
+		compatible = "wlf,wm8994";
+		#sound-dai-cells = <0>;
+		reg = <0x1b>;
+
+		gpio-controller;
+		#gpio-cells = <2>;
+
+		DBVDD-supply = <&vdd>;
+		SPKVDD1-supply = <&vdd>;
+		SPKVDD2-supply = <&vdd>;
+		AVDD2-supply = <&v1v8>;
+		CPVDD-supply = <&v1v8>;
+
+		wlf,ldoena-always-driven;
+
+		clocks = <&sai2a>;
+		clock-names = "MCLK1";
+
+		wlf,gpio-cfg = <0x8101 0xa100 0xa100 0xa100 0xa101 0xa101\
+						0xa100 0xa101 0xa101 0xa101 0xa101>;
+		status = "okay";
+
+		ports {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			wm8994_tx_port: port@0 {
+				reg = <0>;
+				wm8994_tx_endpoint: endpoint {
+					remote-endpoint = <&sai2a_endpoint>;
+				};
+			};
+
+			wm8994_rx_port: port@1 {
+				reg = <1>;
+				wm8994_rx_endpoint: endpoint {
+					remote-endpoint = <&sai2b_endpoint>;
+				};
+			};
+		};
+	};
 
 	ov5640: camera@3c {
 		compatible = "ovti,ov5640";
@@ -338,6 +578,65 @@
 	};
 };
 
+&sai2 {
+	clocks = <&rcc SAI2>, <&rcc PLL3_Q>, <&rcc PLL3_R>;
+	pinctrl-names = "default", "sleep";
+	pinctrl-0 = <&sai2a_pins_a>, <&sai2b_pins_a>;
+	pinctrl-1 = <&sai2a_sleep_pins_a>, <&sai2b_sleep_pins_a>;
+	clock-names = "pclk", "x8k", "x11k";
+	status = "okay";
+
+	sai2a: audio-controller@4400b004 {
+		#clock-cells = <0>;
+		dma-names = "tx";
+		status = "okay";
+
+		sai2a_port: port {
+			sai2a_endpoint: endpoint {
+				remote-endpoint = <&wm8994_tx_endpoint>;
+				dai-format = "i2s";
+				mclk-fs = <256>;
+			};
+		};
+	};
+
+	sai2b: audio-controller@4400b024 {
+		dma-names = "rx";
+		clocks = <&rcc SAI2_K>, <&sai2a>;
+		clock-names = "sai_ck", "MCLK";
+		status = "okay";
+
+		sai2b_port: port {
+			sai2b_endpoint: endpoint {
+				remote-endpoint = <&wm8994_rx_endpoint>;
+				dai-format = "i2s";
+				mclk-fs = <256>;
+			};
+		};
+	};
+};
+
+&sai4 {
+	clocks = <&rcc SAI4>, <&rcc PLL3_Q>, <&rcc PLL3_R>;
+	clock-names = "pclk", "x8k", "x11k";
+	status = "okay";
+
+	sai4a: audio-controller@50027004 {
+		pinctrl-names = "default", "sleep";
+		pinctrl-0 = <&sai4a_pins_a>;
+		pinctrl-1 = <&sai4a_sleep_pins_a>;
+		dma-names = "tx";
+		st,iec60958;
+		status = "okay";
+
+		sai4a_port: port {
+			sai4a_endpoint: endpoint {
+				remote-endpoint = <&spdif_out_endpoint>;
+			};
+		};
+	};
+};
+
 &sdmmc3 {
 	pinctrl-names = "default", "opendrain", "sleep";
 	pinctrl-0 = <&sdmmc3_b4_pins_a>;
@@ -348,6 +647,19 @@
 	bus-width = <4>;
 	vmmc-supply = <&v3v3>;
 	status = "disabled";
+};
+
+&spdifrx {
+	pinctrl-names = "default", "sleep";
+	pinctrl-0 = <&spdifrx_pins_a>;
+	pinctrl-1 = <&spdifrx_sleep_pins_a>;
+	status = "okay";
+
+	spdifrx_port: port {
+		spdifrx_endpoint: endpoint {
+			remote-endpoint = <&spdif_in_endpoint>;
+		};
+	};
 };
 
 &spi1 {
