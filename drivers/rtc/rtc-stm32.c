@@ -131,6 +131,8 @@
 	.num_groups = ARRAY_SIZE(((const char *[]){ __VA_ARGS__ })), \
 }
 
+#define to_stm32_rtc(_hw) container_of(_hw, struct stm32_rtc, clk_lsco_hw)
+
 struct stm32_rtc;
 
 struct stm32_rtc_registers {
@@ -173,7 +175,8 @@ struct stm32_rtc {
 	struct clk *rtc_ck;
 	const struct stm32_rtc_data *data;
 	int irq_alarm;
-	struct clk *clk_lsco;
+	unsigned int pin_lsco;
+	struct clk_hw clk_lsco_hw;
 };
 
 struct stm32_rtc_rif_resource {
@@ -289,6 +292,95 @@ static int stm32_rtc_pinmux_action_alarm(struct pinctrl_dev *pctldev, unsigned i
 	return 0;
 }
 
+static int stm32_rtc_clk_lsco_enable(struct clk_hw *hw)
+{
+	struct stm32_rtc *rtc = to_stm32_rtc(hw);
+	const struct stm32_rtc_registers *regs = &rtc->data->regs;
+	u32 mask, val;
+
+	switch (rtc->pin_lsco) {
+	case OUT1:
+		mask = BIT(STM32_RTC_CFGR_LSCOEN_OUT1);
+		break;
+	case OUT2_RMP:
+		mask = BIT(STM32_RTC_CFGR_LSCOEN_OUT2_RMP);
+		break;
+	default:
+		return -EPERM;
+	}
+
+	val = readl_relaxed(rtc->base + regs->cfgr);
+	val &= ~STM32_RTC_CFGR_LSCOEN;
+	val |= mask;
+	writel(val, rtc->base + regs->cfgr);
+
+	return 0;
+}
+
+static void stm32_rtc_clk_lsco_disable(struct clk_hw *hw)
+{
+	struct stm32_rtc *rtc = to_stm32_rtc(hw);
+	const struct stm32_rtc_registers *regs = &rtc->data->regs;
+	u32 val;
+
+	val = readl_relaxed(rtc->base + regs->cfgr);
+	val &= ~STM32_RTC_CFGR_LSCOEN;
+	writel(val, rtc->base + regs->cfgr);
+}
+
+static int stm32_rtc_clk_lsco_is_enabled(struct clk_hw *hw)
+{
+	struct stm32_rtc *rtc = to_stm32_rtc(hw);
+	const struct stm32_rtc_registers *regs = &rtc->data->regs;
+	u32 val;
+
+	val = readl_relaxed(rtc->base + regs->cfgr);
+	val &= STM32_RTC_CFGR_LSCOEN;
+
+	return val ? 1 : 0;
+}
+
+static const struct clk_ops stm32_rtc_clk_lsco_ops = {
+	.enable = stm32_rtc_clk_lsco_enable,
+	.disable = stm32_rtc_clk_lsco_disable,
+	.is_enabled = stm32_rtc_clk_lsco_is_enabled,
+};
+
+static int stm32_rtc_clk_register_lsco(struct stm32_rtc *rtc)
+{
+	struct device *dev = &rtc->rtc_dev->dev;
+	struct clk_init_data init = {};
+	const char *parent_name;
+	unsigned long flags = 0;
+	int ret;
+
+	if (!rtc->data->has_lsco)
+		return 0;
+
+	/*
+	 * For backward compatibility with old DT without #clock-cells
+	 * and with no clock clients, keep the clock always enabled.
+	 */
+	if (!of_property_present(dev->of_node, "#clock-cells"))
+		flags = CLK_IGNORE_UNUSED;
+
+	parent_name = __clk_get_name(rtc->rtc_ck);
+
+	init.name = "rtc_lsco";
+	init.flags = flags;
+	init.ops = &stm32_rtc_clk_lsco_ops;
+	init.parent_names = &parent_name;
+	init.num_parents = 1;
+
+	rtc->clk_lsco_hw.init = &init;
+
+	ret = devm_clk_hw_register(dev, &rtc->clk_lsco_hw);
+	if (ret)
+		return ret;
+
+	return devm_of_clk_add_hw_provider(dev, of_clk_hw_simple_get, &rtc->clk_lsco_hw);
+}
+
 static int stm32_rtc_pinmux_lsco_available(struct pinctrl_dev *pctldev, unsigned int pin)
 {
 	struct stm32_rtc *rtc = pinctrl_dev_get_drvdata(pctldev);
@@ -324,10 +416,6 @@ static int stm32_rtc_pinmux_lsco_available(struct pinctrl_dev *pctldev, unsigned
 static int stm32_rtc_pinmux_action_lsco(struct pinctrl_dev *pctldev, unsigned int pin)
 {
 	struct stm32_rtc *rtc = pinctrl_dev_get_drvdata(pctldev);
-	const struct stm32_rtc_registers *regs = &rtc->data->regs;
-	struct device *dev = rtc->rtc_dev->dev.parent;
-	unsigned long flags = 0;
-	u8 lscoen;
 	int ret;
 
 	if (!rtc->data->has_lsco)
@@ -337,21 +425,15 @@ static int stm32_rtc_pinmux_action_lsco(struct pinctrl_dev *pctldev, unsigned in
 	if (ret)
 		return ret;
 
-	lscoen = (pin == OUT1) ? STM32_RTC_CFGR_LSCOEN_OUT1 : STM32_RTC_CFGR_LSCOEN_OUT2_RMP;
+	rtc->pin_lsco = pin;
 
 	/*
 	 * For backward compatibility with old DT without #clock-cells
-	 * and with no clock clients, keep the clock always enabled.
+	 * and with no clock clients, always enable the clock at pinmux
+	 * activation.
 	 */
-	if (!of_property_present(dev->of_node, "#clock-cells"))
-		flags = CLK_IGNORE_UNUSED | CLK_IS_CRITICAL;
-
-	rtc->clk_lsco = clk_register_gate(dev, "rtc_lsco", __clk_get_name(rtc->rtc_ck), flags,
-					  rtc->base + regs->cfgr, lscoen, 0, NULL);
-	if (IS_ERR(rtc->clk_lsco))
-		return PTR_ERR(rtc->clk_lsco);
-
-	of_clk_add_provider(dev->of_node, of_clk_src_simple_get, rtc->clk_lsco);
+	if (clk_hw_get_flags(&rtc->clk_lsco_hw) & CLK_IGNORE_UNUSED)
+		stm32_rtc_clk_lsco_enable(&rtc->clk_lsco_hw);
 
 	return 0;
 }
@@ -1174,6 +1256,10 @@ static int stm32_rtc_probe(struct platform_device *pdev)
 
 	stm32_rtc_clean_outs(rtc);
 
+	ret = stm32_rtc_clk_register_lsco(rtc);
+	if (ret)
+		goto err;
+
 	ret = devm_pinctrl_register_and_init(&pdev->dev, &stm32_rtc_pdesc, rtc, &pctl);
 	if (ret)
 		return dev_err_probe(&pdev->dev, ret, "pinctrl register failed");
@@ -1211,9 +1297,6 @@ static void stm32_rtc_remove(struct platform_device *pdev)
 	struct stm32_rtc *rtc = platform_get_drvdata(pdev);
 	const struct stm32_rtc_registers *regs = &rtc->data->regs;
 	unsigned int cr;
-
-	if (!IS_ERR_OR_NULL(rtc->clk_lsco))
-		clk_unregister_gate(rtc->clk_lsco);
 
 	/* Disable interrupts */
 	stm32_rtc_wpr_unlock(rtc);
