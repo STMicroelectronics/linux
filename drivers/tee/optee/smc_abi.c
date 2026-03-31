@@ -1075,6 +1075,128 @@ out:
  * 5. Asynchronous notification
  */
 
+static int get_it_value(optee_invoke_fn *invoke_fn, bool *value_valid,
+			bool *value_pending)
+{
+	struct arm_smccc_res res;
+
+	invoke_fn(OPTEE_SMC_GET_IT_NOTIF_VALUE, 0, 0, 0, 0, 0, 0, 0, &res);
+
+	if (res.a0)
+		return -1;
+
+	*value_valid = res.a2 & OPTEE_SMC_IT_NOTIF_VALUE_VALID;
+	*value_pending = res.a2 & OPTEE_SMC_IT_NOTIF_VALUE_PENDING;
+	return (int)res.a1;
+}
+
+static void set_it_mask(optee_invoke_fn *invoke_fn, u32 it_value, bool mask)
+{
+	struct arm_smccc_res res;
+
+	invoke_fn(OPTEE_SMC_SET_IT_NOTIF_MASK, it_value, mask, 0, 0, 0, 0, 0, &res);
+}
+
+static int handle_optee_it(struct optee *optee)
+{
+	bool value_valid;
+	bool value_pending;
+	u32 it;
+
+	do {
+		struct irq_desc *desc;
+		int it_id;
+
+		it_id = get_it_value(optee->smc.invoke_fn, &value_valid, &value_pending);
+		if (it_id < 0) {
+			/*
+			 * OP-TEE interrupt notification is not supported
+			 * hence disable the feature so that current function
+			 * is no more called and we handle async value
+			 * OPTEE_SMC_ASYNC_NOTIF_VALUE_DO_IT as a generic legacy
+			 * OP-TEE async notif.
+			 */
+			optee->itr_notif = false;
+			optee_notif_send(optee, OPTEE_SMC_ASYNC_NOTIF_VALUE_DO_IT);
+			return 0;
+		}
+		it = (u32)it_id;
+
+		if (!value_valid)
+			break;
+
+		desc = irq_to_desc(irq_find_mapping(optee->smc.domain, it));
+		if (!desc) {
+			pr_err("no desc for optee IT:%d\n", it);
+			return -EIO;
+		}
+
+		handle_simple_irq(desc);
+
+	} while (value_pending);
+
+	return 0;
+}
+
+static void optee_it_irq_mask(struct irq_data *d)
+{
+	struct optee *optee = d->domain->host_data;
+
+	set_it_mask(optee->smc.invoke_fn, d->hwirq, true);
+}
+
+static void optee_it_irq_unmask(struct irq_data *d)
+{
+	struct optee *optee = d->domain->host_data;
+
+	set_it_mask(optee->smc.invoke_fn, d->hwirq, false);
+}
+
+static struct irq_chip optee_it_irq_chip = {
+	.name = "optee-it",
+	.irq_disable = optee_it_irq_mask,
+	.irq_enable = optee_it_irq_unmask,
+	.flags = IRQCHIP_SKIP_SET_WAKE,
+};
+
+static int optee_it_alloc(struct irq_domain *d, unsigned int virq,
+			  unsigned int nr_irqs, void *data)
+{
+	struct irq_fwspec *fwspec = data;
+	irq_hw_number_t hwirq;
+
+	hwirq = fwspec->param[0];
+
+	irq_domain_set_hwirq_and_chip(d, virq, hwirq, &optee_it_irq_chip, d->host_data);
+
+	return 0;
+}
+
+static const struct irq_domain_ops optee_it_irq_domain_ops = {
+	.alloc = optee_it_alloc,
+	.free = irq_domain_free_irqs_common,
+};
+
+static int optee_irq_domain_init(struct platform_device *pdev, struct optee *optee)
+{
+	struct device *dev = &pdev->dev;
+	struct device_node *np = dev->of_node;
+
+	optee->smc.domain = irq_domain_add_linear(np, OPTEE_MAX_IT,
+						  &optee_it_irq_domain_ops, optee);
+	if (!optee->smc.domain) {
+		dev_err(dev, "Unable to add irq domain\n");
+		return -ENOMEM;
+	}
+
+	return 0;
+}
+
+static void optee_irq_domain_uninit(struct optee *optee)
+{
+	irq_domain_remove(optee->smc.domain);
+}
+
 static u32 get_async_notif_value(optee_invoke_fn *invoke_fn, bool *value_valid,
 				 bool *value_pending)
 {
@@ -1106,6 +1228,8 @@ static irqreturn_t irq_handler(struct optee *optee)
 
 		if (value == OPTEE_SMC_ASYNC_NOTIF_VALUE_DO_BOTTOM_HALF)
 			do_bottom_half = true;
+		else if (optee->itr_notif && value == OPTEE_SMC_ASYNC_NOTIF_VALUE_DO_IT)
+			handle_optee_it(optee);
 		else
 			optee_notif_send(optee, value);
 	} while (value_pending);
@@ -1565,6 +1689,8 @@ static void optee_smc_remove(struct platform_device *pdev)
 
 	optee_smc_notif_uninit_irq(optee);
 
+	optee_irq_domain_uninit(optee);
+
 	optee_remove_common(optee);
 
 	if (optee->smc.memremaped_shm)
@@ -1875,6 +2001,15 @@ static int optee_probe(struct platform_device *pdev)
 	    (sec_caps & OPTEE_SMC_SEC_CAP_RPMB_PROBE))
 		optee->in_kernel_rpmb_routing = true;
 
+	/*
+	 * Default assume OP-TEE interrupt notification through async notif
+	 * value 1 (OPTEE_SMC_ASYNC_NOTIF_VALUE_DO_IT) is supported.
+	 * The feature will be disabled if we find SMC function ID
+	 * OPTEE_SMC_ASYNC_NOTIF_VALUE_DO_IT is not supported, meaning OP-TEE
+	 * async value 1 is a generic legacy async notif value.
+	 */
+	optee->itr_notif = true;
+
 	teedev = tee_device_alloc(&optee_clnt_desc, NULL, pool, optee);
 	if (IS_ERR(teedev)) {
 		rc = PTR_ERR(teedev);
@@ -1932,6 +2067,20 @@ static int optee_probe(struct platform_device *pdev)
 			irq_dispose_mapping(irq);
 			goto err_notif_uninit;
 		}
+
+		if (optee->itr_notif) {
+			rc = optee_irq_domain_init(pdev, optee);
+			if (rc) {
+				if (irq_is_percpu_devid(optee->smc.notif_irq))
+					uninit_pcpu_irq(optee);
+				else
+					free_irq(optee->smc.notif_irq, optee);
+
+				irq_dispose_mapping(irq);
+				goto err_notif_uninit;
+			}
+		}
+
 		enable_async_notif(optee->smc.invoke_fn);
 		pr_info("Asynchronous notifications enabled\n");
 	}
