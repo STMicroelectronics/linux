@@ -1113,6 +1113,19 @@
 				status = "disabled";
 			};
 
+			hash1: hash@42030400 {
+				compatible = "st,stm32mp13-hash";
+				reg = <0x42030400 0x0 0x400>;
+				interrupts = <GIC_SPI 132 IRQ_TYPE_LEVEL_HIGH>;
+				clocks = <&rcc CK_BUS_HASH1>;
+				resets = <&rcc HASH1_R>;
+				dmas = <&hpdma 6 0x40 0x23021>;
+				dma-names = "in";
+				access-controllers = <&rifsc 96>;
+				power-domains = <&d1_pd>;
+				status = "disabled";
+			};
+
 			rng1: rng@42030800 {
 				compatible = "st,stm32mp21-rng";
 				reg = <0x42030800 0x0 0x400>;
