@@ -454,6 +454,12 @@ struct optee_smc_disable_shm_cache_result {
 #define OPTEE_SMC_IT_NOTIF_VALUE_VALID		BIT(0)
 #define OPTEE_SMC_IT_NOTIF_VALUE_PENDING	BIT(1)
 
+/* See OPTEE_SMC_CALL_WITH_RPC_ARG above */
+#define OPTEE_SMC_FUNCID_CALL_WITH_RPC_ARG	18
+
+/* See OPTEE_SMC_CALL_WITH_REGD_ARG above */
+#define OPTEE_SMC_FUNCID_CALL_WITH_REGD_ARG	19
+
 /*
  * Notification that OP-TEE generates and interruption.
  */
@@ -465,11 +471,6 @@ struct optee_smc_disable_shm_cache_result {
 #define OPTEE_SMC_SET_IT_NOTIF_MASK \
 	OPTEE_SMC_FAST_CALL_VAL(OPTEE_SMC_FUNCID_SET_IT_NOTIF_MASK)
 
-/* See OPTEE_SMC_CALL_WITH_RPC_ARG above */
-#define OPTEE_SMC_FUNCID_CALL_WITH_RPC_ARG	18
-
-/* See OPTEE_SMC_CALL_WITH_REGD_ARG above */
-#define OPTEE_SMC_FUNCID_CALL_WITH_REGD_ARG	19
 /*
  * Get protected memory config
  *
