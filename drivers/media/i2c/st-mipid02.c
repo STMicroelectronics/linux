@@ -611,21 +611,25 @@ static int mipid02_set_fmt(struct v4l2_subdev *sd,
 		return -EINVAL;
 
 	pad_fmt = v4l2_subdev_state_get_format(sd_state, fmt->pad);
-	fmt->format.code = get_fmt_code(fmt->format.code);
 
-	/* code may need to be converted */
-	if (fmt->pad == MIPID02_SOURCE)
+	/* In case of setting a source, simply make it same as sink */
+	if (fmt->pad == MIPID02_SOURCE) {
+		fmt->format = *v4l2_subdev_state_get_format(sd_state,
+							    MIPID02_SINK_0);
 		fmt->format.code = serial_to_parallel_code(fmt->format.code);
+		*pad_fmt = fmt->format;
 
+		return 0;
+	}
+
+	/* Check format is applicable */
+	fmt->format.code = get_fmt_code(fmt->format.code);
 	*pad_fmt = fmt->format;
 
 	/* Propagate the format to the source pad in case of sink pad update */
-	if (fmt->pad == MIPID02_SINK_0) {
-		pad_fmt = v4l2_subdev_state_get_format(sd_state,
-						       MIPID02_SOURCE);
-		*pad_fmt = fmt->format;
-		pad_fmt->code = serial_to_parallel_code(fmt->format.code);
-	}
+	pad_fmt = v4l2_subdev_state_get_format(sd_state, MIPID02_SOURCE);
+	*pad_fmt = fmt->format;
+	pad_fmt->code = serial_to_parallel_code(fmt->format.code);
 
 	return 0;
 }
