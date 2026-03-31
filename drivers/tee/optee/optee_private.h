@@ -243,6 +243,7 @@ struct optee_ops {
  * @scan_bus_done	flag if device registation was already done.
  * @scan_bus_work	workq to scan optee bus and register optee drivers
  * @itr_notif		True if OP-TEE offers interrupt notification
+ * @noirq_enabled	True if OP-TEE invokes in PM_NOIRQ context
  */
 struct optee {
 	struct tee_device *supp_teedev;
@@ -269,6 +270,7 @@ struct optee {
 	struct work_struct scan_bus_work;
 	struct work_struct rpmb_scan_bus_work;
 	bool itr_notif;
+	bool noirq_enabled;
 };
 
 /**

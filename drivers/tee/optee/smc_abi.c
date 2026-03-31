@@ -926,7 +926,11 @@ static int optee_smc_do_call_with_arg(struct tee_context *ctx,
 	}
 
 	if  (rpc_arg && tee_shm_is_dynamic(shm)) {
-		param.a0 = OPTEE_SMC_CALL_WITH_REGD_ARG;
+		if (optee->noirq_enabled)
+			param.a0 = OPTEE_SMC_CALL_WITH_REGD_ARG_NSEC_NOIRQ;
+		else
+			param.a0 = OPTEE_SMC_CALL_WITH_REGD_ARG;
+
 		reg_pair_from_64(&param.a1, &param.a2, (u_long)shm);
 		param.a3 = offs;
 	} else {
@@ -936,10 +940,18 @@ static int optee_smc_do_call_with_arg(struct tee_context *ctx,
 		if (rc)
 			return rc;
 
-		if (rpc_arg)
-			param.a0 = OPTEE_SMC_CALL_WITH_RPC_ARG;
-		else
-			param.a0 = OPTEE_SMC_CALL_WITH_ARG;
+		if (rpc_arg) {
+			if (optee->noirq_enabled)
+				param.a0 =
+					OPTEE_SMC_CALL_WITH_RPC_ARG_NSEC_NOIRQ;
+			else
+				param.a0 = OPTEE_SMC_CALL_WITH_RPC_ARG;
+		} else {
+			if (optee->noirq_enabled)
+				param.a0 = OPTEE_SMC_CALL_WITH_ARG_NSEC_NOIRQ;
+			else
+				param.a0 = OPTEE_SMC_CALL_WITH_ARG;
+		}
 		reg_pair_from_64(&param.a1, &param.a2, parg);
 	}
 	/* Initialize waiter */
@@ -1895,6 +1907,32 @@ static int optee_protmem_pool_init(struct optee *optee)
 	return rc;
 }
 
+/*
+ * Hook on PM late ops to switch OP-TEE standard SMC invocation
+ * for supporting PM_NOIRQ sequences.
+ */
+static int optee_suspend_noirq(struct device *dev)
+{
+	struct optee *optee = dev_get_drvdata(dev);
+
+	optee->noirq_enabled = optee->smc.sec_caps & OPTEE_SMC_SEC_CAP_PM_NOIRQ;
+
+	return 0;
+}
+
+static int optee_resume_noirq(struct device *dev)
+{
+	struct optee *optee = dev_get_drvdata(dev);
+
+	optee->noirq_enabled = false;
+
+	return 0;
+}
+
+static const struct dev_pm_ops optee_pm_ops = {
+	NOIRQ_SYSTEM_SLEEP_PM_OPS(optee_suspend_noirq, optee_resume_noirq)
+};
+
 static int optee_probe(struct platform_device *pdev)
 {
 	optee_invoke_fn *invoke_fn;
@@ -2160,6 +2198,7 @@ static struct platform_driver optee_driver = {
 	.driver = {
 		.name = "optee",
 		.of_match_table = optee_dt_match,
+		.pm = pm_ptr(&optee_pm_ops),
 	},
 };
 
