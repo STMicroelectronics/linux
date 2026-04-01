@@ -342,6 +342,10 @@
 	status = "okay";
 };
 
+&ipcc2 {
+	status = "okay";
+};
+
 &m33_rproc {
 	mboxes = <&ipcc1 0x100>, <&ipcc1 0x101>, <&ipcc1 2>;
 	mbox-names = "vq0", "vq1", "shutdown";
