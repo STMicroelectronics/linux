@@ -34,12 +34,14 @@
 			label = "User-1";
 			linux,code = <BTN_1>;
 			gpios = <&gpioc 5 GPIO_ACTIVE_HIGH>;
+			status = "okay";
 		};
 
 		button-user-2 {
 			label = "User-2";
 			linux,code = <BTN_2>;
 			gpios = <&gpioc 11 GPIO_ACTIVE_HIGH>;
+			status = "disabled";
 		};
 	};
 
