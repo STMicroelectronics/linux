@@ -6,6 +6,7 @@
 
 /dts-v1/;
 
+#include <dt-bindings/input/input.h>
 #include "stm32mp215.dtsi"
 #include "stm32mp21xf.dtsi"
 
@@ -19,6 +20,18 @@
 
 	chosen {
 		stdout-path = "serial0:115200n8";
+	};
+
+	gpio-keys {
+		compatible = "gpio-keys";
+
+		button-wake-up {
+			label = "wake-up";
+			linux,code = <KEY_WAKEUP>;
+			interrupts-extended = <&optee 0>;
+			wakeup-source;
+			status = "okay";
+		};
 	};
 
 	memory@80000000 {
