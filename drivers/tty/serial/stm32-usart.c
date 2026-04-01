@@ -2490,8 +2490,10 @@ static int __maybe_unused stm32_usart_serial_en_wakeup(struct uart_port *port,
 			stm32_usart_set_bits(port, ofs->cr3, USART_CR3_DMAT);
 
 		if (stm32_port->rx_ch) {
+			spin_lock_irqsave(&port->lock, flags);
 			stm32_usart_set_bits(port, ofs->cr3, USART_CR3_DMAR);
 			ret = stm32_usart_rx_dma_start_or_resume(port);
+			spin_unlock_irqrestore(&port->lock, flags);
 			if (ret)
 				return ret;
 		}
