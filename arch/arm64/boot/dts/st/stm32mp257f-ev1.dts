@@ -413,6 +413,10 @@
 	status = "okay";
 };
 
+&ipcc2 {
+	status = "okay";
+};
+
 /* use LPTIMER with tick broadcast for suspend mode */
 &lptimer3 {
 	status = "okay";
