@@ -398,6 +398,15 @@
 		#interrupt-cells = <1>;
 		interrupt-controller;
 	};
+
+	i2c_rpmsg: i2c@2 {
+		compatible = "rpmsg,i2c-controller";
+		reg = <2 0>;
+		rpmsg,dev-id = "rpmsg_i2c";
+		#address-cells = <1>;
+		#size-cells = <0>;
+		status = "okay";
+	};
 };
 
 &optee {
