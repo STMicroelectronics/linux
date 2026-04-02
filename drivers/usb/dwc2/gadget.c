@@ -3031,6 +3031,19 @@ static void dwc2_gadget_handle_nak(struct dwc2_hsotg_ep *hs_ep)
 static void kill_all_requests(struct dwc2_hsotg *hsotg,
 			      struct dwc2_hsotg_ep *ep,
 			      int result);
+
+static void dwc2_gadget_setup_timeout(struct work_struct *work)
+{
+	struct dwc2_hsotg *hsotg = container_of(work, struct dwc2_hsotg, dw_gsetup.work);
+	unsigned long flags;
+
+	dev_dbg(hsotg->dev, "%s: DOEPINT0=0x%08x\n",  __func__, dwc2_readl(hsotg, DOEPINT(0)));
+
+	spin_lock_irqsave(&hsotg->lock, flags);
+	dwc2_hsotg_core_init_disconnected(hsotg, false);
+	spin_unlock_irqrestore(&hsotg->lock, flags);
+}
+
 /**
  * dwc2_hsotg_epint - handle an in/out endpoint interrupt
  * @hsotg: The driver state
@@ -3078,16 +3091,20 @@ static void dwc2_hsotg_epint(struct dwc2_hsotg *hsotg, unsigned int idx,
 
 		if (!(dwc2_readl(hsotg, epctl_reg) & DXEPCTL_EPENA)) {
 			/*
-			 * More than 3 setup packets have likely been missed.
-			 * This may happen when other packets has been stored
-			 * in the RxFifo on other endpoints accepting packet
-			 * without being enabled.
-			 * As the EP0 got disabled, complete cb will never be
-			 * called. So enforce here the EP0 remains active (re
-			 * enqueue setup) when later stuck packets gets pulled.
+			 * In DDMA mode, only the "SETUP Phase Done" can be asserted.
+			 * Setup timeout won't be asserted through DXEPINT_SETUP flag.
+			 *
+			 * An incomplete setup phase may be hit when packets have been stored
+			 * into the RxFifo on other endpoints accepting packet without proper
+			 * descriptor chain.
+			 * As the EP0 got disabled, and the DXEPINT_XFERCOMPL flag has been
+			 * cleared above, the complete cb will never be called, due to setup
+			 * timeout not detected.
+			 * So detect here a possible setup request timeout (50ms), to kill
+			 * incomplete setup data, and requeue proper setup descriptors.
 			 */
-			kill_all_requests(hsotg, hsotg->eps_out[0], -ESHUTDOWN);
-			dwc2_hsotg_enqueue_setup(hsotg);
+			queue_delayed_work(hsotg->wq_gadget, &hsotg->dw_gsetup,
+					   msecs_to_jiffies(50));
 		}
 	}
 
@@ -3139,6 +3156,9 @@ static void dwc2_hsotg_epint(struct dwc2_hsotg *hsotg, unsigned int idx,
 		hsotg->retry_connect = false;
 
 		if (using_dma(hsotg) && idx == 0) {
+			/* Safety check to cancel dw_gsetup setup timeout */
+			if (hsotg->ep0_state == DWC2_EP0_SETUP)
+				cancel_delayed_work(&hsotg->dw_gsetup);
 			/*
 			 * this is the notification we've received a
 			 * setup packet. In non-DMA mode we'd get this
@@ -5105,6 +5125,13 @@ int dwc2_gadget_init(struct dwc2_hsotg *hsotg)
 		return -EINVAL;
 	}
 
+	hsotg->wq_gadget = alloc_ordered_workqueue("dwc2_gadget", 0);
+	if (!hsotg->wq_gadget) {
+		dev_err(hsotg->dev, "Failed to create workqueue\n");
+		return -ENOMEM;
+	}
+	INIT_DELAYED_WORK(&hsotg->dw_gsetup, dwc2_gadget_setup_timeout);
+
 	/* setup endpoint information */
 
 	INIT_LIST_HEAD(&hsotg->gadget.ep_list);
@@ -5116,6 +5143,7 @@ int dwc2_gadget_init(struct dwc2_hsotg *hsotg)
 						     GFP_KERNEL);
 	if (!hsotg->ctrl_req) {
 		dev_err(dev, "failed to allocate ctrl req\n");
+		destroy_workqueue(hsotg->wq_gadget);
 		return -ENOMEM;
 	}
 
@@ -5143,6 +5171,9 @@ int dwc2_hsotg_remove(struct dwc2_hsotg *hsotg)
 {
 	usb_del_gadget_udc(&hsotg->gadget);
 	dwc2_hsotg_ep_free_request(&hsotg->eps_out[0]->ep, hsotg->ctrl_req);
+
+	cancel_delayed_work_sync(&hsotg->dw_gsetup);
+	destroy_workqueue(hsotg->wq_gadget);
 
 	return 0;
 }

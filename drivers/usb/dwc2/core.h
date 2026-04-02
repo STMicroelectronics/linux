@@ -1095,7 +1095,9 @@ struct dwc2_hsotg {
 	unsigned int srp_success:1;
 
 	struct workqueue_struct *wq_otg;
+	struct workqueue_struct *wq_gadget;
 	struct work_struct wf_otg;
+	struct delayed_work dw_gsetup;
 	struct timer_list wkp_timer;
 	enum dwc2_lx_state lx_state;
 	struct dwc2_gregs_backup gr_backup;
