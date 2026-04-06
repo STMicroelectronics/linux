@@ -587,6 +587,8 @@ struct macsec_ops;
  * @advertising_eee: Currently advertised EEE linkmodes
  * @enable_tx_lpi: When True, MAC should transmit LPI to PHY
  * @eee_active: phylib private state, indicating that EEE has been negotiated
+ * @autonomous_eee_disabled: Set when autonomous EEE has been disabled,
+ *	used to re-apply after PHY soft reset
  * @eee_cfg: User configuration of EEE
  * @lp_advertising: Current link partner advertised linkmodes
  * @host_interfaces: PHY interface modes supported by host
@@ -710,6 +712,7 @@ struct phy_device {
 	__ETHTOOL_DECLARE_LINK_MODE_MASK(eee_disabled_modes);
 	bool enable_tx_lpi;
 	bool eee_active;
+	bool autonomous_eee_disabled;
 	struct eee_config eee_cfg;
 
 	/* Host supported PHY interface types. Should be ignored if empty. */
@@ -1160,6 +1163,17 @@ struct phy_driver {
 	/** @get_stats: Return the statistic counter values */
 	void (*get_stats)(struct phy_device *dev,
 			  struct ethtool_stats *stats, u64 *data);
+
+	/**
+	 * @disable_autonomous_eee: Disable PHY-autonomous EEE
+	 *
+	 * Some PHYs manage EEE autonomously, preventing the MAC from
+	 * controlling LPI signaling. This callback disables autonomous
+	 * EEE at the PHY.
+	 *
+	 * Return: 0 on success, negative errno on failure.
+	 */
+	int (*disable_autonomous_eee)(struct phy_device *dev);
 
 	/* Get and Set PHY tunables */
 	/** @get_tunable: Return the value of a tunable */
