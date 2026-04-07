@@ -22,6 +22,7 @@ properties:
               - st,stm32f4-gcan
               - st,stm32mp151-pwr-mcu
               - st,stm32mp157-syscfg
+              - st,stm32mp21-pwr
               - st,stm32mp21-syscfg
               - st,stm32mp23-syscfg
               - st,stm32mp25-pwr
