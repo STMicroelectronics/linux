@@ -63,6 +63,16 @@ config TYPEC_FUSB302
 	  Type-C Port Controller Manager to provide USB PD and USB
 	  Type-C functionalities.
 
+config TYPEC_ST_TCPP
+	tristate "STMicroelectronics TCCP USB-C Protection for UCPD DRP"
+	depends on I2C
+	help
+	  Say Y or M here if your system has STM TCPP03 or TCPP02 Type-C
+	  PD protection
+
+	  If you choose to build this driver as a dynamically linked
+	  module, the module will be called st_tcpp.ko.
+
 config TYPEC_WCOVE
 	tristate "Intel WhiskeyCove PMIC USB Type-C PHY driver"
 	depends on ACPI
