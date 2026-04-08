@@ -508,6 +508,15 @@
 	status = "okay";
 };
 
+/* use LPTIMER with tick broadcast for suspend mode */
+&lptimer3 {
+	clocks = <&rcc CK_LPTIM3_AM>;
+	status = "okay";
+	timer {
+		status = "okay";
+	};
+};
+
 &ltdc {
 	bootph-some-ram;
 	status = "okay";
