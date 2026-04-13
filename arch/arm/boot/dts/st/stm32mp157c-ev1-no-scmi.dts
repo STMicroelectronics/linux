@@ -805,3 +805,8 @@
 	st,tune-hs-rx-offset = <2>;
 	st,no-lsfs-sc;
 };
+
+/* Ramp-up delay 300ms to let enough time for wm8994 POR */
+&v1v8 {
+	regulator-enable-ramp-delay = <300000>;
+};
