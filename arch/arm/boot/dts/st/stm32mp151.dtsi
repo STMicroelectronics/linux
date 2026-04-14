@@ -783,6 +783,9 @@
 			ts_cal2: calib@5e {
 				reg = <0x5e 0x2>;
 			};
+			ethernet_mac_address: mac@e4 {
+				reg = <0xe4 0x6>;
+			};
 		};
 
 		etzpc: bus@5c007000 {
