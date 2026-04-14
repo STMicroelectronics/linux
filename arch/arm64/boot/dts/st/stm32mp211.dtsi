@@ -1556,6 +1556,26 @@
 			st,mem-map = <0x0a040000 0x20000>;
 		};
 
+		bsec: efuse@44000000 {
+			compatible = "st,stm32mp25-bsec";
+			reg = <0x44000000 0x0 0x1000>;
+			#address-cells = <1>;
+			#size-cells = <1>;
+
+			part_number_otp@24 {
+				reg = <0x24 0x4>;
+			};
+
+			vrefint: vrefin-cal@1b8 {
+				reg = <0x1b8 0x2>;
+			};
+
+			package_otp@1e8 {
+				reg = <0x1e8 0x1>;
+				bits = <0 3>;
+			};
+		};
+
 		dts: thermal-sensor@44070000 {
 			compatible = "moortec,mr75203";
 			reg = <0x44070000 0x0 0x80>,
