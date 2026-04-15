@@ -370,9 +370,6 @@ static int dcmipp_capture_try_fmt_vid_cap(struct file *file, void *priv,
 {
 	struct dcmipp_capture_device *vcap = video_drvdata(file);
 	struct v4l2_pix_format *format = &f->fmt.pix;
-	/* Take into consideration the width constraint of the pixel packer */
-	unsigned int walign = (vcap->pipe_id != 0 ?
-			       hdw_pixel_alignment(format->pixelformat) : 0);
 	u32 in_w, in_h;
 
 	/* Don't accept a pixelformat that is not on the table */
@@ -382,14 +379,15 @@ static int dcmipp_capture_try_fmt_vid_cap(struct file *file, void *priv,
 	/* Adjust width & height */
 	in_w = format->width;
 	in_h = format->height;
-	v4l_bound_align_image(&format->width, DCMIPP_FRAME_MIN_WIDTH,
-			      vcap->pipe_id != 0 ?
-			      DCMIPP_PIXEL_FRAME_MAX_WIDTH : DCMIPP_FRAME_MAX_WIDTH,
-			      walign,
-			      &format->height, DCMIPP_FRAME_MIN_HEIGHT,
-			      vcap->pipe_id != 0 ?
-			      DCMIPP_PIXEL_FRAME_MAX_HEIGHT : DCMIPP_FRAME_MAX_HEIGHT,
-			      0, 0);
+	format->width = clamp_t(u32, format->width, DCMIPP_FRAME_MIN_WIDTH,
+				vcap->pipe_id != 0 ?
+				DCMIPP_PIXEL_FRAME_MAX_WIDTH : DCMIPP_FRAME_MAX_WIDTH);
+	if (vcap->pipe_id != 0)
+		format->width = round_up(format->width,
+					 1 << hdw_pixel_alignment(format->pixelformat));
+	format->height = clamp_t(u32, format->height, DCMIPP_FRAME_MIN_HEIGHT,
+				 vcap->pipe_id != 0 ?
+                                 DCMIPP_PIXEL_FRAME_MAX_HEIGHT : DCMIPP_FRAME_MAX_HEIGHT);
 	if (format->width != in_w || format->height != in_h)
 		dev_dbg(vcap->dev, "resolution updated: %dx%d -> %dx%d\n",
 			in_w, in_h, format->width, format->height);
@@ -1131,15 +1129,17 @@ static int dcmipp_capture_link_validate(struct media_link *link)
 		.which = V4L2_SUBDEV_FORMAT_ACTIVE,
 		.pad = link->source->index,
 	};
+	u32 width_aligned;
 	int ret, i;
 
 	ret = v4l2_subdev_call(source_sd, pad, get_fmt, NULL, &source_fmt);
 	if (ret < 0)
 		return 0;
 
+	width_aligned = source_fmt.format.width;
+
 	/* On pixel pipes there can be alignment constraints */
 	if (vcap->pipe_id != 0) {
-		u32 width_aligned;
 		/*
 		 * Depending on the format & pixelpacker constraints, vcap width is
 		 * different from mbus width.  Compute expected vcap width based on
@@ -1147,21 +1147,13 @@ static int dcmipp_capture_link_validate(struct media_link *link)
 		 */
 		width_aligned = round_up(source_fmt.format.width,
 					 1 << hdw_pixel_alignment(vcap->format.pixelformat));
-
-		if (width_aligned != vcap->format.width ||
-		    source_fmt.format.height != vcap->format.height) {
-			dev_err(vcap->dev, "Wrong width or height %ux%u (%ux%u expected)\n",
-				vcap->format.width, vcap->format.height,
-				width_aligned, source_fmt.format.height);
-			return -EINVAL;
-		}
 	}
 
-	if (source_fmt.format.width != vcap->format.width ||
+	if (width_aligned != vcap->format.width ||
 	    source_fmt.format.height != vcap->format.height) {
 		dev_err(vcap->dev, "Wrong width or height %ux%u (%ux%u expected)\n",
 			vcap->format.width, vcap->format.height,
-			source_fmt.format.width, source_fmt.format.height);
+			width_aligned, source_fmt.format.height);
 		return -EINVAL;
 	}
 
