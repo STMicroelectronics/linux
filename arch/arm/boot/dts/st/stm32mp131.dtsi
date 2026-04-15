@@ -1848,7 +1848,7 @@
 				interrupts = <GIC_SPI 81 IRQ_TYPE_LEVEL_HIGH>;
 				clocks = <&rcc HASH1>;
 				resets = <&rcc HASH1_R>;
-				dmas = <&mdma 30 0x2 0x1000a02 0x0 0x0 0x0>;
+				dmas = <&mdma 30 0x2 0x1000a02 0x0 0x0>;
 				dma-names = "in";
 				access-controllers = <&etzpc 41>;
 				status = "disabled";
