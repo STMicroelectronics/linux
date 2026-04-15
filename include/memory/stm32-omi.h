@@ -184,7 +184,7 @@ struct stm32_tap_window {
 
 int stm32_omi_abort(struct stm32_omi *omi);
 int stm32_omi_dlyb_init(struct stm32_omi *omi, bool bypass_mode,
-			u16 period_ps);
+			u32 period_ps);
 int stm32_omi_dlyb_find_tap(struct stm32_omi *omi, bool rx_only,
 			    u8 *window_len);
 int stm32_omi_dlyb_set_cr(struct stm32_omi *omi, u32 dlyb_cr);

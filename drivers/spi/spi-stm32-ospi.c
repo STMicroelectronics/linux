@@ -566,7 +566,7 @@ static int stm32_ospi_dtr_calibration(struct stm32_ospi *ospi)
 	struct stm32_ospi_flash *flash = &ospi->flash[ospi->last_cs];
 	void __iomem *regs_base = omi->regs_base;
 	u32 prescaler, bus_freq;
-	u16 period_ps = 0;
+	u32 period_ps = 0;
 	u8 window_len = 0;
 	int ret;
 	bool bypass_mode = false;

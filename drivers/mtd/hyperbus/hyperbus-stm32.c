@@ -139,7 +139,7 @@ static int stm32_hyperbus_calibrate(struct hyperbus_device *hbdev)
 	struct stm32_omi *omi = hyperbus->omi;
 	void __iomem *regs_base = omi->regs_base;
 	u32 prescaler;
-	u16 period_ps = 0;
+	u32 period_ps = 0;
 	u8 window_len = 0;
 	int ret;
 	bool bypass_mode = false;
