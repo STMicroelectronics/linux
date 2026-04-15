@@ -1492,7 +1492,7 @@
 				dmas = <&dmamux1 83 0x400 0x01>,
 				       <&dmamux1 84 0x400 0x01>;
 				dma-names = "rx", "tx";
-				access-controllers = <&etzpc 13>;
+				access-controllers = <&etzpc 18>;
 				status = "disabled";
 			};
 
