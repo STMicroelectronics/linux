@@ -2021,6 +2021,42 @@
 					snps,wr_osr_lmt = <0x7>;
 				};
 			};
+
+			usbh: usb@482e0000 {
+				compatible = "st,stm32mp25-usbh";
+				st,syscfg = <&syscfg 0x2420>;
+				#address-cells = <1>;
+				#size-cells = <1>;
+				ranges = <0x482e0000 0x482e0000 0x20000>;
+				access-controllers = <&rifsc 63>;
+				power-domains = <&d1_pd>;
+				wakeup-source;
+				interrupts-extended = <&exti1 43 IRQ_TYPE_EDGE_RISING>;
+				status = "disabled";
+
+				usbh_ohci: usb@482e0000 {
+					compatible = "generic-ohci";
+					reg = <0x482e0000 0x1000>;
+					clocks = <&usb2_phy1 1>, <&rcc CK_BUS_USB2OHCI>;
+					resets = <&rcc USBH_R>;
+					interrupts = <GIC_SPI 140 IRQ_TYPE_LEVEL_HIGH>;
+					phys = <&usb2_phy1>;
+					phy-names = "usb";
+					wakeup-source;
+				};
+
+				usbh_ehci: usb@482f0000 {
+					compatible = "generic-ehci";
+					reg = <0x482f0000 0x1000>;
+					clocks = <&usb2_phy1 0>, <&rcc CK_BUS_USB2EHCI>;
+					resets = <&rcc USBH_R>;
+					interrupts = <GIC_SPI 139 IRQ_TYPE_LEVEL_HIGH>;
+					companion = <&usbh_ohci>;
+					phys = <&usb2_phy1>;
+					phy-names = "usb";
+					wakeup-source;
+				};
+			};
 		};
 
 		risaf1: risaf@420a0000 {
