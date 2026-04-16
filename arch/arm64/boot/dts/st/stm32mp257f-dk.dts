@@ -187,7 +187,7 @@
 	sound {
 		compatible = "audio-graph-card";
 		label = "STM32MP25-DK";
-		dais = <&mdf1_port0 &mdf1_port1>;
+		dais = <&i2s2_port &mdf1_port0 &mdf1_port1>;
 		status = "okay";
 	};
 
@@ -500,6 +500,13 @@
 					remote-endpoint = <&hdmi_connector_in>;
 				};
 			};
+
+			port@2 {
+				reg = <2>;
+				adv7535_tx_endpoint: endpoint {
+					remote-endpoint = <&i2s2_endpoint>;
+				};
+			};
 		};
 	};
 
@@ -524,6 +531,21 @@
 	/* spare dmas for other usage */
 	/delete-property/dmas;
 	/delete-property/dma-names;
+};
+
+&i2s2 {
+	pinctrl-names = "default", "sleep";
+	pinctrl-0 = <&i2s2_pins_b>;
+	pinctrl-1 = <&i2s2_sleep_pins_b>;
+	status = "okay";
+
+	i2s2_port: port {
+		i2s2_endpoint: endpoint {
+			remote-endpoint = <&adv7535_tx_endpoint>;
+			dai-format = "i2s";
+			mclk-fs = <256>;
+		};
+	};
 };
 
 &i3c4 {
