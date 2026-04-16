@@ -447,6 +447,20 @@ static const struct hantro_ctrl controls[] = {
 			.id = V4L2_CID_STATELESS_MPEG2_SEQUENCE,
 		},
 	}, {
+		.codec = HANTRO_VP8_ENCODER,
+		.cfg = {
+			.id = V4L2_CID_STATELESS_VP8_ENCODE_PARAMS,
+		},
+	}, {
+		.codec = HANTRO_VP8_ENCODER,
+		.cfg = {
+			.id = V4L2_CID_STATELESS_VP8_ENCODE_QP,
+			.min = 0,
+			.max = 127,
+			.step = 1,
+			.def = 0,
+		},
+	}, {
 		.codec = HANTRO_MPEG2_DECODER,
 		.cfg = {
 			.id = V4L2_CID_STATELESS_MPEG2_PICTURE,
