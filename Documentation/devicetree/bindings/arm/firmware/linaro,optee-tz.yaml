@@ -31,6 +31,13 @@ properties:
       software is expected to be either a per-cpu interrupt or an
       edge-triggered peripheral interrupt.
 
+  interrupt-controller: true
+
+  "#interrupt-cells":
+    description: Specifies the number of cells needed to encode an
+      interrupt source.
+    const: 1
+
   method:
     enum: [smc, hvc]
     description: |
