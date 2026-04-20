@@ -539,6 +539,11 @@ properties:
       Enables the TSO feature otherwise it will be managed by MAC HW capability
       register.
 
+  snps,ext-systime:
+    $ref: /schemas/types.yaml#/definitions/flag
+    description:
+      Enable PTP External System Time bus.
+
   mdio:
     $ref: mdio.yaml#
     unevaluatedProperties: false
