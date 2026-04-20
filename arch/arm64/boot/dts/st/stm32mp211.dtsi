@@ -760,8 +760,10 @@
 			compatible = "st,stm32mp25-dwmac", "snps,dwmac-5.20";
 			reg = <0x482c0000 0x4000>;
 			reg-names = "stmmaceth";
-			interrupts-extended = <&intc GIC_SPI 117 IRQ_TYPE_LEVEL_HIGH>;
-			interrupt-names = "macirq";
+			interrupts-extended = <&intc GIC_SPI 117 IRQ_TYPE_LEVEL_HIGH>,
+					      <&exti1 68 IRQ_TYPE_LEVEL_HIGH>;
+			interrupt-names = "macirq",
+					  "eth_wake_irq";
 			clock-names = "stmmaceth",
 				      "mac-clk-tx",
 				      "mac-clk-rx",
@@ -782,6 +784,8 @@
 			snps,axi-config = <&stmmac_axi_config_1>;
 			snps,tso;
 			access-controllers = <&rifsc 60>;
+			power-domains = <&d1_pd>;
+			wakeup-source;
 			status = "disabled";
 			snps,mtl-rx-config = <&mtl_rx_setup_1>;
 			snps,mtl-tx-config = <&mtl_tx_setup_1>;
