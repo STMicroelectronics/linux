@@ -89,6 +89,14 @@ properties:
       - port@0
       - port@1
 
+  vdd-supply:
+    description:
+      Phandle of the regulator that provides the supply voltage vdd.
+
+  vdda18-supply:
+    description:
+      Phandle of the regulator that provides the supply voltage vdda18.
+
 required:
   - compatible
   - "#clock-cells"
