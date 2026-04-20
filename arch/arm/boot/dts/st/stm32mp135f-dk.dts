@@ -236,6 +236,8 @@
 	max-speed = <100>;
 	phy-handle = <&phy0_eth1>;
 	st,phy-wol;
+	nvmem-cells = <&ethernet_mac1_address>;
+	nvmem-cell-names = "mac-address";
 
 	mdio {
 		#address-cells = <1>;
@@ -262,6 +264,8 @@
 	phy-handle = <&phy0_eth2>;
 	st,ext-phyclk;
 	phy-supply = <&scmi_v3v3_sw>;
+	nvmem-cells = <&ethernet_mac2_address>;
+	nvmem-cell-names = "mac-address";
 
 	mdio {
 		#address-cells = <1>;
