@@ -27,6 +27,18 @@ properties:
   vdd_3v3_usbfs-supply:
     description: Input supply phandle(s) for vdd_3v3_usbfs input
 
+  st,tzcr:
+    description: Use to configure the RCC TrustZone Control Register "RCC_TZCR"
+      within RCC. This property is used to enable RCC TrustZone protection
+      through "TZEN" and optionally protect the registers involved in the
+      generation of the "mcuss_ck" clock through "MCKPROT".
+    $ref: /schemas/types.yaml#/definitions/phandle-array
+    items:
+      - items:
+          - description: phandle to rcc
+          - description: register offset within rcc for "RCC_TZCR" "0x0"
+          - description: register bitmask for "TZEN" and "MCKPROT" bits
+
 patternProperties:
   "^(reg11|reg18|usb33)$":
     type: object
