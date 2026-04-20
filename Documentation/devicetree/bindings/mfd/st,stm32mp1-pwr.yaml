@@ -1,0 +1,80 @@
+# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/mfd/st,stm32mp1-pwr.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: STMicroelectronics STM32MP1 Power Management Controller
+
+description: |
+  The PWR IP is responsible for handling power-related resources such as
+  clocks, power supplies, and resets.
+
+  It provides 6 wake-up pins handled by an interrupt controller. These
+  wake-up pins can be used to wake up the SoC from the STANDBY state.
+
+maintainers:
+  - Pascal Paillet <p.paillet@foss.st.com>
+
+deprecated: true
+
+properties:
+  compatible:
+    items:
+      - const: st,stm32mp1-pwr
+
+  reg:
+    maxItems: 1
+
+  interrupts:
+    maxItems: 1
+    description: Reference to the GIC wake-up pin interrupt.
+
+  interrupt-controller: true
+
+  "#interrupt-cells":
+    const: 3
+    description: |
+      Interrupt specifier cells:
+        - cell 1: wake-up pin id from 0 to 5
+        - cell 2: IRQ trigger type
+        - cell 3: pull configuration
+          - 0: no pull
+          - 1: pull-up
+          - 2: pull-down
+
+  st,wakeup-pins:
+    $ref: /schemas/types.yaml#/definitions/phandle-array
+    description: List of GPIO specifiers describing each wake-up pin.
+
+required:
+  - compatible
+  - reg
+  - interrupts
+  - interrupt-controller
+  - "#interrupt-cells"
+  - st,wakeup-pins
+
+additionalProperties: false
+
+examples:
+  - |
+    #include <dt-bindings/interrupt-controller/arm-gic.h>
+    #include <dt-bindings/interrupt-controller/irq.h>
+    #include <dt-bindings/gpio/gpio.h>
+
+    pwr_irq: pwr@50001020 {
+      compatible = "st,stm32mp1-pwr";
+      reg = <0x50001020 0x100>;
+      interrupts = <GIC_SPI 149 IRQ_TYPE_LEVEL_HIGH>;
+      interrupt-controller;
+      #interrupt-cells = <3>;
+
+      st,wakeup-pins = <&gpioa 0 GPIO_ACTIVE_HIGH>,
+                        <&gpioa 2 GPIO_ACTIVE_HIGH>,
+                        <&gpioc 13 GPIO_ACTIVE_HIGH>,
+                        <&gpioi 8 GPIO_ACTIVE_HIGH>,
+                        <&gpioi 11 GPIO_ACTIVE_HIGH>,
+                        <&gpioc 1 GPIO_ACTIVE_HIGH>;
+      };
+...
