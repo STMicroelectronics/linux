@@ -42,7 +42,62 @@ properties:
     maxItems: 1
 
   access-controllers:
-    maxItems: 1
+    description: phandle to the rifsc device to check access right.
+    items:
+      - description: phandle to common controller
+
+  access-controller-names:
+    items:
+      - const: cmn
+
+  l1l2:
+    type: object
+    additionalProperties: false
+
+    properties:
+      access-controllers:
+        description: phandle to the rifsc device to check access right.
+        items:
+          - description: phandle to l1 & l2 layers
+
+      access-controller-names:
+        items:
+          - const: l1l2
+
+  l3:
+    type: object
+    additionalProperties: false
+
+    properties:
+      access-controllers:
+        description: phandle to the rifsc device to check access right.
+        items:
+          - description: phandle to l3 layer
+
+      access-controller-names:
+        items:
+          - const: l3
+
+  rot:
+    type: object
+    additionalProperties: false
+
+    properties:
+      access-controllers:
+        description: phandle to the rifsc device to check access right.
+        items:
+          - description: phandle to rotation controller
+
+      access-controller-names:
+        items:
+          - const: rot
+
+  rotation-memory:
+    $ref: /schemas/types.yaml#/definitions/phandle-array
+    description:
+      List of phandles to the reserved memory regions associated with the
+      rotation feature. The size of this memory is at least two frames.
+      (see ../reserved-memory/reserved-memory.txt)
 
   port:
     $ref: /schemas/graph.yaml#/properties/port
@@ -52,6 +107,9 @@ properties:
       - for external dpi rgb panel or bridge, using gpios.
       - for internal dpi input of the MIPI DSI host controller.
       Note: These 2 endpoints cannot be activated simultaneously.
+
+  power-domains:
+    maxItems: 1
 
 required:
   - compatible
