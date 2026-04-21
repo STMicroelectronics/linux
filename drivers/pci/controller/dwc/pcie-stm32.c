@@ -112,7 +112,11 @@ static int stm32_pcie_resume_noirq(struct device *dev)
 	stm32_pcie_deassert_perst(stm32_pcie);
 
 	ret = dw_pcie_resume_noirq(&stm32_pcie->pci);
-	if (ret)
+	/*
+	 * Ignore timeout, without link we still need the controller clock
+	 * to access dbi registers.
+	 */
+	if (ret && ret != -ETIMEDOUT)
 		goto err_disable_clk;
 
 	pinctrl_pm_select_default_state(dev);
@@ -298,6 +302,9 @@ static int stm32_pcie_probe(struct platform_device *pdev)
 		dev_err_probe(dev, ret, "Failed to enable runtime PM\n");
 		goto err_disable_clk;
 	}
+
+	stm32_pcie->pci.pp.use_atu_msg = true;
+	stm32_pcie->pci.pp.skip_l23_ready = true;
 
 	ret = dw_pcie_host_init(&stm32_pcie->pci.pp);
 	if (ret)
