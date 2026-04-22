@@ -1857,7 +1857,7 @@
 				interrupts = <GIC_SPI 109 IRQ_TYPE_LEVEL_HIGH>;
 				dmas = <&hpdma 0 0x62 0x00003121>,
 				       <&hpdma 0 0x62 0x00003112>,
-				       <&hpdma 1 0x42 0x00013113>;
+				       <&hpdma 1 0x42 0x00023113>;
 				dma-names = "tx", "rx", "ecc";
 				status = "disabled";
 			};
