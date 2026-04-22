@@ -57,6 +57,9 @@ properties:
   touchscreen-size-y: true
   touchscreen-swapped-x-y: true
 
+  panel:
+    description: phandle to the panel.
+
 additionalProperties: false
 
 required:
