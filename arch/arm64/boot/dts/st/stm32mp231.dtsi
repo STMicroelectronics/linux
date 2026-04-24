@@ -3040,6 +3040,8 @@
 			      <0x4ac60000 0x20000>;
 			#interrupt-cells = <3>;
 			interrupt-controller;
+			interrupt-parent = <&intc>;
+			interrupts = <GIC_PPI 9 (GIC_CPU_MASK_SIMPLE(1) | IRQ_TYPE_LEVEL_LOW)>;
 		};
 	};
 
