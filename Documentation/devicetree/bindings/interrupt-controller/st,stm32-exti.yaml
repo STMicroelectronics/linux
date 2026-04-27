@@ -47,6 +47,9 @@ properties:
     description:
       Interrupts references to primary interrupt controller
 
+  power-domains:
+    maxItems: 1
+
   wakeup-parent: true
 
 required:
@@ -68,6 +71,7 @@ allOf:
         interrupts:
           minItems: 1
           maxItems: 32
+        power-domains: false
       required:
         - interrupts
   - if:
@@ -81,6 +85,7 @@ allOf:
         interrupts:
           minItems: 1
           maxItems: 96
+        power-domains: false
       required:
         - interrupts
 
