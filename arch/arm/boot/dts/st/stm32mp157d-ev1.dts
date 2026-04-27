@@ -213,12 +213,17 @@
 
 	dfsdm0: filter@0 {
 		compatible = "st,stm32-dfsdm-dmic";
-		st,adc-channels = <3>;
-		st,adc-channel-names = "dmic_u1";
-		st,adc-channel-types = "SPI_R";
-		st,adc-channel-clk-src = "CLKOUT";
 		st,filter-order = <3>;
+		#address-cells = <1>;
+		#size-cells = <0>;
 		status = "okay";
+
+		channel@3 {
+			reg = <3>;
+			label = "dmic_u1";
+			st,adc-channel-type = "SPI_R";
+			st,adc-channel-clk-src = "CLKOUT";
+		};
 
 		asoc_pdm0: dfsdm-dai {
 			compatible = "st,stm32h7-dfsdm-dai";
@@ -236,13 +241,18 @@
 
 	dfsdm1: filter@1 {
 		compatible = "st,stm32-dfsdm-dmic";
-		st,adc-channels = <0>;
-		st,adc-channel-names = "dmic_u2";
-		st,adc-channel-types = "SPI_F";
-		st,adc-channel-clk-src = "CLKOUT";
 		st,filter-order = <3>;
-		st,adc-alt-channel = <1>;
+		#address-cells = <1>;
+		#size-cells = <0>;
 		status = "okay";
+
+		channel@0 {
+			reg = <0>;
+			label = "dmic_u2";
+			st,adc-channel-type = "SPI_F";
+			st,adc-channel-clk-src = "CLKOUT";
+			st,adc-alt-channel;
+		};
 
 		asoc_pdm1: dfsdm-dai {
 			compatible = "st,stm32h7-dfsdm-dai";
@@ -260,13 +270,18 @@
 
 	dfsdm2: filter@2 {
 		compatible = "st,stm32-dfsdm-dmic";
-		st,adc-channels = <2>;
-		st,adc-channel-names = "dmic_u3";
-		st,adc-channel-types = "SPI_F";
-		st,adc-channel-clk-src = "CLKOUT";
-		st,adc-alt-channel = <1>;
 		st,filter-order = <3>;
+		#address-cells = <1>;
+		#size-cells = <0>;
 		status = "okay";
+
+		channel@2 {
+			reg = <2>;
+			label = "dmic_u3";
+			st,adc-channel-type = "SPI_F";
+			st,adc-channel-clk-src = "CLKOUT";
+			st,adc-alt-channel;
+		};
 
 		asoc_pdm2: dfsdm-dai {
 			compatible = "st,stm32h7-dfsdm-dai";
@@ -284,12 +299,17 @@
 
 	dfsdm3: filter@3 {
 		compatible = "st,stm32-dfsdm-dmic";
-		st,adc-channels = <1>;
-		st,adc-channel-names = "dmic_u4";
-		st,adc-channel-types = "SPI_R";
-		st,adc-channel-clk-src = "CLKOUT";
 		st,filter-order = <3>;
+		#address-cells = <1>;
+		#size-cells = <0>;
 		status = "okay";
+
+		channel@1 {
+			reg = <1>;
+			label = "dmic_u4";
+			st,adc-channel-type = "SPI_R";
+			st,adc-channel-clk-src = "CLKOUT";
+		};
 
 		asoc_pdm3: dfsdm-dai {
 			compatible = "st,stm32h7-dfsdm-dai";
