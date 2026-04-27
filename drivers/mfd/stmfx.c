@@ -81,13 +81,11 @@ static struct mfd_cell stmfx_cells[] = {
 		.num_resources = ARRAY_SIZE(stmfx_pinctrl_resources),
 	},
 	{
-		.of_compatible = "st,stmfx-0300-idd",
 		.name = "stmfx-idd",
 		.resources = stmfx_idd_resources,
 		.num_resources = ARRAY_SIZE(stmfx_idd_resources),
 	},
 	{
-		.of_compatible = "st,stmfx-0300-ts",
 		.name = "stmfx-ts",
 		.resources = stmfx_ts_resources,
 		.num_resources = ARRAY_SIZE(stmfx_ts_resources),
