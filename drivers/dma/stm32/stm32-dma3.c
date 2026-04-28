@@ -2275,8 +2275,9 @@ static int stm32_dma3_probe(struct platform_device *pdev)
 	chan_reserved = stm32_dma3_check_rif(ddata);
 
 	if (chan_reserved == GENMASK(ddata->dma_channels - 1, 0)) {
+		/* There is no channel available, abort registration silently */
 		ret = -ENODEV;
-		dev_err_probe(&pdev->dev, ret, "No channel available, abort registration\n");
+		dev_dbg(&pdev->dev, "No channel available, abort registration\n");
 		goto err_clk_disable;
 	}
 
