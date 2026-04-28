@@ -2261,10 +2261,6 @@ static int stm32_dma3_probe(struct platform_device *pdev)
 			goto err_clk_disable;
 	}
 
-	ret = stm32_dma3_lli_pool_create(pdev, ddata);
-	if (ret)
-		goto err_clk_disable;
-
 	ddata->chans = devm_kcalloc(&pdev->dev, ddata->dma_channels, sizeof(*ddata->chans),
 				    GFP_KERNEL);
 	if (!ddata->chans) {
@@ -2280,6 +2276,10 @@ static int stm32_dma3_probe(struct platform_device *pdev)
 		dev_dbg(&pdev->dev, "No channel available, abort registration\n");
 		goto err_clk_disable;
 	}
+
+	ret = stm32_dma3_lli_pool_create(pdev, ddata);
+	if (ret)
+		goto err_clk_disable;
 
 	/* G_FIFO_SIZE x=0..7 in HWCFGR3 and G_FIFO_SIZE x=8..15 in HWCFGR4 */
 	hwcfgr = readl_relaxed(ddata->base + STM32_DMA3_HWCFGR3);
