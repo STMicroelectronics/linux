@@ -2570,7 +2570,7 @@ config SND_SOC_WM8993
 	depends on I2C
 
 config SND_SOC_WM8994
-	tristate
+	tristate "Wolfson Microelectronics WM8994 codec"
 	depends on MFD_WM8994
 
 config SND_SOC_WM8995
