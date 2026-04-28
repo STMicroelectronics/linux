@@ -9,6 +9,7 @@
 	vdec: vdec@480d0000 {
 		compatible = "st,stm32mp25-vdec";
 		reg = <0x480d0000 0x3c8>;
+		resets = <&rcc VDEC_R>;
 		interrupts = <GIC_SPI 117 IRQ_TYPE_LEVEL_HIGH>;
 		clocks = <&rcc CK_BUS_VDEC>;
 		access-controllers = <&rifsc 89>;
