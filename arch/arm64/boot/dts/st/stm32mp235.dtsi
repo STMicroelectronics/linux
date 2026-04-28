@@ -12,5 +12,6 @@
 		interrupts = <GIC_SPI 117 IRQ_TYPE_LEVEL_HIGH>;
 		clocks = <&rcc CK_BUS_VDEC>;
 		access-controllers = <&rifsc 89>;
+		power-domains = <&d1_pd>;
 	};
 };
