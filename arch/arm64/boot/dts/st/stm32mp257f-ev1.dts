@@ -714,43 +714,6 @@
 	status = "okay";
 };
 
-&mlahb {
-	intc_rpmsg: interrupt-controller@1 {
-		compatible = "rpmsg,intc";
-		reg = <1 0>;
-		#interrupt-cells = <1>;
-		interrupt-controller;
-		status = "okay";
-	};
-
-	i2c_rpmsg: i2c@2 {
-		compatible = "rpmsg,i2c-controller";
-		reg = <2 0>;
-		rpmsg,dev-id = "rpmsg_i2c";
-		#address-cells = <1>;
-		#size-cells = <0>;
-		status = "okay";
-
-		typec@35 {
-			compatible = "st,stm32mp25-typec";
-			reg = <0x35>;
-			interrupts-extended = <&intc_rpmsg 0>;
-			status = "okay";
-			connector {
-				compatible = "usb-c-connector";
-				label = "USB-C";
-
-				port {
-					typec_ep: endpoint {
-						remote-endpoint = <&dwc3_ep>;
-					};
-				};
-			};
-		};
-	};
-};
-
-
 &ommanager {
 	memory-region = <&mm_ospi1>;
 	memory-region-names = "ospi1";
@@ -1002,6 +965,26 @@
 	};
 	timer@11 {
 		status = "okay";
+	};
+};
+
+&ucpd {
+	st,tcpp = <&tcpp>;
+	status = "okay";
+
+	connector {
+		compatible = "usb-c-connector";
+		label = "USB-C";
+		data-role = "device";
+		power-role = "sink";
+		typec-power-opmode = "default";
+		pd-disable;
+		self-powered;
+		port {
+			typec_ep: endpoint {
+				remote-endpoint = <&dwc3_ep>;
+			};
+		};
 	};
 };
 
