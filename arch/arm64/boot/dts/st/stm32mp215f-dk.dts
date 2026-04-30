@@ -88,6 +88,10 @@
 	status = "okay";
 };
 
+&bsec {
+	bootph-all;
+};
+
 &cryp1 {
 	status = "okay";
 };
