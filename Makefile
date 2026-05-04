@@ -1574,7 +1574,26 @@ dt_binding_check: dt_binding_schemas scripts_dtc
 	$(Q)$(MAKE) $(build)=Documentation/devicetree/bindings $@
 
 dt_binding_schemas:
-	$(Q)$(MAKE) $(build)=Documentation/devicetree/bindings
+	$(Q)set -e; \
+	copy_list=""; \
+	cleanup_extdt_schemas() { \
+		for dst in $$copy_list; do \
+			rm -f "$$dst"; \
+		done; \
+	}; \
+	trap cleanup_extdt_schemas EXIT INT TERM; \
+	if [ $(KBUILD_EXTDTB) -ne 0 ]; then \
+		for extdts in $(wildcard $(KBUILD_EXTDTS)); do \
+			echo "Looking for schemas into $$extdts"; \
+			for yaml in "$$extdts"/*.yaml; do \
+				[ -e "$$yaml" ] || continue; \
+				dst="$(srctree)/Documentation/devicetree/bindings/arm/stm32/$$(basename "$$yaml")"; \
+				copy_list="$$copy_list $$dst"; \
+				cp "$$yaml" "$$dst"; \
+			done; \
+		done; \
+	fi; \
+	$(MAKE) $(build)=Documentation/devicetree/bindings
 
 PHONY += dt_compatible_check
 dt_compatible_check: dt_binding_schemas
