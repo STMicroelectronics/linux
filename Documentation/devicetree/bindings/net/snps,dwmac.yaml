@@ -476,6 +476,20 @@ properties:
     $ref: /schemas/types.yaml#/definitions/uint32
     enum: [1, 2, 4, 8, 16, 32]
 
+  snps,txqos:
+    $ref: /schemas/types.yaml#/definitions/uint32
+    description:
+      Tx QoS used to drive priority of output signals for all
+      transactions of DMA Tx Channel. Value of Transmit QoS is
+      value between 0 and 15. (15 is best priority)
+
+  snps,rxqos:
+    $ref: /schemas/types.yaml#/definitions/uint32
+    description:
+      Rx QoS used to drive priority of output signals for all
+      transactions of DMA Rx Channel. Value of Receive QoS is
+      value between 0 and 15. (15 is best priority)
+
   snps,no-pbl-x8:
     $ref: /schemas/types.yaml#/definitions/flag
     description:
