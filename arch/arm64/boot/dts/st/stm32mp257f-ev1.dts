@@ -417,6 +417,10 @@
 	bootph-all;
 };
 
+&gpu {
+	contiguous-area = <&gpu_reserved>;
+};
+
 &hpdma {
 	memory-region = <&hpdma1_lli>;
 };
