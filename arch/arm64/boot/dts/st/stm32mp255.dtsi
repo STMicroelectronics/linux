@@ -3,7 +3,29 @@
  * Copyright (C) STMicroelectronics 2023 - All Rights Reserved
  * Author: Alexandre Torgue <alexandre.torgue@foss.st.com> for STMicroelectronics.
  */
+#include <dt-bindings/power/st,stm32mp25-power.h>
 #include "stm32mp253.dtsi"
+
+/ {
+	thermal-zones {
+		cpu-thermal {
+			trips {
+				gpu_alert: gpu-alert {
+					temperature = <110000>;
+					hysteresis = <10000>;
+					type = "passive";
+				};
+			};
+
+			cooling-maps {
+				map1 {
+					trip = <&gpu_alert>;
+					cooling-device = <&gpu 1 6>;
+				};
+			};
+		};
+	};
+};
 
 &ltdc {
 	compatible = "st,stm32mp255-ltdc";
@@ -143,5 +165,18 @@
 		clocks = <&rcc CK_BUS_VENC>;
 		access-controllers = <&rifsc 90>;
 		power-domains = <&d1_pd>;
+	};
+
+	gpu: gpu@48280000 {
+		compatible = "vivante,gc";
+		reg = <0x48280000 0x800>;
+		interrupts = <GIC_SPI 183 IRQ_TYPE_LEVEL_HIGH>;
+		resets = <&rcc GPU_R>;
+		clock-names = "bus", "core";
+		clocks = <&rcc CK_BUS_GPU>, <&rcc CK_KER_GPU>;
+		power-domains = <&scmi_perf 1>, <&scmi_devpd PD_SCMI_GPU>, <&d1_pd>;
+		power-domain-names = "perf", "scmi_devpd", "d1_pd";
+		access-controllers = <&rifsc 79>;
+		#cooling-cells = <2>;
 	};
 };
