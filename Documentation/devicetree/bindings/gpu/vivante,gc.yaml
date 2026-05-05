@@ -47,7 +47,18 @@ properties:
     maxItems: 1
 
   power-domains:
+    minItems: 1
+    maxItems: 3
+
+  power-domain-names:
+    minItems: 1
+    maxItems: 3
+
+  access-controllers:
     maxItems: 1
+
+  contiguous-area:
+    $ref: /schemas/types.yaml#/definitions/phandle
 
 required:
   - compatible
