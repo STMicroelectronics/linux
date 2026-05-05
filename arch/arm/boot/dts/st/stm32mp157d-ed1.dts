@@ -72,9 +72,23 @@
 			no-map;
 		};
 
+		gpu_reserved: gpu@e8000000 {
+			reg = <0xe8000000 0x8000000>;
+			no-map;
+		};
+
 		optee@fe000000 {
 			reg = <0xfe000000 0x2000000>;
 			no-map;
+		};
+
+		/* global autoconfigured region for contiguous allocations */
+		linux,cma {
+			compatible = "shared-dma-pool";
+			reusable;
+			size = <0x8000000>;
+			alignment = <0x2000>;
+			linux,cma-default;
 		};
 	};
 
@@ -281,6 +295,10 @@
 &gpioz {
 	bootph-all;
 	clocks = <&scmi_clk CK_SCMI_GPIOZ>;
+};
+
+&gpu {
+	contiguous-area = <&gpu_reserved>;
 };
 
 &hash1 {
