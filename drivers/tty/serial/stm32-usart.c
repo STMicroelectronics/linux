@@ -2276,8 +2276,6 @@ static void stm32_usart_console_write(struct console *co, const char *s,
 	else
 		uart_port_lock_irqsave(port, &flags);
 
-	pm_runtime_get(port->dev);
-
 	/* Save and disable interrupts, enable the transmitter */
 	old_cr1 = readl_relaxed(port->membase + ofs->cr1);
 	new_cr1 = old_cr1 & ~USART_CR1_IE_MASK;
@@ -2288,9 +2286,6 @@ static void stm32_usart_console_write(struct console *co, const char *s,
 
 	/* Restore interrupt state */
 	writel_relaxed(old_cr1, port->membase + ofs->cr1);
-
-	pm_runtime_mark_last_busy(port->dev);
-	pm_runtime_put_autosuspend(port->dev);
 
 	if (locked)
 		uart_port_unlock_irqrestore(port, flags);
