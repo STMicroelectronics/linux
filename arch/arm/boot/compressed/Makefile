@@ -51,14 +51,20 @@ endif
 
 #
 # We now have a PIC decompressor implementation.  Decompressors running
-# from RAM should not define ZTEXTADDR.  Decompressors running directly
-# from ROM or Flash must define ZTEXTADDR (preferably via the config)
+# directly from ROM or Flash must define ZTEXTADDR (preferably via the config).
+# Decompressors running from RAM don't need to define ZTEXTADDR, thus value
+# zero is generally fine. But to help debugging the decompressor, if LOADADDR
+# is defined then use it to initialize ZTEXTADDR, so addr2line will work fine.
 # FIXME: Previous assignment to ztextaddr-y is lost here. See SHARK
 ifeq ($(CONFIG_ZBOOT_ROM),y)
 ZTEXTADDR	:= $(CONFIG_ZBOOT_ROM_TEXT)
 ZBSSADDR	:= $(CONFIG_ZBOOT_ROM_BSS)
 else
-ZTEXTADDR	:= 0
+  ifneq ($(LOADADDR),)
+    ZTEXTADDR	:= $(LOADADDR)
+  else
+    ZTEXTADDR	:= 0
+  endif
 ZBSSADDR	:= ALIGN(8)
 endif
 
