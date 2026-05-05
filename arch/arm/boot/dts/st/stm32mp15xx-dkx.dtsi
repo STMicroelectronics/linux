@@ -60,6 +60,20 @@
 			reg = <0x38000000 0x10000>;
 			no-map;
 		};
+
+		gpu_reserved: gpu@d4000000 {
+			reg = <0xd4000000 0x4000000>;
+			no-map;
+		};
+
+		/* global autoconfigured region for contiguous allocations */
+		linux,cma {
+			compatible = "shared-dma-pool";
+			reusable;
+			size = <0x8000000>;
+			alignment = <0x2000>;
+			linux,cma-default;
+		};
 	};
 
 	led {
@@ -280,6 +294,10 @@
 
 &gpioz {
 	bootph-all;
+};
+
+&gpu {
+	contiguous-area = <&gpu_reserved>;
 };
 
 &hash1 {
