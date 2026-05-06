@@ -114,6 +114,9 @@ static int wm8994_suspend(struct device *dev)
 	struct wm8994 *wm8994 = dev_get_drvdata(dev);
 	int ret;
 
+	if (wm8994->suspended)
+		return 0;
+
 	/* Don't actually go through with the suspend if the CODEC is
 	 * still active for accessory detect. */
 	switch (wm8994->type) {
@@ -161,15 +164,15 @@ static int wm8994_suspend(struct device *dev)
 	if (ret != 0)
 		dev_err(dev, "Failed to restore interrupt mask: %d\n", ret);
 
-	regcache_cache_only(wm8994->regmap, true);
-	wm8994->suspended = true;
-
 	ret = regulator_bulk_disable(wm8994->num_supplies,
 				     wm8994->supplies);
 	if (ret != 0) {
 		dev_err(dev, "Failed to disable supplies: %d\n", ret);
 		return ret;
 	}
+
+	regcache_cache_only(wm8994->regmap, true);
+	wm8994->suspended = true;
 
 	return 0;
 }
