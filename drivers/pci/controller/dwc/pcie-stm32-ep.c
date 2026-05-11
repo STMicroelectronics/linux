@@ -26,6 +26,7 @@ struct stm32_pcie {
 	struct clk *clk;
 	struct gpio_desc *perst_gpio;
 	unsigned int perst_irq;
+	int last_perst;
 };
 
 static void stm32_pcie_ep_init(struct dw_pcie_ep *ep)
@@ -182,16 +183,29 @@ static irqreturn_t stm32_pcie_ep_perst_irq_thread(int irq, void *data)
 {
 	struct stm32_pcie *stm32_pcie = data;
 	struct dw_pcie *pci = &stm32_pcie->pci;
-	u32 perst;
+	int perst;
 
 	perst = gpiod_get_value(stm32_pcie->perst_gpio);
-	if (perst)
-		stm32_pcie_perst_assert(pci);
-	else
-		stm32_pcie_perst_deassert(pci);
+	if (perst < 0) {
+		dev_err(pci->dev, "Failed read PERST gpio: %d\n", perst);
+		return IRQ_NONE;
+	}
 
-	irq_set_irq_type(gpiod_to_irq(stm32_pcie->perst_gpio),
-			 (perst ? IRQF_TRIGGER_HIGH : IRQF_TRIGGER_LOW));
+	if (perst != stm32_pcie->last_perst) {
+		if (perst)
+			stm32_pcie_perst_assert(pci);
+		else
+			stm32_pcie_perst_deassert(pci);
+
+		irq_set_irq_type(gpiod_to_irq(stm32_pcie->perst_gpio),
+				 (perst ? IRQF_TRIGGER_HIGH : IRQF_TRIGGER_LOW));
+
+		stm32_pcie->last_perst = perst;
+	} else if (perst) {
+		dev_dbg(pci->dev, "PERST already asserted !\n");
+	} else {
+		dev_dbg(pci->dev, "PERST already de-asserted !\n");
+	}
 
 	return IRQ_HANDLED;
 }
@@ -285,6 +299,7 @@ static int stm32_pcie_probe(struct platform_device *pdev)
 	}
 
 	stm32_pcie->perst_irq = gpiod_to_irq(stm32_pcie->perst_gpio);
+	stm32_pcie->last_perst = -EINVAL;
 
 	/* Will be enabled in start_link when device is initialized. */
 	irq_set_status_flags(stm32_pcie->perst_irq, IRQ_NOAUTOEN);
