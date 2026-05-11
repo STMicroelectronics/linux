@@ -886,6 +886,7 @@ __armv7_mmu_cache_on:
 						@ (needed for ARM1176)
 #ifdef CONFIG_MMU
  ARM_BE8(	orr	r0, r0, #1 << 25 )	@ big-endian page tables
+		bic	r0, r0, #3 << 19	@ clear SCTLR.UWXN and SCTLR.WXN
 		mrcne   p15, 0, r6, c2, c0, 2   @ read ttb control reg
 		orrne	r0, r0, #1		@ MMU enabled
 		movne	r1, #0xfffffffd		@ domain 0 = client
