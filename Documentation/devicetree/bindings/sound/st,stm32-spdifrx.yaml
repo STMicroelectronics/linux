@@ -50,6 +50,9 @@ properties:
   resets:
     maxItems: 1
 
+  power-domains:
+    maxItems: 1
+
   port:
     $ref: audio-graph-port.yaml#
     unevaluatedProperties: false
