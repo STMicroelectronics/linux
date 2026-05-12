@@ -129,6 +129,9 @@ patternProperties:
         description: Configure the SAI device as master clock provider.
         const: 0
 
+      power-domains:
+        maxItems: 1
+
       port:
         $ref: audio-graph-port.yaml#
         unevaluatedProperties: false
