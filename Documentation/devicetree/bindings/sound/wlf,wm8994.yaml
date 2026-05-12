@@ -35,9 +35,14 @@ properties:
 
   clock-names:
     minItems: 1
-    items:
-      - const: MCLK1
-      - const: MCLK2
+    oneOf:
+      - items:
+          - enum:
+              - MCLK1
+              - MCLK2
+      - items:
+          - const: MCLK1
+          - const: MCLK2
 
   gpio-controller: true
 
