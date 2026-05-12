@@ -71,6 +71,13 @@ properties:
   '#sound-dai-cells':
     const: 0
 
+  ports:
+    $ref: /schemas/graph.yaml#/properties/ports
+
+  port:
+    $ref: audio-graph-port.yaml#
+    unevaluatedProperties: false
+
   wlf,gpio-cfg:
     $ref: /schemas/types.yaml#/definitions/uint32-array
     maxItems: 11
