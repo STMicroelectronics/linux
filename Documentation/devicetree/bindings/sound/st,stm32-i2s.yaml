@@ -57,6 +57,9 @@ properties:
   resets:
     maxItems: 1
 
+  power-domains:
+    maxItems: 1
+
   "#clock-cells":
     description: Configure the I2S device as MCLK clock provider.
     const: 0
