@@ -536,7 +536,9 @@ patternProperties:
               const: 0x0
 
             interrupts:
-              const: 0
+              items:
+                - items:
+                    - const: 0
 
             assigned-resolution-bits:
               enum: [6, 8, 10, 12]
