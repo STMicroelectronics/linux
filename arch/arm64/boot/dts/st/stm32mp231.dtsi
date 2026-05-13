@@ -2057,6 +2057,33 @@
 					wakeup-source;
 				};
 			};
+
+			usb3dr: usb@48300000 {
+				compatible = "st,stm32mp25-dwc3";
+				ranges = <0x48300000 0x48300000 0x100000>;
+				access-controllers = <&rifsc 66>;
+				interrupts-extended = <&exti1 44 IRQ_TYPE_EDGE_RISING>;
+				power-domains = <&d1_pd>;
+				wakeup-source;
+				#address-cells = <1>;
+				#size-cells = <1>;
+				st,syscfg = <&syscfg 0x4800>;
+				status = "disabled";
+
+				dwc3: usb@48300000 {
+					compatible = "snps,dwc3";
+					reg = <0x48300000 0x100000>;
+					interrupts = <GIC_SPI 228 IRQ_TYPE_LEVEL_HIGH>;
+					clock-names = "ref", "bus_early", "suspend";
+					clocks = <&rcc CK_KER_USB2PHY2>, <&rcc CK_BUS_USB3DR>,
+						 <&rcc CK_KER_USB2PHY2>;
+					resets = <&rcc USB3DR_R>;
+					phys = <&usb2_phy2>;
+					phy-names = "usb2-phy";
+					maximum-speed = "high-speed";
+					wakeup-source;
+				};
+			};
 		};
 
 		risaf1: risaf@420a0000 {
