@@ -660,11 +660,18 @@ static int stm32_dfsdm_channel_parse_of(struct stm32_dfsdm *dfsdm,
 	}
 	df_ch->src = val;
 
-	ret = of_property_read_u32_index(indio_dev->dev.of_node,
-					 "st,adc-alt-channel", chan_idx,
-					 &df_ch->alt_si);
-	if (ret < 0)
-		df_ch->alt_si = 0;
+	df_ch->alt_si = 0;
+	if (of_property_present(indio_dev->dev.of_node, "st,adc-alt-channel")) {
+		ret = of_property_read_u32_index(indio_dev->dev.of_node,
+						 "st,adc-alt-channel", chan_idx,
+						 &df_ch->alt_si);
+		if (ret < 0) {
+			if (ret == -ENODATA)
+				df_ch->alt_si = 1;
+			else
+				df_ch->alt_si = 0;
+		}
+	}
 
 	return 0;
 }
