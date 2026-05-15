@@ -19,6 +19,7 @@ properties:
     enum:
       - st,stm32mp131-hdp
       - st,stm32mp151-hdp
+      - st,stm32mp211-hdp
       - st,stm32mp231-hdp
       - st,stm32mp251-hdp
 
@@ -126,6 +127,39 @@ allOf:
                       ca7_standbywfi0, ca7_standbywfe0, ca7_dbgack0, bsec_out_fuse_ok,
                       bsec_out_sec_spiden, eth_out_mac_speed_o0, gpu_dbg0, ddrctrl_csysreq_ddrc,
                       ddrctrl_hpr_credit_cnt, dts_valobus1_4, dts_valobus2_4, gpoval7 ]
+  - if:
+      properties:
+        compatible:
+          contains:
+            const: st,stm32mp211-hdp
+    then:
+      patternProperties:
+        "^hdp[0-7]-pins$":
+          properties:
+            function:
+              enum: [ pwr_pwrwake_sys, cpu2_sleep_deep, bsec_out_test_sdr_unlock_or_disable_scan,
+                      bsec_out_nidenm, bsec_out_nidena, cpu2_state_0, rcc_pwrds_sys, none,
+                      ddrss_csysreq_ddrc, ddrss_dfi_phyupd_req, pll1_lock, d2_gbl_per_clk_bus_req,
+                      usb_hdp_0, usb_hdp_8, sdmmc1_dll_lock, gpoval0, pwr_pwrwake_cpu2, cpu2_halted,
+                      cpu2_state_1, bsec_out_dbgenm, bsec_out_dbgena, exti1_sys_wakeup,
+                      rcc_pwrds_cpu2, ddrss_csysack_ddrc, ddrss_dfi_phymstr_req, pll2_lock,
+                      d2_gbl_per_dma_req, usb_hdp_1, usb_hdp_9, sdmmc2_dll_lock, gpoval1,
+                      pwr_pwrwake_cpu1, cpu2_rxev, bsec_out_shdbgen, exti1_cpu2_wakeup,
+                      rcc_pwrds_cpu1, ddrss_cactive_ddrc, ddrss_dfi_lp_req, hpdma1_clk_bus_req,
+                      usb_hdp_2, usb_hdp_10, sdmmc3_dll_lock, gpoval2, pwr_sel_vth_vddcpu,
+                      cpu2_txev, cpu1_npmuirq0, cpu1_nfiqout0, bsec_out_ddbgen, exti1_cpu1_wakeup,
+                      ddrss_mcdcg_en, ddrss_dfi_freq_0, pll4_lock, hpdma2_clk_bus_req, usb_hdp_3,
+                      usb_hdp_11, d1_state_0, gpoval3, pwr_sel_vth_vddcore, cpu2_sleeping,
+                      cpu1_evento, bsec_out_spnidena, exti2_sys_wakeup, ddrss_dphycg_en,
+                      ddrss_obsp0, pll5_lock, hpdma3_clk_bus_req, usb_hdp_4, usb_hdp_12,
+                      d1_state_1, gpoval4, cpu1_standby_wfil2, cpu1_nirqout0, bsec_out_spidena,
+                      ddrctrl_dfi_init_start, ddrss_obsp1, pll6_lock, usb_hdp_5, usb_hdp_13,
+                      d1_state_2, gpoval5, cpu1_naxierrirq, bsec_out_spnidenm, exti2_cpu2_wakeup,
+                      ddrss_dfi_init_complete, ddrss_obsp2, d2_state_0, pll7_lock, usb_hdp_6,
+                      octospi1_dll_lock, cpu1_state_0, gpoval6, cpu1_standby_wfi0,
+                      cpu1_standby_wfe0, cpu1_halted0, bsec_out_spidenm, exti2_cpu1_wakeup,
+                      ddrss_dfi_ctrlupd_req, ddrss_obsp3, d2_state_1, pll8_lock, usb_hdp_7,
+                      cpu1_state_1, gpoval7]
   - if:
       properties:
         compatible:
