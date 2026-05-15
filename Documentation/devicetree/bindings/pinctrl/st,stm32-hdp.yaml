@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
-# Copyright (C) STMicroelectronics 2025.
+# Copyright (C) STMicroelectronics 2025-2026.
 %YAML 1.2
 ---
 $id: http://devicetree.org/schemas/pinctrl/st,stm32-hdp.yaml#
@@ -19,6 +19,7 @@ properties:
     enum:
       - st,stm32mp131-hdp
       - st,stm32mp151-hdp
+      - st,stm32mp231-hdp
       - st,stm32mp251-hdp
 
   reg:
@@ -129,7 +130,9 @@ allOf:
       properties:
         compatible:
           contains:
-            const: st,stm32mp251-hdp
+            enum:
+              - st,stm32mp231-hdp
+              - st,stm32mp251-hdp
     then:
       patternProperties:
         "^hdp[0-7]-pins$":
