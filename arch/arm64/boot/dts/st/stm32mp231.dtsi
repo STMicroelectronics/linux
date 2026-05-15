@@ -884,6 +884,14 @@
 			};
 		};
 
+		hdp: pinctrl@44090000 {
+			compatible = "st,stm32mp231-hdp";
+			reg = <0x44090000 0x400>;
+			clocks = <&rcc CK_BUS_HDP>;
+			access-controllers = <&dbg_bus 1>, <&rifsc 57>;
+			status = "disabled";
+		};
+
 		rcc: clock-controller@44200000 {
 			compatible = "st,stm32mp25-rcc";
 			reg = <0x44200000 0x10000>;
