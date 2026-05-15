@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (C) STMicroelectronics 2025 - All Rights Reserved
+ * Copyright (C) STMicroelectronics 2025-2026 - All Rights Reserved
  * Author: Clément Le Goffic <clement.legoffic@foss.st.com> for STMicroelectronics.
  */
 #include <linux/bits.h>
@@ -596,6 +596,10 @@ static const struct of_device_id stm32_hdp_of_match[] = {
 	{
 		.compatible = "st,stm32mp151-hdp",
 		.data = &func_name_mp15,
+	},
+	{
+		.compatible = "st,stm32mp231-hdp",
+		.data = &func_name_mp25,
 	},
 	{
 		.compatible = "st,stm32mp251-hdp",
