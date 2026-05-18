@@ -313,6 +313,23 @@ static inline void lvds_clear(struct stm_lvds *lvds, u32 reg, u32 mask)
 }
 
 /*
+ * Expected JEIDA-RGB666 data to be sent in LSB format
+ *	    bit6 ............................bit2
+ * CHAN0   {ONE, ONE, ZERO, ZERO, ZERO, ONE, ONE}
+ * CHAN1   {G2,  R7,  R6,   R5,   R4,   R3,  R2}
+ * CHAN2   {B3,  B2,  G7,   G6,   G5,   G4,  G3}
+ * CHAN3   {DE,  VS,  HS,   B7,   B6,   B5,  B4}
+ * CHAN4   {ZERO,  ZERO,  ZERO,   ZERO,   ZERO,   ZERO,  ZERO}
+ */
+static enum lvds_pixel lvds_bitmap_jeida_rgb666[5][7] = {
+	{ PIX_ONE, PIX_ONE, PIX_ZER, PIX_ZER, PIX_ZER, PIX_ONE, PIX_ONE },
+	{ PIX_G_2, PIX_R_7, PIX_R_6, PIX_R_5, PIX_R_4, PIX_R_3, PIX_R_2 },
+	{ PIX_B_3, PIX_B_2, PIX_G_7, PIX_G_6, PIX_G_5, PIX_G_4, PIX_G_3 },
+	{ PIX_D_E, PIX_V_S, PIX_H_S, PIX_B_7, PIX_B_6, PIX_B_5, PIX_B_4 },
+	{ PIX_ZER, PIX_ZER, PIX_ZER, PIX_ZER, PIX_ZER, PIX_ZER, PIX_ZER }
+};
+
+/*
  * Expected JEIDA-RGB888 data to be sent in LSB format
  *	    bit6 ............................bit0
  * CHAN0   {ONE, ONE, ZERO, ZERO, ZERO, ONE, ONE}
@@ -805,9 +822,9 @@ static void lvds_config_data_mapping(struct stm_lvds *lvds)
 	}
 
 	switch (info->bus_formats[0]) {
-	case MEDIA_BUS_FMT_RGB666_1X7X3_SPWG: /* VESA-RGB666 */
-		drm_warn(drm, "Pixel format with data mapping not yet supported.\n");
-		return;
+	case MEDIA_BUS_FMT_RGB666_1X7X3_SPWG: /* JEIDA-RGB666 */
+		bitmap = lvds_bitmap_jeida_rgb666;
+		break;
 	case MEDIA_BUS_FMT_RGB888_1X7X4_SPWG: /* VESA-RGB888 */
 		bitmap = lvds_bitmap_vesa_rgb888;
 		break;
