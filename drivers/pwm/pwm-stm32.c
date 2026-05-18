@@ -390,14 +390,19 @@ static int stm32_pwm_write_waveform(struct pwm_chip *chip,
 			if (ret)
 				return ret;
 
-			ccer = (ccer & ~mask) | (wfhw->ccer & mask);
-			regmap_write(priv->regmap, TIM_CCER, ccer);
+			ret = regmap_update_bits(priv->regmap, TIM_CCER, mask, wfhw->ccer);
+			if (ret)
+				goto out;
 
 			/* Make sure that registers are updated */
-			regmap_set_bits(priv->regmap, TIM_EGR, TIM_EGR_UG);
+			ret = regmap_set_bits(priv->regmap, TIM_EGR, TIM_EGR_UG);
+			if (ret)
+				goto out;
 
 			/* Enable controller */
-			regmap_set_bits(priv->regmap, TIM_CR1, TIM_CR1_CEN);
+			ret = regmap_set_bits(priv->regmap, TIM_CR1, TIM_CR1_CEN);
+			if (ret)
+				goto out;
 		}
 
 	} else {
