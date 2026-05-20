@@ -2404,7 +2404,7 @@
 			st,syscfg-holdboot = <&rcc 0x10C 0x1>;
 			st,syscfg-pdds = <&pwr_mcu 0x0 0x1>;
 			st,syscfg-rsc-tbl = <&tamp 0x144 0xFFFFFFFF>;
-			st,syscfg-m4-state = <&tamp 0x148 0xFFFFFFFF>;
+			st,syscfg-cm-state = <&tamp 0x148 0xFFFFFFFF>;
 			status = "disabled";
 		};
 	};
