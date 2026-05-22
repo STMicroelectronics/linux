@@ -21,6 +21,7 @@
 enum stm32_dbg_profile {
 	PERIPHERAL_DBG_PROFILE	= 0,
 	HDP_DBG_PROFILE		= 1,
+	DDRPERFM_DBG_PROFILE	= 2,
 };
 
 enum stm32_dbg_pta_command {
@@ -82,7 +83,8 @@ static int stm32_dbg_bus_grant_access(struct stm32_firewall_controller *ctrl, u3
 	u32 session_id;
 	int ret;
 
-	if (dbg_profile != PERIPHERAL_DBG_PROFILE && dbg_profile != HDP_DBG_PROFILE)
+	if (dbg_profile != PERIPHERAL_DBG_PROFILE && dbg_profile != HDP_DBG_PROFILE &&
+	    dbg_profile != DDRPERFM_DBG_PROFILE)
 		return -EOPNOTSUPP;
 
 	ret = stm32_dbg_pta_open_session(&session_id);
