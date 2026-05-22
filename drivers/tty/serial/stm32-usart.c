@@ -1442,7 +1442,7 @@ static void stm32_usart_set_termios(struct uart_port *port,
 	unsigned long flags;
 	int brr_fit = 0, ret;
 
-	pm_runtime_get(port->dev);
+	pm_runtime_get_sync(port->dev);
 
 	if (!stm32_port->hw_flow_control)
 		cflag &= ~CRTSCTS;
