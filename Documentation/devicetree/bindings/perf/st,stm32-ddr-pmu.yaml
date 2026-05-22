@@ -89,6 +89,6 @@ examples:
     perf@48041000 {
       compatible = "st,stm32mp251-ddr-pmu";
       reg = <0x48041000 0x400>;
-      access-controllers = <&rcc 104>;
+      access-controllers = <&dbg_bus 2>;
       memory-channel = <&ddr_channel>;
     };
