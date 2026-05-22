@@ -926,6 +926,14 @@
 	};
 
 	/omit-if-no-ref/
+	tcpp_flgn_pins_a: tcpp-flgn-0 {
+		pins {
+			pinmux = <STM32_PINMUX('G', 1, GPIO)>;
+			bias-pull-up;
+		};
+	};
+
+	/omit-if-no-ref/
 	tim10_counter_pins_a: tim10-counter-0 {
 		pins {
 			pinmux = <STM32_PINMUX('B', 9, AF9)>; /* TIM10_CH1 */
