@@ -358,7 +358,7 @@
 
 &ddrperfm {
 	memory-channel = <&lpddr_channel>;
-	status = "disabled";
+	status = "okay";
 };
 
 &dsi {
