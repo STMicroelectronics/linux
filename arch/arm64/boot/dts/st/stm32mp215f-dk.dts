@@ -312,6 +312,11 @@
 	};
 };
 
+&ddrperfm {
+	memory-channel = <&lpddr_channel>;
+	status = "okay";
+};
+
 &ethernet1 {
 	status = "okay";
 	pinctrl-0 = <&eth1_rmii_pins_a>;
