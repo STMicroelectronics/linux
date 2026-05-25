@@ -324,11 +324,6 @@
 	status = "okay";
 };
 
-&ddrperfm {
-	memory-channel = <&ddr_channel>;
-	status = "disabled";
-};
-
 &dcmipp {
 	status = "okay";
 	port {
@@ -337,6 +332,11 @@
 			bus-type = <MEDIA_BUS_TYPE_CSI2_DPHY>;
 		};
 	};
+};
+
+&ddrperfm {
+	memory-channel = <&ddr_channel>;
+	status = "okay";
 };
 
 &dsi {
