@@ -1513,8 +1513,8 @@ static int dw_mipi_dsi_stm_resume(struct device *dev)
 }
 
 static const struct dev_pm_ops dw_mipi_dsi_stm_pm_ops = {
-	SYSTEM_SLEEP_PM_OPS(dw_mipi_dsi_stm_suspend,
-			    dw_mipi_dsi_stm_resume)
+	SYSTEM_SLEEP_PM_OPS(pm_runtime_force_suspend,
+			    pm_runtime_force_resume)
 	RUNTIME_PM_OPS(dw_mipi_dsi_stm_suspend,
 		       dw_mipi_dsi_stm_resume, NULL)
 };
