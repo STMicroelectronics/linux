@@ -97,6 +97,13 @@
 		};
 	};
 
+	lpddr_channel: sdram-channel-0 {
+		compatible = "jedec,lpddr4-channel";
+		io-width = <16>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+	};
+
 	memory@80000000 {
 		device_type = "memory";
 		reg = <0x0 0x80000000 0x0 0x80000000>;
