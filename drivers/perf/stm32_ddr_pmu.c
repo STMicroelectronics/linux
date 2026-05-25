@@ -735,6 +735,10 @@ static int stm32_ddr_pmu_device_probe(struct platform_device *pdev)
 		if (ret)
 			return dev_err_probe(pmu->dev, ret, "Failed to get firewall\n");
 		ret = stm32_firewall_grant_access_by_id(&firewall, firewall.firewall_id);
+		if (ret == -EACCES) {
+			dev_dbg(pmu->dev, "Access denied by firewall\n");
+			return -ENODEV;
+		}
 		if (ret)
 			return dev_err_probe(pmu->dev, ret, "Failed to grant access\n");
 	}
