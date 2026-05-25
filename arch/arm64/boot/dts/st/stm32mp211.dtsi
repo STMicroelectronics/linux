@@ -1772,6 +1772,15 @@
 				status = "disabled";
 			};
 
+			ddrperfm: perf@480c0000 {
+				compatible = "st,stm32mp211-ddr-pmu", "st,stm32mp251-ddr-pmu";
+				reg = <0x480c0000 0x0 0x400>;
+				clocks = <&rcc CK_BUS_DDRPERFM>;
+				resets = <&rcc DDRPERFM_R>;
+				access-controllers = <&rifsc 67>;
+				status = "disabled";
+			};
+
 			sdmmc1: mmc@48220000 {
 				compatible = "st,stm32mp25-sdmmc2", "arm,pl18x", "arm,primecell";
 				reg = <0x48220000 0x0 0x400>, <0x44230400 0x0 0x8>;
