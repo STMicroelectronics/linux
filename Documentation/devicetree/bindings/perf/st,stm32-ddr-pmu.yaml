@@ -20,6 +20,11 @@ properties:
           - const: st,stm32mp131-ddr-pmu
       - items:
           - const: st,stm32mp251-ddr-pmu
+      - items:
+          - enum:
+              - st,stm32mp211-ddr-pmu
+              - st,stm32mp231-ddr-pmu
+          - const: st,stm32mp251-ddr-pmu
 
   reg:
     maxItems: 1
