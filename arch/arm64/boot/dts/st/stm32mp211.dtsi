@@ -299,6 +299,9 @@
 				resets = <&rcc I2C1_R>;
 				#address-cells = <1>;
 				#size-cells = <0>;
+				dmas = <&hpdma 23 0x40 0x3012>,
+				       <&hpdma 24 0x40 0x3021>;
+				dma-names = "rx", "tx";
 				access-controllers = <&rifsc 41>;
 				i2c-analog-filter;
 				wakeup-source;
@@ -315,6 +318,9 @@
 				resets = <&rcc I2C2_R>;
 				#address-cells = <1>;
 				#size-cells = <0>;
+				dmas = <&hpdma 26 0x40 0x3012>,
+				       <&hpdma 27 0x40 0x3021>;
+				dma-names = "rx", "tx";
 				access-controllers = <&rifsc 42>;
 				i2c-analog-filter;
 				wakeup-source;
@@ -351,6 +357,9 @@
 				resets = <&rcc I2C3_R>;
 				#address-cells = <1>;
 				#size-cells = <0>;
+				dmas = <&hpdma 29 0x40 0x3012>,
+				       <&hpdma 30 0x40 0x3021>;
+				dma-names = "rx", "tx";
 				access-controllers = <&rifsc 43>;
 				i2c-analog-filter;
 				wakeup-source;
