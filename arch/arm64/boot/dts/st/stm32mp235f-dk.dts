@@ -294,6 +294,11 @@
 	};
 };
 
+&ddrperfm {
+	memory-channel = <&lpddr_channel>;
+	status = "okay";
+};
+
 &dsi {
 	vdd-supply =  <&scmi_vddcore>;
 	vdda18-supply = <&scmi_v1v8>;
