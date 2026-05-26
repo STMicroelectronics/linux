@@ -61,6 +61,7 @@
 		regulator-min-microvolt = <5000000>;
 		regulator-max-microvolt = <5000000>;
 		regulator-always-on;
+		bootph-all;
 	};
 
 	vddcore: regulator-vddcore {
@@ -70,6 +71,7 @@
 		regulator-max-microvolt = <1200000>;
 		regulator-always-on;
 		vin-supply = <&vin>;
+		bootph-all;
 	};
 
 	vdd: regulator-vdd {
@@ -79,6 +81,7 @@
 		regulator-max-microvolt = <3300000>;
 		regulator-always-on;
 		vin-supply = <&vin>;
+		bootph-all;
 	};
 
 	vddq_ddr: regulator-vddq-ddr {
@@ -88,7 +91,32 @@
 		regulator-max-microvolt = <1350000>;
 		regulator-always-on;
 		vin-supply = <&vin>;
+		bootph-all;
 	};
+};
+
+&bsec {
+	bootph-all;
+};
+
+&clk_hse {
+	bootph-all;
+};
+
+&clk_hsi {
+	bootph-all;
+};
+
+&clk_lse {
+	bootph-all;
+};
+
+&clk_lsi {
+	bootph-all;
+};
+
+&clk_csi {
+	bootph-all;
 };
 
 &dts {
@@ -113,12 +141,61 @@
 	};
 };
 
+&gpioa {
+	bootph-all;
+};
+
+&gpiob {
+	bootph-all;
+};
+
+&gpioc {
+	bootph-all;
+};
+
+&gpiod {
+	bootph-all;
+};
+
+&gpioe {
+	bootph-all;
+};
+
+&gpiof {
+	bootph-all;
+};
+
+&gpiog {
+	bootph-all;
+};
+
+&gpioh {
+	bootph-all;
+};
+
+&gpioi {
+	bootph-all;
+};
+
+&gpioj {
+	bootph-all;
+};
+
+&gpiok {
+	bootph-all;
+};
+
+&gpioz {
+	bootph-all;
+};
+
 &ipcc {
 	status = "okay";
 };
 
 &iwdg2 {
 	timeout-sec = <32>;
+	bootph-all;
 	status = "okay";
 };
 
@@ -130,6 +207,26 @@
 	interrupt-parent = <&exti>;
 	interrupts = <68 1>;
 	status = "okay";
+};
+
+&pinctrl {
+	bootph-all;
+};
+
+&pinctrl_z {
+	bootph-all;
+};
+
+&psci {
+	bootph-some-ram;
+};
+
+&pwr_regulators {
+	bootph-all;
+};
+
+&rcc {
+	bootph-all;
 };
 
 &rng1 {

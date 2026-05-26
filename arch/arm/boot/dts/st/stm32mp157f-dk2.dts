@@ -97,6 +97,7 @@
 };
 
 &ltdc {
+	bootph-some-ram;
 	status = "okay";
 
 	port {

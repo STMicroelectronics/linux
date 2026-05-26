@@ -158,6 +158,7 @@
 	pinctrl-names = "default", "sleep";
 	pinctrl-0 = <&ltdc_pins_c>;
 	pinctrl-1 = <&ltdc_sleep_pins_c>;
+	bootph-some-ram;
 	status = "okay";
 
 	port {
