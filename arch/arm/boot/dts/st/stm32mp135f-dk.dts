@@ -161,6 +161,10 @@
 	};
 };
 
+&bsec {
+	bootph-all;
+};
+
 &crc1 {
 	status = "okay";
 };
@@ -206,6 +210,46 @@
 			wakeup-source;
 		};
 	};
+};
+
+&etzpc {
+	bootph-all;
+};
+
+&gpioa {
+	bootph-all;
+};
+
+&gpiob {
+	bootph-all;
+};
+
+&gpioc {
+	bootph-all;
+};
+
+&gpiod {
+	bootph-all;
+};
+
+&gpioe {
+	bootph-all;
+};
+
+&gpiof {
+	bootph-all;
+};
+
+&gpiog {
+	bootph-all;
+};
+
+&gpioh {
+	bootph-all;
+};
+
+&gpioi {
+	bootph-all;
 };
 
 &i2c1 {
@@ -342,6 +386,7 @@
 
 &iwdg2 {
 	timeout-sec = <32>;
+	bootph-all;
 	status = "okay";
 };
 
@@ -349,6 +394,7 @@
 	pinctrl-names = "default", "sleep";
 	pinctrl-0 = <&ltdc_pins_a>;
 	pinctrl-1 = <&ltdc_sleep_pins_a>;
+	bootph-some-ram;
 	status = "okay";
 
 	port {
@@ -356,6 +402,22 @@
 			remote-endpoint = <&panel_in_rgb>;
 		};
 	};
+};
+
+&optee {
+	bootph-all;
+};
+
+&pinctrl {
+	bootph-all;
+};
+
+&psci {
+	bootph-some-ram;
+};
+
+&rcc {
+	bootph-all;
 };
 
 &rtc {
@@ -367,6 +429,14 @@
 		pins = "out2_rmp";
 		function = "lsco";
 	};
+};
+
+&scmi {
+	bootph-all;
+};
+
+&scmi_clk {
+	bootph-all;
 };
 
 &scmi_regu {
@@ -392,6 +462,10 @@
 	};
 };
 
+&scmi_reset {
+	bootph-all;
+};
+
 &sdmmc1 {
 	pinctrl-names = "default", "opendrain", "sleep";
 	pinctrl-0 = <&sdmmc1_b4_pins_a &sdmmc1_clk_pins_a>;
@@ -402,7 +476,22 @@
 	st,neg-edge;
 	bus-width = <4>;
 	vmmc-supply = <&scmi_vdd_sd>;
+	bootph-pre-ram;
 	status = "okay";
+};
+
+&sdmmc1_b4_pins_a {
+	bootph-pre-ram;
+	pins {
+		bootph-pre-ram;
+	};
+};
+
+&sdmmc1_clk_pins_a {
+	bootph-pre-ram;
+	pins {
+		bootph-pre-ram;
+	};
 };
 
 /* Wifi */
@@ -434,6 +523,10 @@
 	pinctrl-0 = <&spi5_pins_a>;
 	pinctrl-1 = <&spi5_sleep_pins_a>;
 	status = "disabled";
+};
+
+&syscfg {
+	bootph-all;
 };
 
 &timers3 {
@@ -517,7 +610,18 @@
 	pinctrl-2 = <&uart4_idle_pins_a>;
 	/delete-property/dmas;
 	/delete-property/dma-names;
+	bootph-all;
 	status = "okay";
+};
+
+&uart4_pins_a {
+	bootph-all;
+	pins1 {
+		bootph-all;
+	};
+	pins2 {
+		bootph-all;
+	};
 };
 
 &uart8 {
@@ -583,6 +687,7 @@
 };
 
 &usbphyc {
+	bootph-all;
 	status = "okay";
 };
 
