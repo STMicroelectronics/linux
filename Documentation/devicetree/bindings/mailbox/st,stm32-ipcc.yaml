@@ -26,6 +26,9 @@ properties:
   clocks:
     maxItems: 1
 
+  power-domains:
+    maxItems: 1
+
   interrupts:
     items:
       - description: rx channel occupied
