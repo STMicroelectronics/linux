@@ -36,6 +36,7 @@ properties:
       - param 1: device base address (Cortex-M processor address)
       - param 2: physical base address (local CPU address)
       - param 3: size of the memory region.
+    minItems: 1
     maxItems: 3
 
   '#address-cells':
