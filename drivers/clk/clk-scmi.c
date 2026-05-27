@@ -54,32 +54,43 @@ static unsigned long scmi_clk_recalc_rate(struct clk_hw *hw,
 	return rate;
 }
 
+static int scmi_clk_determine_rate_get(struct clk_hw *hw,
+				       struct clk_rate_request *req)
+{
+	u64 round_rate = req->rate;
+	struct scmi_clk *clk = to_scmi_clk(hw);
+
+	if (scmi_proto_clk_ops->round_rate_get(clk->ph, clk->id, &round_rate))
+		return -EINVAL;
+
+	req->rate = round_rate;
+
+	return 0;
+}
+
 static int scmi_clk_determine_rate(struct clk_hw *hw,
 				   struct clk_rate_request *req)
 {
-	u64 fmin, fmax, ftmp;
 	struct scmi_clk *clk = to_scmi_clk(hw);
+	unsigned long fmin, fmax;
+	u64 ftmp;
 
-	/*
-	 * We can't figure out what rate it will be, so just return the
-	 * rate back to the caller. scmi_clk_recalc_rate() will be called
-	 * after the rate is set and we'll know what rate the clock is
-	 * running at then.
-	 */
-	if (clk->info->rate_discrete)
-		return 0;
+	clk_hw_get_rate_range(hw, &fmin, &fmax);
 
-	fmin = clk->info->range.min_rate;
-	fmax = clk->info->range.max_rate;
 	if (req->rate <= fmin) {
 		req->rate = fmin;
-
 		return 0;
 	} else if (req->rate >= fmax) {
 		req->rate = fmax;
-
 		return 0;
 	}
+
+	/*
+	 * If the clock exposes discrete rates, use the SCMI Clock protocol
+	 * to find the closest supported rate.
+	 */
+	if (clk->info->rate_discrete)
+		return scmi_clk_determine_rate_get(hw, req);
 
 	ftmp = req->rate - fmin;
 	ftmp += clk->info->range.step_size - 1; /* to round up */
