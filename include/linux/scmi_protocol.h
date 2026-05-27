@@ -98,6 +98,7 @@ enum scmi_clock_oem_config {
  * @config_oem_set: set the value of an OEM specific clock config
  * @parent_get: get the parent id of a clk
  * @parent_set: set the parent of a clock
+ * @round_rate_get: Get the nearest rate a clock can support.
  */
 struct scmi_clk_proto_ops {
 	int (*count_get)(const struct scmi_protocol_handle *ph);
@@ -122,6 +123,7 @@ struct scmi_clk_proto_ops {
 			      u32 oem_val, bool atomic);
 	int (*parent_get)(const struct scmi_protocol_handle *ph, u32 clk_id, u32 *parent_id);
 	int (*parent_set)(const struct scmi_protocol_handle *ph, u32 clk_id, u32 parent_id);
+	int (*round_rate_get)(const struct scmi_protocol_handle *ph, u32 clk_id, u64 *rate);
 };
 
 struct scmi_perf_domain_info {

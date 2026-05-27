@@ -626,6 +626,67 @@ static int scmi_clock_rate_set(const struct scmi_protocol_handle *ph,
 	return ret;
 }
 
+static int scmi_clock_round_rate_get(const struct scmi_protocol_handle *ph,
+				     u32 clk_id, u64 *round_rate)
+{
+	u64 rate, rate_low, rate_high, rate_tmp;
+	size_t index_low, index_high, index_tmp;
+	struct clock_info *ci = ph->get_priv(ph);
+	struct scmi_clock_info *clk;
+
+	clk = scmi_clock_domain_lookup(ci, clk_id);
+	if (IS_ERR(clk))
+		return PTR_ERR(clk);
+
+	/* This function is expected to be called on discrete rates list */
+	if (!clk->rate_discrete || clk->list.num_rates == 0)
+		return -EINVAL;
+
+	index_low = 0;
+	rate = *round_rate;
+	rate_low = clk->list.rates[0];
+	index_high = clk->list.num_rates - 1;
+	rate_high = clk->list.rates[index_high];
+
+	if (clk->list.num_rates == 1) {
+		*round_rate = rate_low;
+		return 0;
+	}
+
+	while (true) {
+		if (index_low == index_high) {
+			*round_rate = rate_low;
+			return 0;
+		}
+
+		if (index_high == index_low + 1) {
+			if (rate - rate_low > rate_high - rate)
+				*round_rate = rate_high;
+			else
+				*round_rate = rate_low;
+
+			return 0;
+		}
+
+		index_tmp = (index_low + index_high) / 2;
+
+		rate_tmp = clk->list.rates[index_tmp];
+
+		if (rate_tmp == rate) {
+			*round_rate = rate;
+			return 0;
+		}
+
+		if (rate_tmp < rate) {
+			index_low = index_tmp;
+			rate_low = rate_tmp;
+		} else {
+			index_high = index_tmp;
+			rate_high = rate_tmp;
+		}
+	}
+}
+
 static int
 scmi_clock_config_set(const struct scmi_protocol_handle *ph, u32 clk_id,
 		      enum clk_state state,
@@ -945,6 +1006,7 @@ static const struct scmi_clk_proto_ops clk_proto_ops = {
 	.config_oem_set = scmi_clock_config_oem_set,
 	.parent_set = scmi_clock_set_parent,
 	.parent_get = scmi_clock_get_parent,
+	.round_rate_get = scmi_clock_round_rate_get,
 };
 
 static bool scmi_clk_notify_supported(const struct scmi_protocol_handle *ph,
