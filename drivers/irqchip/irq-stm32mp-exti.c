@@ -545,26 +545,6 @@ static bool stm32mp_exti_test_gpio_mux_available(struct stm32mp_exti_host_data *
 	return false;
 }
 
-static int stm32mp_exti_domain_match(struct irq_domain *dm,
-				     struct device_node *node,
-				     enum irq_domain_bus_token bus_token)
-{
-	struct stm32mp_exti_host_data *host_data = dm->host_data;
-
-	if (!node ||
-	    (bus_token != DOMAIN_BUS_ANY && dm->bus_token != bus_token))
-		return 0;
-
-	if (!host_data->dt_has_irqs_desc)
-		return (to_of_node(dm->fwnode) == node);
-
-	if (node != host_data->dev->of_node)
-		return 0;
-
-	return (to_of_node(dm->parent->fwnode) ==
-		of_irq_find_parent(host_data->dev->of_node));
-}
-
 static int stm32mp_exti_domain_select(struct irq_domain *dm,
 				      struct irq_fwspec *fwspec,
 				      enum irq_domain_bus_token bus_token)
@@ -576,14 +556,20 @@ static int stm32mp_exti_domain_select(struct irq_domain *dm,
 	u32 gpio_bank;
 	int ret;
 
-	if (!fwnode ||
-	    (bus_token != DOMAIN_BUS_ANY && dm->bus_token != bus_token))
+	if (!fwnode || dm->bus_token != bus_token)
 		return 0;
 
 	if (!host_data->dt_has_irqs_desc)
 		return (dm->fwnode == fwnode);
 
 	if (fwnode != of_node_to_fwnode(host_data->dev->of_node))
+		return 0;
+
+	if (!fwspec->param_count)
+		return (to_of_node(dm->parent->fwnode) ==
+			of_irq_find_parent(host_data->dev->of_node));
+
+	if (fwspec->param_count != 2)
 		return 0;
 
 	gpio_bank = FIELD_GET(STM32MP_GPIO_BANK_MASK, fwspec->param[1]);
@@ -778,7 +764,6 @@ static struct stm32mp_exti_chip_data *stm32mp_exti_chip_init(struct stm32mp_exti
 }
 
 static const struct irq_domain_ops stm32mp_exti_domain_ops = {
-	.match	= stm32mp_exti_domain_match,
 	.select = stm32mp_exti_domain_select,
 	.alloc	= stm32mp_exti_domain_alloc,
 	.free	= stm32mp_exti_domain_free,
@@ -897,6 +882,7 @@ static int stm32mp_exti_probe(struct platform_device *pdev)
 	if (ret)
 		return ret;
 
+	irq_domain_update_bus_token(domain, DOMAIN_BUS_WIRED);
 	irq_domain_set_pm_device(domain, dev);
 
 	host_data->dt_has_irqs_desc = of_property_present(np, "interrupts-extended");
@@ -938,6 +924,7 @@ static int stm32mp_exti_probe(struct platform_device *pdev)
 		if (ret)
 			return ret;
 
+		irq_domain_update_bus_token(domain, DOMAIN_BUS_WIRED);
 		irq_domain_set_pm_device(domain, dev);
 	}
 
