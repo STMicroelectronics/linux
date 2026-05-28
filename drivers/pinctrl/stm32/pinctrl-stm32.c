@@ -627,8 +627,7 @@ static int stm32_gpio_domain_select(struct irq_domain *dm,
 	struct irq_fwspec parent_fwspec;
 	struct stm32_gpio_bank *bank;
 
-	if (!fwnode ||
-	    (bus_token != DOMAIN_BUS_ANY && dm->bus_token != bus_token))
+	if (!fwnode || dm->bus_token != bus_token)
 		return 0;
 
 	bank = stm32_pctrl_fwnode_to_bank(pctl, fwnode);
@@ -637,6 +636,12 @@ static int stm32_gpio_domain_select(struct irq_domain *dm,
 
 	if (!pctl->has_irq_extended)
 		return 1;
+
+	if (!fwspec->param_count)
+		return 1;
+
+	if (fwspec->param_count != 2)
+		return 0;
 
 	if (!dm->parent->ops->select)
 		return 0;
@@ -648,22 +653,6 @@ static int stm32_gpio_domain_select(struct irq_domain *dm,
 				 FIELD_PREP(STM32_GPIO_BANK_MASK, bank->bank_ioport_nr);
 
 	return dm->parent->ops->select(dm->parent, &parent_fwspec, bus_token);
-}
-
-static int stm32_gpio_domain_match(struct irq_domain *dm,
-				   struct device_node *node,
-				   enum irq_domain_bus_token bus_token)
-{
-	struct stm32_pinctrl *pctl = dm->host_data;
-
-	if (!node ||
-	    (bus_token != DOMAIN_BUS_ANY && dm->bus_token != bus_token))
-		return 0;
-
-	if (stm32_pctrl_fwnode_to_bank(pctl, of_node_to_fwnode(node)))
-		return 1;
-
-	return 0;
 }
 
 static int stm32_gpio_domain_translate(struct irq_domain *d,
@@ -782,7 +771,6 @@ static void stm32_gpio_domain_free(struct irq_domain *d, unsigned int virq,
 
 static const struct irq_domain_ops stm32_gpio_domain_ops = {
 	.select		= stm32_gpio_domain_select,
-	.match		= stm32_gpio_domain_match,
 	.translate	= stm32_gpio_domain_translate,
 	.alloc		= stm32_gpio_domain_alloc,
 	.free		= stm32_gpio_domain_free,
@@ -1897,6 +1885,8 @@ static struct irq_domain *stm32_pctrl_get_irq_domain(struct stm32_pinctrl *pctl)
 				irq_domain_free_fwnode(fwnode);
 				return ERR_PTR(ret);
 			}
+
+			irq_domain_update_bus_token(domain, DOMAIN_BUS_WIRED);
 		}
 
 		pctl->has_irq_extended = true;
@@ -1929,6 +1919,8 @@ static struct irq_domain *stm32_pctrl_get_irq_domain(struct stm32_pinctrl *pctl)
 		irq_domain_remove(domain);
 		return ERR_PTR(ret);
 	}
+
+	irq_domain_update_bus_token(domain, DOMAIN_BUS_WIRED);
 
 	return domain;
 }
