@@ -152,7 +152,7 @@
 		linux,cma {
 			compatible = "shared-dma-pool";
 			reusable;
-			alloc-ranges = <0 0x80000000 0 0x80000000>;
+			alloc-ranges = <0 0x80000000 0 0x7fffe000>;
 			size = <0x0 0x8000000>;
 			alignment = <0x0 0x2000>;
 			linux,cma-default;
