@@ -110,7 +110,7 @@
 		reg = <0x0 0x80000000 0x1 0x0>;
 	};
 
-	panel_lvds: display {
+	panel_lvds: panel-lvds {
 		compatible = "edt,etml0700z9ndha", "panel-lvds";
 		enable-gpios = <&gpiog 15 GPIO_ACTIVE_HIGH>;
 		backlight = <&panel_lvds_backlight>;
@@ -139,7 +139,7 @@
 		};
 	};
 
-	panel_lvds_backlight: backlight {
+	panel_lvds_backlight: panel-lvds-backlight {
 		compatible = "gpio-backlight";
 		gpios = <&gpioi 5 GPIO_ACTIVE_HIGH>;
 		default-on;
