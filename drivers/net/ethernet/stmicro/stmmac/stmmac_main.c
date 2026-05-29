@@ -1203,7 +1203,7 @@ static int stmmac_phy_setup(struct stmmac_priv *priv)
 
 	config->dev = &priv->dev->dev;
 	config->type = PHYLINK_NETDEV;
-	config->mac_managed_pm = true;
+	config->mac_managed_pm = false;
 
 	/* Stmmac always requires an RX clock for hardware initialization */
 	config->mac_requires_rxc = true;
