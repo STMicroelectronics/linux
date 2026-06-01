@@ -311,7 +311,7 @@ static int stm32_pcie_probe(struct platform_device *pdev)
 		goto err_disable_clk;
 
 	if (stm32_pcie->wake_gpio)
-		device_init_wakeup(dev, true);
+		device_set_wakeup_capable(dev, true);
 
 	return 0;
 
@@ -330,7 +330,7 @@ static void stm32_pcie_remove(struct platform_device *pdev)
 	struct dw_pcie_rp *pp = &stm32_pcie->pci.pp;
 
 	if (stm32_pcie->wake_gpio)
-		device_init_wakeup(&pdev->dev, false);
+		device_set_wakeup_capable(&pdev->dev, false);
 
 	dw_pcie_host_deinit(pp);
 
