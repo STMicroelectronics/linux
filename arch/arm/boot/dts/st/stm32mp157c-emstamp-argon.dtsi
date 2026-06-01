@@ -368,7 +368,6 @@
 	interrupt-parent = <&exti>;
 	interrupts = <68 1>;
 	interrupt-names = "wdg";
-	recovery;
 	status = "okay";
 };
 
