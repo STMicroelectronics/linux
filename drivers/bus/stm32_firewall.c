@@ -326,7 +326,7 @@ int stm32_firewall_populate_bus(struct stm32_firewall_controller *firewall_contr
 				 */
 				fwnode_links_purge(of_fwnode_handle(child));
 				of_detach_node(child);
-				dev_err(parent, "%s: Device driver will not be probed\n",
+				dev_dbg(parent, "%s: Device driver will not be probed\n",
 					child->full_name);
 			}
 		}
