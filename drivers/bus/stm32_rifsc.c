@@ -791,8 +791,8 @@ static int stm32_rifsc_populate_bus(struct stm32_firewall_controller *ctrl)
 				 */
 				fwnode_links_purge(of_fwnode_handle(child));
 				of_detach_node(child);
-				dev_err(parent, "%s: Device driver will not be probed, error: %d\n",
-					child->full_name, err);
+				dev_dbg(parent, "%s: Device driver will not be probed\n",
+					child->full_name);
 			}
 			if (IS_ENABLED(CONFIG_STM32_RIFSC_DEBUG)) {
 				dev_dbg(parent, "Unprivileged %s", child->full_name);
