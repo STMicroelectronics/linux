@@ -785,8 +785,11 @@ static int stm32_rifsc_populate_bus(struct stm32_firewall_controller *ctrl)
 			if (err) {
 				/*
 				 * Peripheral access not allowed or not defined.
-				 * Mark the node as populated so platform bus won't probe it
+				 * Mark the node as populated so platform bus won't probe it.
+				 * Drop the links supplier/consumers to prevent device link
+				 * to query the node.
 				 */
+				fwnode_links_purge(of_fwnode_handle(child));
 				of_detach_node(child);
 				dev_err(parent, "%s: Device driver will not be probed, error: %d\n",
 					child->full_name, err);
