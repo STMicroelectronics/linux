@@ -1687,6 +1687,7 @@ static const struct stm32_reset_cfg *stm32mp21_reset_cfg[] = {
 	RESET_MP21(CRYP1_R,		RCC_CRYP1CFGR,		0,	0),
 	RESET_MP21(CRYP2_R,		RCC_CRYP2CFGR,		0,	0),
 	RESET_MP21(OTG_R,		RCC_OTGCFGR,		0,	0),
+	RESET_MP21(DDRPERFM_R,		RCC_DDRPERFMCFGR,	0,	0),
 };
 
 static u16 stm32mp21_cpt_gate[GATE_NB];
