@@ -674,6 +674,11 @@ static int rtl8211f_config_init(struct phy_device *phydev)
 	struct device *dev = &phydev->mdio.dev;
 	int ret;
 
+	/* Set green LED for Link, yellow LED for Active */
+	phy_write(phydev, RTL821x_PAGE_SELECT, 0xd04);
+	phy_write(phydev, 0x10, 0x617f);
+	phy_write(phydev, RTL821x_PAGE_SELECT, 0x0);
+
 	ret = rtl8211f_config_aldps(phydev);
 	if (ret) {
 		dev_err(dev, "aldps mode configuration failed: %pe\n",
