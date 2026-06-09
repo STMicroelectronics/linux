@@ -2,6 +2,7 @@
 obj-$(CONFIG_TYPEC_TCPM)		+= tcpm.o
 obj-$(CONFIG_TYPEC_FUSB302)		+= fusb302.o
 obj-$(CONFIG_TYPEC_ST_TCPP)		+= st_tcpp.o
+obj-$(CONFIG_TYPEC_UCPD_STM32)		+= stm32_ucpd.o
 obj-$(CONFIG_TYPEC_WCOVE)		+= typec_wcove.o
 typec_wcove-y				:= wcove.o
 obj-$(CONFIG_TYPEC_TCPCI)		+= tcpci.o

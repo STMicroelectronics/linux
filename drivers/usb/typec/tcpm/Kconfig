@@ -73,6 +73,18 @@ config TYPEC_ST_TCPP
 	  If you choose to build this driver as a dynamically linked
 	  module, the module will be called st_tcpp.ko.
 
+config TYPEC_UCPD_STM32
+	tristate "USB-C UCPD Interface for STM32"
+	select TYPEC_ST_TCPP
+	help
+	  This driver provides both USB PD and Type-C functionalities.
+	  Only supports Type-C functionality in Peripheral mode.
+	  Say Y or M here if your system has Type-C UCPD controller on
+	  STM32 MP23/MP25 SoCs.
+
+	  If you choose to build this driver as a dynamically linked
+	  module, the module will be called stm32_ucpd.ko.
+
 config TYPEC_WCOVE
 	tristate "Intel WhiskeyCove PMIC USB Type-C PHY driver"
 	depends on ACPI
