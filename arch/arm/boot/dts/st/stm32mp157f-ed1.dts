@@ -165,6 +165,7 @@
 &cryp1 {
 	clocks = <&scmi_clk CK_SCMI_CRYP1>;
 	resets = <&scmi_reset RST_SCMI_CRYP1>;
+	post-init-providers = <&scmi_clk>, <&scmi_reset>;
 	status = "okay";
 };
 
@@ -296,6 +297,7 @@
 &hash1 {
 	clocks = <&scmi_clk CK_SCMI_HASH1>;
 	resets = <&scmi_reset RST_SCMI_HASH1>;
+	post-init-providers = <&scmi_clk>, <&scmi_reset>;
 	status = "okay";
 };
 
@@ -538,6 +540,7 @@
 &rng1 {
 	clocks = <&scmi_clk CK_SCMI_RNG1>;
 	resets = <&scmi_reset RST_SCMI_RNG1>;
+	post-init-providers = <&scmi_clk>, <&scmi_reset>;
 };
 
 &rtc {
