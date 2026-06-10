@@ -1,0 +1,90 @@
+# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/soc/st/stm32mp157c-pd.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: STM32MP1 power domain based on proprietary SMC
+
+maintainers:
+  - Patrick Delaunay <patrick.delaunay@foss.st.com>
+
+deprecated: true
+
+description: |
+  STM32MP1 hierarchical power domain provider and based on proprietary SMC.
+
+  This binding is used for backward compatibility. New platforms should use
+  hierarchy of PSCI power domains and sub-domain with compatible
+  'st,stm32mp-pm-domain'.
+
+properties:
+  compatible:
+    const: st,stm32mp157c-pd
+
+  '#address-cells':
+    const: 1
+
+  '#size-cells':
+    const: 0
+
+$defs:
+  subdomain:
+    type: object
+    properties:
+      reg:
+        maxItems: 1
+
+      '#power-domain-cells':
+        const: 0
+
+      '#address-cells':
+        const: 1
+
+      '#size-cells':
+        const: 0
+
+      label: true
+
+    required:
+      - reg
+      - '#power-domain-cells'
+
+    patternProperties:
+      '^.*-power-domain@[0-9a-f]+$':
+        $ref: '#/$defs/subdomain'
+
+    additionalProperties: false
+
+required:
+  - compatible
+  - '#address-cells'
+  - '#size-cells'
+
+patternProperties:
+  '^.*-power-domain@[0-9a-f]+$':
+    $ref: '#/$defs/subdomain'
+
+additionalProperties: false
+
+examples:
+  - |
+    pm_domain {
+      #address-cells = <1>;
+      #size-cells = <0>;
+      compatible = "st,stm32mp157c-pd";
+
+      pd_core_ret: core-ret-power-domain@1 {
+        #address-cells = <1>;
+        #size-cells = <0>;
+        reg = <1>;
+        #power-domain-cells = <0>;
+        label = "CORE-RETENTION";
+
+        pd_core: core-power-domain@2 {
+          reg = <2>;
+          #power-domain-cells = <0>;
+          label = "CORE";
+        };
+      };
+    };
