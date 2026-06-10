@@ -28,8 +28,8 @@ description: |
   =======================================
 
   Device nodes should specify the reset channel required in their "resets"
-  property, containing a phandle to the reset device node and an index specifying
-  which channel to use.
+  property, containing a phandle to the reset device node and an index
+  specifying which channel to use.
   The index is the bit number within the RCC registers bank, starting from RCC
   base address.
   It is calculated as: index = register_offset / 4 * 32 + bit_offset.
@@ -63,11 +63,11 @@ properties:
 
   clocks:
     minItems: 1
-    maxItems: 5
+    maxItems: 50
 
   clock-names:
     minItems: 1
-    maxItems: 5
+    maxItems: 50
 
   reg:
     maxItems: 1
@@ -78,38 +78,67 @@ required:
   - compatible
   - reg
 
-if:
-  properties:
-    compatible:
-      contains:
-        enum:
-          - st,stm32mp1-rcc-secure
-          - st,stm32mp13-rcc
-then:
-  properties:
-    clocks:
-      description: Specifies oscillators.
-      maxItems: 5
+allOf:
+  - if:
+      properties:
+        compatible:
+          contains:
+            const: st,stm32mp13-rcc
+    then:
+      properties:
+        clocks:
+          description: Specifies oscillators and SCMI-derived clocks.
+          minItems: 5
+          maxItems: 50
 
-    clock-names:
-      items:
-        - const: hse
-        - const: hsi
-        - const: csi
-        - const: lse
-        - const: lsi
-  required:
-    - clocks
-    - clock-names
-else:
-  properties:
-    clocks:
-      description:
-        Specifies the external RX clock for ethernet MAC.
-      maxItems: 1
+        clock-names:
+          items:
+            - const: hse
+            - const: hsi
+            - const: csi
+            - const: lse
+            - const: lsi
+      required:
+        - clocks
+        - clock-names
 
-    clock-names:
-      const: ETH_RX_CLK/ETH_REF_CLK
+  - if:
+      properties:
+        compatible:
+          contains:
+            const: st,stm32mp1-rcc-secure
+    then:
+      properties:
+        clocks:
+          description: Specifies oscillators.
+          minItems: 5
+          maxItems: 5
+
+        clock-names:
+          items:
+            - const: hse
+            - const: hsi
+            - const: csi
+            - const: lse
+            - const: lsi
+      required:
+        - clocks
+        - clock-names
+
+  - if:
+      properties:
+        compatible:
+          contains:
+            const: st,stm32mp1-rcc
+    then:
+      properties:
+        clocks:
+          description:
+            Specifies the external RX clock for ethernet MAC.
+          maxItems: 1
+
+        clock-names:
+          const: ETH_RX_CLK/ETH_REF_CLK
 
 additionalProperties: false
 
