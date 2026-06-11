@@ -23,6 +23,8 @@
 	aliases {
 		ethernet0 = &eth2;
 		ethernet1 = &eth1;
+		mmc0 = &sdmmc1;
+		mmc1 = &sdmmc2;
 		serial0 = &usart2;
 		serial1 = &usart6;
 		serial2 = &lpuart1;
