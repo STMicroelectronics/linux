@@ -153,7 +153,8 @@ static u64 stm32_rproc_get_vect_table(struct rproc *rproc, const struct firmware
 		u64 offset = elf_shdr_get_sh_offset(class, shdr);
 		u32 name = elf_shdr_get_sh_name(class, shdr);
 
-		if (strcmp(name_table + name, ".isr_vectors"))
+		if (strcmp(name_table + name, ".isr_vectors")&&
+			strcmp(name_table + name, "A0"))
 			continue;
 
 		/* make sure we have the entire table */
