@@ -538,7 +538,6 @@
 &rng1 {
 	clocks = <&scmi_clk CK_SCMI_RNG1>;
 	resets = <&scmi_reset RST_SCMI_RNG1>;
-	status = "okay";
 };
 
 &rtc {
