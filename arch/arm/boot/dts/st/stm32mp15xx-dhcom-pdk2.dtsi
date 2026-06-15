@@ -235,6 +235,7 @@
 				dai-tdm-slot-width = <16>;
 				frame-master;
 				mclk-fs = <256>;
+				system-clock-direction-out;
 			};
 		};
 	};

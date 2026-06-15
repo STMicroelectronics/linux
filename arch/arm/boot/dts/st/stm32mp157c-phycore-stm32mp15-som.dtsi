@@ -462,6 +462,7 @@
 		sai2a_endpoint: endpoint {
 			remote-endpoint = <&tlv320_rx_endpoint>;
 			mclk-fs = <256>;
+			system-clock-direction-out;
 			dai-tdm-slot-num = <2>;
 			dai-tdm-slot-width = <16>;
 		};
