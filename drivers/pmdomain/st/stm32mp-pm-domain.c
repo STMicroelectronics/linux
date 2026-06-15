@@ -50,7 +50,7 @@ static int stm32mp_pm_domain_probe(struct platform_device *pdev)
 	 * Domain based only on PM clk framework, no GENPD_FLAG_ACTIVE_WAKEUP
 	 * support, the wake-up is handled by power domain of interrupt driver
 	 */
-	pd->flags = GENPD_FLAG_PM_CLK | GENPD_FLAG_IRQ_SAFE;
+	pd->flags = GENPD_FLAG_PM_CLK | GENPD_FLAG_IRQ_SAFE | GENPD_FLAG_NO_STAY_ON;
 
 	ret = pm_genpd_init(pd, NULL, false);
 	if (ret)
