@@ -169,10 +169,6 @@
 	cpu-supply = <&vddcore>;
 };
 
-&crc1 {
-	status = "okay";
-};
-
 &cs_cti_cpu0 {
 	status = "okay";
 };

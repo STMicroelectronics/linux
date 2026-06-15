@@ -164,10 +164,6 @@
 	cpu-supply = <&vddcore>;
 };
 
-&crc1 {
-	status = "okay";
-};
-
 &cryp1 {
 	status = "okay";
 };

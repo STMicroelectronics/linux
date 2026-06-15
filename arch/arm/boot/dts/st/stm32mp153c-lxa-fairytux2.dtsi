@@ -98,10 +98,6 @@
 baseboard_eeprom: &sip_eeprom {
 };
 
-&crc1 {
-	status = "okay";
-};
-
 &cryp1 {
 	status = "okay";
 };

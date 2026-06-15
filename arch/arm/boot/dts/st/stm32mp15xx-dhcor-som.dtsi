@@ -87,10 +87,6 @@
 	bootph-all;
 };
 
-&crc1 {
-	status = "okay";
-};
-
 &dts {
 	status = "okay";
 };
