@@ -1,0 +1,45 @@
+# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/uio/uio-fwu-shmem.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: Userspace I/O (UIO) shared memory for Firmware Update (FWU)
+
+maintainers:
+  - Maxime Méré <maxime.mere@foss.st.com>
+
+description:
+  A memory-mapped region exported to userspace through the Linux UIO
+  framework. It holds the Firmware Update (FWU) images that are used by
+  the coprocessor's update agent. The node is bound to the generic UIO
+  platform driver (uio_pdrv_genirq) through the
+  "uio_pdrv_genirq.of_id=uio-fwu-shmem" kernel command line parameter.
+
+properties:
+  $nodename:
+    pattern: "^uio-fwu-shmem(@[0-9a-f]+)?$"
+
+  compatible:
+    const: uio-fwu-shmem
+
+  reg:
+    maxItems: 1
+
+required:
+  - compatible
+  - reg
+
+additionalProperties: false
+
+examples:
+  - |
+    soc {
+        #address-cells = <2>;
+        #size-cells = <2>;
+
+        uio-fwu-shmem@81300000 {
+            compatible = "uio-fwu-shmem";
+            reg = <0x0 0x81300000 0x0 0x00a00000>;
+        };
+    };
