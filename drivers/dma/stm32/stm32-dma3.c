@@ -251,12 +251,14 @@ struct stm32_dma3_hwdesc {
 } __packed __aligned(32);
 
 /*
- * CLLR_LA / sizeof(struct stm32_dma3_hwdesc) represents the number of hdwdesc that can be addressed
- * by the pointer to the next linked-list data structure. The __aligned forces the 32-byte
- * alignment. So use hardcoded 32. Multiplied by the max block size of each item, it represents
- * the sg size limitation.
+ * (CLLR_LA / STM32_DMA3_DESC_SIZE) + 1 represents the number of hwdesc that can be addressed
+ * by the pointer to the next linked-list data structure.
+ * Multiplied by the max block size of each item, it represents the sg size limitation.
  */
-#define STM32_DMA3_MAX_SEG_SIZE		((CLLR_LA / 32) * STM32_DMA3_MAX_BLOCK_SIZE)
+#define STM32_DMA3_DESC_SIZE		ALIGN(sizeof(struct stm32_dma3_hwdesc), \
+					      __alignof__(struct stm32_dma3_hwdesc))
+#define STM32_DMA3_MAX_DESC_COUNT	((CLLR_LA / STM32_DMA3_DESC_SIZE) + 1)
+#define STM32_DMA3_MAX_SEG_SIZE		(STM32_DMA3_MAX_DESC_COUNT * STM32_DMA3_MAX_BLOCK_SIZE)
 
 /*
  * Linked-list items
@@ -406,11 +408,10 @@ static struct stm32_dma3_swdesc *stm32_dma3_chan_desc_alloc(struct stm32_dma3_ch
 	int i;
 
 	/*
-	 * If the memory to be allocated for the number of hwdesc (6 u32 members but 32-bytes
-	 * aligned) is greater than the maximum address of CLLR_LA, then the last items can't be
-	 * addressed, so abort the allocation.
+	 * If the memory to be allocated for the number of hwdesc is greater than the maximum
+	 * addressable by CLLR_LA, then the last items can't be addressed, so abort the allocation.
 	 */
-	if ((count * 32) > CLLR_LA) {
+	if (count > STM32_DMA3_MAX_DESC_COUNT) {
 		dev_err(chan2dev(chan), "Transfer is too big (> %luB)\n", STM32_DMA3_MAX_SEG_SIZE);
 		return NULL;
 	}
