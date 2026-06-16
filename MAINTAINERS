@@ -24703,6 +24703,13 @@ S:	Orphan
 F:	Documentation/networking/device_drivers/ethernet/stmicro/
 F:	drivers/net/ethernet/stmicro/stmmac/
 
+TTTECH TSN DEVICETREE BINDINGS
+L:	netdev@vger.kernel.org
+S:	Orphan
+F:	Documentation/devicetree/bindings/net/st,stm32-deip.yaml
+F:	Documentation/devicetree/bindings/net/ttt,acm-4.0.yaml
+F:	Documentation/devicetree/bindings/net/ttt,deip-sw.yaml
+
 SUN HAPPY MEAL ETHERNET DRIVER
 M:	Sean Anderson <seanga2@gmail.com>
 S:	Maintained

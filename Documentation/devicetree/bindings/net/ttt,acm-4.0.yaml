@@ -1,0 +1,63 @@
+# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/net/ttt,acm-4.0.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: TTTech ACM (ACceleration Module)
+
+maintainers:
+  - Christophe Roullier <christophe.roullier@foss.st.com>
+
+description: |
+  This file documents schema for TTTech ACM node referenced by STM32MP25
+  device trees.
+
+select:
+  properties:
+    compatible:
+      contains:
+        const: ttt,acm-4.0
+  required:
+    - compatible
+
+properties:
+  compatible:
+    const: ttt,acm-4.0
+
+additionalProperties: true
+
+examples:
+  - |
+    / {
+        #address-cells = <1>;
+        #size-cells = <1>;
+
+        ttt_sw@4c000000 {
+            #address-cells = <1>;
+            #size-cells = <1>;
+            compatible = "st,stm32-deip";
+            ranges = <0x4b000000 0x4b000000 0xc0000>;
+            status = "disabled";
+
+            deip_sw0: deip-sw {
+                compatible = "ttt,deip-sw";
+            };
+
+            acm@4b000000 {
+                compatible = "ttt,acm-4.0";
+                reg = <0x4b000000 0x00400>,
+                      <0x4b010000 0x10000>,
+                      <0x4b030000 0x10000>,
+                      <0x4b050000 0x10000>,
+                      <0x4b060000 0x20000>,
+                      <0x4b080000 0x40000>;
+                reg-names = "CommonRegister", "Bypass1", "Bypass0", "Redundancy",
+                            "Scheduler", "Messagebuffer";
+                buffers = <32>;
+                ptp_worker = <&deip_sw0>;
+            };
+        };
+    };
+
+...
