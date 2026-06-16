@@ -317,7 +317,7 @@ static int scmi_cpufreq_init(struct cpufreq_policy *policy)
 							SCMI_EVENT_PERFORMANCE_LIMITS_CHANGED,
 							&priv->domain_id,
 							&priv->limit_notify_nb);
-	if (ret)
+	if (ret && ret != -EOPNOTSUPP)
 		dev_warn(&sdev->dev,
 			 "failed to register for limits change notifier for domain %d\n",
 			 priv->domain_id);
