@@ -477,6 +477,7 @@
 	pcie_pins_a: pcie-0 {
 		pins {
 			pinmux = <STM32_PINMUX('J', 0, AF4)>;
+			drive-open-drain;
 			bias-disable;
 		};
 	};
