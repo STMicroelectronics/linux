@@ -353,20 +353,25 @@ static int dwc2_stm32_hw_disable(struct dwc2_hsotg *hsotg)
 	return 0;
 }
 
-static int __dwc2_lowlevel_hw_enable(struct dwc2_hsotg *hsotg)
+static int __dwc2_lowlevel_clks_disable(struct dwc2_hsotg *hsotg)
 {
-	struct platform_device *pdev = to_platform_device(hsotg->dev);
-	int ret;
+	if (hsotg->clk)
+		clk_disable_unprepare(hsotg->clk);
 
-	ret = regulator_bulk_enable(ARRAY_SIZE(hsotg->supplies),
-				    hsotg->supplies);
-	if (ret)
-		return ret;
+	if (hsotg->utmi_clk)
+		clk_disable_unprepare(hsotg->utmi_clk);
+
+	return 0;
+}
+
+static int __dwc2_lowlevel_clks_enable(struct dwc2_hsotg *hsotg)
+{
+	int ret;
 
 	if (hsotg->utmi_clk) {
 		ret = clk_prepare_enable(hsotg->utmi_clk);
 		if (ret)
-			goto err_dis_reg;
+			return ret;
 	}
 
 	if (hsotg->clk) {
@@ -374,6 +379,33 @@ static int __dwc2_lowlevel_hw_enable(struct dwc2_hsotg *hsotg)
 		if (ret)
 			goto err_dis_utmi_clk;
 	}
+
+	return 0;
+
+err_dis_utmi_clk:
+	if (hsotg->utmi_clk)
+		clk_disable_unprepare(hsotg->utmi_clk);
+
+	return ret;
+}
+
+static int __dwc2_lowlevel_hw_enable(struct dwc2_hsotg *hsotg, bool was_off)
+{
+	struct platform_device *pdev = to_platform_device(hsotg->dev);
+	int ret;
+
+	/* Just re-enable clocks, if PHY and HW glue has been kept powered on during suspend */
+	if (!was_off)
+		return __dwc2_lowlevel_clks_enable(hsotg);
+
+	ret = regulator_bulk_enable(ARRAY_SIZE(hsotg->supplies),
+				    hsotg->supplies);
+	if (ret)
+		return ret;
+
+	ret = __dwc2_lowlevel_clks_enable(hsotg);
+	if (ret)
+		goto err_dis_reg;
 
 	if (hsotg->uphy) {
 		ret = usb_phy_init(hsotg->uphy);
@@ -408,12 +440,7 @@ err_dis_phy:
 	}
 
 err_dis_clk:
-	if (hsotg->clk)
-		clk_disable_unprepare(hsotg->clk);
-
-err_dis_utmi_clk:
-	if (hsotg->utmi_clk)
-		clk_disable_unprepare(hsotg->utmi_clk);
+	__dwc2_lowlevel_clks_disable(hsotg);
 
 err_dis_reg:
 	regulator_bulk_disable(ARRAY_SIZE(hsotg->supplies), hsotg->supplies);
@@ -430,17 +457,21 @@ err_dis_reg:
  */
 int dwc2_lowlevel_hw_enable(struct dwc2_hsotg *hsotg)
 {
-	int ret = __dwc2_lowlevel_hw_enable(hsotg);
+	int ret = __dwc2_lowlevel_hw_enable(hsotg, true);
 
 	if (ret == 0)
 		hsotg->ll_hw_enabled = true;
 	return ret;
 }
 
-static int __dwc2_lowlevel_hw_disable(struct dwc2_hsotg *hsotg)
+static int __dwc2_lowlevel_hw_disable(struct dwc2_hsotg *hsotg, bool can_power_off)
 {
 	struct platform_device *pdev = to_platform_device(hsotg->dev);
 	int ret = 0;
+
+	/* Just disable clocks, keep the PHY and HW glue powered on */
+	if (!can_power_off)
+		return __dwc2_lowlevel_clks_disable(hsotg);
 
 	ret = dwc2_stm32_hw_disable(hsotg);
 	if (ret)
@@ -458,11 +489,7 @@ static int __dwc2_lowlevel_hw_disable(struct dwc2_hsotg *hsotg)
 	if (ret)
 		return ret;
 
-	if (hsotg->clk)
-		clk_disable_unprepare(hsotg->clk);
-
-	if (hsotg->utmi_clk)
-		clk_disable_unprepare(hsotg->utmi_clk);
+	__dwc2_lowlevel_clks_disable(hsotg);
 
 	return regulator_bulk_disable(ARRAY_SIZE(hsotg->supplies), hsotg->supplies);
 }
@@ -476,7 +503,7 @@ static int __dwc2_lowlevel_hw_disable(struct dwc2_hsotg *hsotg)
  */
 int dwc2_lowlevel_hw_disable(struct dwc2_hsotg *hsotg)
 {
-	int ret = __dwc2_lowlevel_hw_disable(hsotg);
+	int ret = __dwc2_lowlevel_hw_disable(hsotg, true);
 
 	if (ret == 0)
 		hsotg->ll_hw_enabled = false;
@@ -978,11 +1005,10 @@ static int __maybe_unused dwc2_suspend(struct device *dev)
 
 	dwc2_drd_suspend(dwc2);
 
-	if (dwc2->ll_hw_enabled &&
-	    (dwc2_gadget_can_poweroff_phy(dwc2) || dwc2_host_can_poweroff_phy(dwc2))) {
-		ret = __dwc2_lowlevel_hw_disable(dwc2);
-		dwc2->phy_off_for_suspend = true;
-	}
+	dwc2->phy_off_for_suspend =
+		dwc2_gadget_can_poweroff_phy(dwc2) || dwc2_host_can_poweroff_phy(dwc2);
+
+	ret = __dwc2_lowlevel_hw_disable(dwc2, dwc2->phy_off_for_suspend);
 
 	/* If HW has been kept enabled for wakeup, enable wake irq */
 	if (!dwc2->phy_off_for_suspend)
@@ -1002,11 +1028,10 @@ static int __maybe_unused dwc2_resume(struct device *dev)
 	if (!dwc2->phy_off_for_suspend)
 		disable_irq_wake(dwc2->irq);
 
-	if (dwc2->phy_off_for_suspend && dwc2->ll_hw_enabled) {
-		ret = __dwc2_lowlevel_hw_enable(dwc2);
-		if (ret)
-			return ret;
-	}
+	ret = __dwc2_lowlevel_hw_enable(dwc2, dwc2->phy_off_for_suspend);
+	if (ret)
+		return ret;
+
 	dwc2->phy_off_for_suspend = false;
 
 	if (!dwc2->role_sw) {
