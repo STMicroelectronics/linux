@@ -35,7 +35,7 @@ static int stm32_cpufreq_probe(struct platform_device *pdev)
 	}
 	opp_node = dev_pm_opp_of_get_opp_desc_node(cpu_dev);
 	if (!opp_node) {
-		dev_err(&pdev->dev, "OPP-v2 not supported\n");
+		dev_dbg(&pdev->dev, "OPP-v2 not supported\n");
 		return -ENODEV;
 	}
 
