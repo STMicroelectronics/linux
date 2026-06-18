@@ -1,0 +1,62 @@
+# SPDX-License-Identifier: (GPL-2.0 OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/usb/st,tcpp.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: STMicroelectronics TCPP03 USB-C PD protection chip for DRP
+
+maintainers:
+  - Christian Bruel <christian.bruel@foss.st.com>
+
+description:
+  TCPP03 is a companion chip to interface and to protect USB-C DRP port.
+  It has been developed to be used with STM32 family embedding UCPD controller.
+  Access from I2C interface with 2 read registers SR1/SR2 and 1 CR register.
+
+properties:
+  compatible:
+    const: st,tcpp03
+
+  reg:
+    description: I2C address
+    maxItems: 1
+
+  interrupts:
+    maxItems: 1
+
+  enable-gpios:
+    description:
+      GPIO pin connected to the TCPP_EN signal of the UCPD
+    maxItems: 1
+
+required:
+  - compatible
+  - reg
+
+unevaluatedProperties: false
+
+examples:
+  - |
+    #include <dt-bindings/interrupt-controller/irq.h>
+    #include <dt-bindings/gpio/gpio.h>
+
+    i2c {
+        #address-cells = <1>;
+        #size-cells = <0>;
+
+        pinctrl-names = "default", "sleep";
+        pinctrl-0 = <&i2c1_pins_a>;
+        pinctrl-1 = <&i2c1_sleep_pins_a>;
+        clock-frequency = <400000>;
+
+        typec@34 {
+            compatible = "st,tcpp03";
+            reg = <0x34>;
+            enable-gpios = <&gpiog 2 GPIO_ACTIVE_HIGH>;
+            interrupt-parent = <&gpiog>;
+            interrupts = <1 IRQ_TYPE_EDGE_FALLING>;
+            pinctrl-names = "default";
+            pinctrl-0 = <&tcpp_flgn_pins_a>;
+        };
+    };
