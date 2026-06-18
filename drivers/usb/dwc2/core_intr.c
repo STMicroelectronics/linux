@@ -572,10 +572,22 @@ static void dwc2_handle_usb_suspend_intr(struct dwc2_hsotg *hsotg)
 			if (hsotg->wq_gadget)
 				queue_delayed_work(hsotg->wq_gadget, &hsotg->dw_enumtimeout,
 						   msecs_to_jiffies(2000));
+
+			if (hsotg->rpm_suspended) {
+				dev_dbg(hsotg->dev, "enumeration raced with dwc2_port_suspend()\n");
+				hsotg->rpm_suspended = false;
+				pm_runtime_get(hsotg->dev);
+			}
+
 			return;
 		}
 		if (dsts & DSTS_SUSPSTS) {
-			dwc2_gadget_enter_lp(hsotg);
+			if (!hsotg->rpm_suspended) {
+				hsotg->rpm_suspended = true;
+				pm_runtime_put(hsotg->dev);
+			} else {
+				pm_request_idle(hsotg->dev);
+			}
 
 			/*
 			 * Change to L2 (suspend) state before releasing

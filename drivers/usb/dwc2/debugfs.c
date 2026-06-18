@@ -126,7 +126,11 @@ static const struct file_operations testmode_fops = {
 static int state_show(struct seq_file *seq, void *v)
 {
 	struct dwc2_hsotg *hsotg = seq->private;
-	int idx;
+	int idx, ret;
+
+	ret = pm_runtime_resume_and_get(hsotg->ddev);
+	if (ret)
+		return ret;
 
 	seq_printf(seq, "DCFG=0x%08x, DCTL=0x%08x, DSTS=0x%08x\n",
 		   dwc2_readl(hsotg, DCFG),
@@ -168,6 +172,8 @@ static int state_show(struct seq_file *seq, void *v)
 		seq_puts(seq, "\n");
 	}
 
+	pm_runtime_put(hsotg->ddev);
+
 	return 0;
 }
 DEFINE_SHOW_ATTRIBUTE(state);
@@ -185,7 +191,11 @@ static int fifo_show(struct seq_file *seq, void *v)
 	struct dwc2_hsotg *hsotg = seq->private;
 	int fifo_count = dwc2_hsotg_tx_fifo_count(hsotg);
 	u32 val;
-	int idx;
+	int idx, ret;
+
+	ret = pm_runtime_resume_and_get(hsotg->ddev);
+	if (ret)
+		return ret;
 
 	seq_puts(seq, "Non-periodic FIFOs:\n");
 	seq_printf(seq, "RXFIFO: Size %d\n", dwc2_readl(hsotg, GRXFSIZ));
@@ -204,6 +214,8 @@ static int fifo_show(struct seq_file *seq, void *v)
 			   val >> FIFOSIZE_DEPTH_SHIFT,
 			   val & FIFOSIZE_STARTADDR_MASK);
 	}
+
+	pm_runtime_put(hsotg->ddev);
 
 	return 0;
 }
@@ -230,6 +242,11 @@ static int ep_show(struct seq_file *seq, void *v)
 	int index = ep->index;
 	int show_limit = 15;
 	unsigned long flags;
+	int ret;
+
+	ret = pm_runtime_resume_and_get(hsotg->ddev);
+	if (ret)
+		return ret;
 
 	seq_printf(seq, "Endpoint index %d, named %s,  dir %s:\n",
 		   ep->index, ep->ep.name, decode_direction(ep->dir_in));
@@ -251,6 +268,8 @@ static int ep_show(struct seq_file *seq, void *v)
 	seq_printf(seq, "\tDIEPTSIZ=0x%08x, DOEPTSIZ=0x%08x\n",
 		   dwc2_readl(hsotg, DIEPTSIZ(index)),
 		   dwc2_readl(hsotg, DOEPTSIZ(index)));
+
+	pm_runtime_put(hsotg->ddev);
 
 	seq_puts(seq, "\n");
 	seq_printf(seq, "mps %d\n", ep->ep.maxpacket);
@@ -772,10 +791,128 @@ static int dr_mode_show(struct seq_file *seq, void *v)
 }
 DEFINE_SHOW_ATTRIBUTE(dr_mode);
 
+static int dwc2_debugfs_runtime_checks(struct dwc2_hsotg *hsotg)
+{
+	/* RPM suspend has been requested to put the core into low power */
+	if (hsotg->rpm_suspended)
+		return -EBUSY;
+
+	/* Connected device isn't suspended (resumed by bus?) */
+	if (dwc2_is_device_mode(hsotg)) {
+		if (dwc2_is_device_connected(hsotg) && !(dwc2_readl(hsotg, DSTS) & DSTS_SUSPSTS))
+			return -EBUSY;
+	}
+
+	return 0;
+}
+
+static int dwc2_debugfs_runtime_suspend(struct device *dev)
+{
+	struct dwc2_hsotg *hsotg = dev_get_drvdata(dev);
+	unsigned long flags;
+
+	dev_dbg(hsotg->dev, "%s lx_state %d\n", __func__, hsotg->lx_state);
+
+	spin_lock_irqsave(&hsotg->lock, flags);
+	if (!dwc2_debugfs_runtime_checks(hsotg)) {
+		/* Balance the pm_runtime_get() call from the Resume ISR */
+		pm_runtime_put(hsotg->dev);
+		hsotg->rpm_suspended = true;
+
+		/*
+		 * gadget has been resumed from suspended state, due to resume ISR
+		 * put it back to suspend state, as there won't be a suspend IRQ here.
+		 */
+		if (hsotg->suspended_from == USB_STATE_CONFIGURED) {
+			usb_gadget_set_state(&hsotg->gadget, USB_STATE_SUSPENDED);
+			call_gadget(hsotg, suspend);
+		}
+	}
+	spin_unlock_irqrestore(&hsotg->lock, flags);
+
+	return 0;
+}
+
+static int dwc2_debugfs_runtime_resume(struct device *dev)
+{
+	struct dwc2_hsotg *hsotg = dev_get_drvdata(dev);
+	unsigned long flags;
+	int ret = 0;
+
+	spin_lock_irqsave(&hsotg->lock, flags);
+	dev_dbg(hsotg->dev, "%s lx_state %d\n", __func__, hsotg->lx_state);
+
+	/* Exiting power saving mode will raise a resume IRQ */
+	if (hsotg->in_ppd) {
+		ret = dwc2_exit_partial_power_down(hsotg, 0, true);
+		if (ret)
+			dev_err(hsotg->dev, "exit power_down failed %d\n", ret);
+	}
+
+	if (hsotg->params.power_down == DWC2_POWER_DOWN_PARAM_NONE &&
+	    hsotg->bus_suspended && !hsotg->params.no_clock_gating) {
+		if (dwc2_is_device_mode(hsotg)) {
+			dwc2_gadget_exit_clock_gating(hsotg, 0);
+		} else {
+			spin_unlock_irqrestore(&hsotg->lock, flags);
+			dwc2_host_exit_clock_gating(hsotg, 0);
+			spin_lock_irqsave(&hsotg->lock, flags);
+		}
+	}
+
+	spin_unlock_irqrestore(&hsotg->lock, flags);
+
+	return ret;
+}
+
+static const struct dev_pm_ops dwc2_debugfs_pm_ops = {
+	RUNTIME_PM_OPS(dwc2_debugfs_runtime_suspend, dwc2_debugfs_runtime_resume, NULL)
+};
+
+static void dwc2_debugfs_ddev_release(struct device *dev)
+{
+	struct dwc2_hsotg *hsotg = container_of(&dev, struct dwc2_hsotg, ddev);
+
+	kfree(hsotg->ddev);
+	hsotg->ddev = NULL;
+}
+
+static const struct device_type dwc2_debugfs_type = {
+	.name =		"dwc2_debugfs",
+	.pm =		&dwc2_debugfs_pm_ops,
+};
+
 int dwc2_debugfs_init(struct dwc2_hsotg *hsotg)
 {
 	int			ret;
 	struct dentry		*root;
+
+	hsotg->ddev = kzalloc(sizeof(*hsotg->ddev), GFP_KERNEL);
+	if (!hsotg->ddev)
+		return -ENOMEM;
+
+	hsotg->ddev->parent = hsotg->dev;
+	hsotg->ddev->type = &dwc2_debugfs_type;
+	hsotg->ddev->release = dwc2_debugfs_ddev_release;
+	ret = dev_set_name(hsotg->ddev, "%s-debugfs", dev_name(hsotg->dev));
+	if (ret)
+		return dev_err_probe(hsotg->dev, ret, "failed to set debugfs dev name\n");
+
+	/*
+	 * separate device to manage power saving modes (by using PM runtime) independently of the
+	 * bus active/suspended sates.
+	 */
+	ret = device_register(hsotg->ddev);
+	if (ret) {
+		/* Free resources in dwc2_debugfs_release */
+		put_device(hsotg->ddev);
+		return dev_err_probe(hsotg->dev, ret, "failed to register debugfs dev\n");
+	}
+
+	dev_set_drvdata(hsotg->ddev, hsotg);
+	ret = devm_pm_runtime_enable(hsotg->ddev);
+	if (ret)
+		return dev_err_probe(hsotg->ddev, ret, "Failed to enable pm runtime\n");
 
 	root = debugfs_create_dir(dev_name(hsotg->dev), usb_debug_root);
 	hsotg->debug_root = root;
@@ -797,12 +934,15 @@ int dwc2_debugfs_init(struct dwc2_hsotg *hsotg)
 	hsotg->regset->regs = dwc2_regs;
 	hsotg->regset->nregs = ARRAY_SIZE(dwc2_regs);
 	hsotg->regset->base = hsotg->regs;
+	hsotg->regset->dev = hsotg->ddev; /* Manage runtime PM for regdump */
 
 	debugfs_create_regset32("regdump", 0444, root, hsotg->regset);
 
 	return 0;
 err:
 	debugfs_remove_recursive(hsotg->debug_root);
+	device_unregister(hsotg->ddev);
+
 	return ret;
 }
 
@@ -810,4 +950,7 @@ void dwc2_debugfs_exit(struct dwc2_hsotg *hsotg)
 {
 	debugfs_remove_recursive(hsotg->debug_root);
 	hsotg->debug_root = NULL;
+	/* dwc2_debugfs_init() result may be ignored, so check if ddev has been registered */
+	if (hsotg->ddev)
+		device_unregister(hsotg->ddev);
 }

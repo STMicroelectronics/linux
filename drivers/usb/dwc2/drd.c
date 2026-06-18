@@ -210,6 +210,9 @@ static int dwc2_drd_role_sw_set(struct usb_role_switch *sw, enum usb_role role)
 		goto skip;
 	}
 
+	/* prevent runtime suspend while changing role */
+	pm_runtime_get(hsotg->dev);
+
 	if ((IS_ENABLED(CONFIG_USB_DWC2_PERIPHERAL) ||
 	     IS_ENABLED(CONFIG_USB_DWC2_DUAL_ROLE)) &&
 	     dwc2_is_device_mode(hsotg) &&
@@ -265,6 +268,8 @@ static int dwc2_drd_role_sw_set(struct usb_role_switch *sw, enum usb_role role)
 			dwc2_hsotg_core_disconnect(hsotg);
 	}
 
+	pm_runtime_put(hsotg->dev);
+
 skip:
 	if (!hsotg->ll_hw_enabled && hsotg->clk)
 		clk_disable_unprepare(hsotg->clk);
@@ -272,6 +277,19 @@ skip:
 	dev_dbg(hsotg->dev, "%s-session valid\n",
 		role == USB_ROLE_NONE ? "No" :
 		role == USB_ROLE_HOST ? "A" : "B");
+
+	if (role == USB_ROLE_NONE && !hsotg->rpm_suspended) {
+		/* Enforce dwc2_conn_id_status_change has completed */
+		if (hsotg->wq_otg)
+			flush_workqueue(hsotg->wq_otg);
+		/*
+		 * With none role, the controller can be put in low power mode,
+		 * in case of a new event, e.g. usb-role-switch, role_sw_set
+		 * will be called, to resume.
+		 */
+		hsotg->rpm_suspended = true;
+		pm_runtime_put_sync(hsotg->dev);
+	}
 
 	return 0;
 }

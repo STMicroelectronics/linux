@@ -775,6 +775,20 @@ static int dwc2_driver_probe(struct platform_device *dev)
 	if (retval)
 		return retval;
 
+	retval = pm_runtime_set_active(&dev->dev);
+	if (retval)
+		return dev_err_probe(&dev->dev, retval, "Failed to activate pm runtime\n");
+
+	retval = devm_pm_runtime_enable(&dev->dev);
+	if (retval)
+		return dev_err_probe(&dev->dev, retval, "Failed to enable pm runtime\n");
+
+	/*
+	 * Disable runtime PM until the device is fully initialized.
+	 * This prevents the device from being suspended prematurely.
+	 */
+	pm_runtime_forbid(&dev->dev);
+
 	spin_lock_init(&hsotg->lock);
 
 	hsotg->vbus_supply = devm_regulator_get_optional(hsotg->dev, "vbus");
@@ -928,6 +942,9 @@ static int dwc2_driver_probe(struct platform_device *dev)
 	platform_set_drvdata(dev, hsotg);
 	hsotg->hibernated = 0;
 
+	/* Now that the hcd is fully initialized, allow runtime PM */
+	pm_runtime_allow(&dev->dev);
+
 	dwc2_debugfs_init(hsotg);
 
 	/* Gadget code manages lowlevel hw on its own */
@@ -1006,6 +1023,8 @@ static int __maybe_unused dwc2_suspend(struct device *dev)
 
 	dwc2_drd_suspend(dwc2);
 
+	pm_runtime_force_suspend(dwc2->dev);
+
 	dwc2->phy_off_for_suspend =
 		dwc2_gadget_can_poweroff_phy(dwc2) || dwc2_host_can_poweroff_phy(dwc2);
 
@@ -1034,6 +1053,17 @@ static int __maybe_unused dwc2_resume(struct device *dev)
 		return ret;
 
 	dwc2->phy_off_for_suspend = false;
+
+	pm_runtime_force_resume(dev);
+	if (!dwc2->rpm_suspended) {
+		/*
+		 * Inform the PM runtime that the device is active, due to
+		 * Resume or Remote Wakeup interrupt.
+		 */
+		pm_runtime_disable(dev);
+		pm_runtime_set_active(dev);
+		pm_runtime_enable(dev);
+	}
 
 	if (!dwc2->role_sw) {
 		/* Need to restore FORCEDEVMODE/FORCEHOSTMODE */
@@ -1064,8 +1094,65 @@ static int __maybe_unused dwc2_resume(struct device *dev)
 	return ret;
 }
 
+/*
+ * Only power saving mode entry is delegated to PM runtime suspend routine.
+ * This way, power saving mode is entered, only after all children have
+ * supended themselves.
+ *
+ * All the resume activities, remains in each child driver part, e.g.:
+ * - gadget resume or remote wakeup IRQ, calls directly the dwc2_gadget_exit_xxx
+ * - hcd port or bus resume routines, calls directly the dwc2_host_exit_xxx
+ * - debugfs runtime resume routine, calls directly...
+ *
+ * Moving resume activities into a runtime resume routine would have a side effect
+ * in gadget mode. A resume IRQ would be triggered, upon system-wide suspend entry:
+ * the (unused) root hub resumes to reconfigure the port without wakeup capability
+ * (as there's no device plugged), without a real need to update dwc2 configuration.
+ * But, this would abort a sequence with a suspended gadget capable of doing remote
+ * wakeup, e.g. bring it out of low power.
+ */
+static int dwc2_runtime_suspend(struct device *dev)
+{
+	struct dwc2_hsotg *hsotg = dev_get_drvdata(dev);
+	int ret;
+
+	dev_dbg(hsotg->dev, "%s lx_state %d\n", __func__, hsotg->lx_state);
+
+	if (dwc2_is_device_mode(hsotg))
+		ret = dwc2_gadget_enter_lp(hsotg);
+	else
+		ret = dwc2_host_enter_lp(hsotg);
+
+	if (ret)
+		return ret;
+
+	/* If the core hasn't been put into power saving modes, keep PM domain active */
+	if (!(hsotg->bus_suspended || hsotg->in_ppd || hsotg->hibernated))
+		return -EBUSY;
+
+	return 0;
+}
+
+static int dwc2_runtime_idle(struct device *dev)
+{
+	struct dwc2_hsotg *hsotg = dev_get_drvdata(dev);
+
+	/* RPM suspend not requested by the driver */
+	if (!hsotg->rpm_suspended)
+		return -EBUSY;
+
+	/* Connected device isn't suspended */
+	if (dwc2_is_device_mode(hsotg)) {
+		if (dwc2_is_device_connected(hsotg) && !(dwc2_readl(hsotg, DSTS) & DSTS_SUSPSTS))
+			return -EBUSY;
+	}
+
+	return 0;
+}
+
 static const struct dev_pm_ops dwc2_dev_pm_ops = {
 	SET_SYSTEM_SLEEP_PM_OPS(dwc2_suspend, dwc2_resume)
+	RUNTIME_PM_OPS(dwc2_runtime_suspend, NULL, dwc2_runtime_idle)
 };
 
 static struct platform_driver dwc2_platform_driver = {

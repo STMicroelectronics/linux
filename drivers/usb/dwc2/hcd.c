@@ -3316,9 +3316,10 @@ int dwc2_port_suspend(struct dwc2_hsotg *hsotg, u16 windex)
 		hsotg->op_state = OTG_STATE_A_SUSPEND;
 	}
 
-	spin_unlock_irqrestore(&hsotg->lock, flags);
-	dwc2_host_enter_lp(hsotg);
-	spin_lock_irqsave(&hsotg->lock, flags);
+	if (!hsotg->rpm_suspended) {
+		hsotg->rpm_suspended = true;
+		ret = pm_runtime_put(hsotg->dev);
+	}
 
 	/* For HNP the bus must be suspended for at least 200ms */
 	if (dwc2_host_is_b_hnp_enabled(hsotg)) {
@@ -4355,13 +4356,16 @@ static int _dwc2_hcd_suspend(struct usb_hcd *hcd)
 	if (!(dwc2_read_hprt0(hsotg) & HPRT0_CONNSTS))
 		goto skip_power_saving;
 
-	spin_unlock_irqrestore(&hsotg->lock, flags);
-	dwc2_host_enter_lp(hsotg);
-	spin_lock_irqsave(&hsotg->lock, flags);
+	if (!hsotg->rpm_suspended) {
+		hsotg->rpm_suspended = true;
+		spin_unlock_irqrestore(&hsotg->lock, flags);
+		pm_runtime_put_sync(hsotg->dev);
+		spin_lock_irqsave(&hsotg->lock, flags);
 
-	/* After entering suspend, hardware is not accessible */
-	if (hsotg->lx_state == DWC2_L2)
-		clear_bit(HCD_FLAG_HW_ACCESSIBLE, &hcd->flags);
+		/* After entering suspend, hardware is not accessible */
+		if (hsotg->lx_state == DWC2_L2)
+			clear_bit(HCD_FLAG_HW_ACCESSIBLE, &hcd->flags);
+	}
 
 skip_power_saving:
 	hsotg->lx_state = DWC2_L2;
@@ -5819,6 +5823,15 @@ int dwc2_host_exit_partial_power_down(struct dwc2_hsotg *hsotg,
 
 	dev_dbg(hsotg->dev, "Exiting host partial power down started.\n");
 
+	/*
+	 * Rely on rpm_suspended, to resume once, as gadget/host partial_power_down
+	 * routines may get called several times, with rem_wakeup.
+	 */
+	if (hsotg->rpm_suspended) {
+		pm_runtime_get(hsotg->dev);
+		hsotg->rpm_suspended = false;
+	}
+
 	pcgcctl = dwc2_readl(hsotg, PCGCTL);
 	pcgcctl &= ~PCGCTL_STOPPCLK;
 	dwc2_writel(hsotg, pcgcctl, PCGCTL);
@@ -5934,6 +5947,15 @@ void dwc2_host_exit_clock_gating(struct dwc2_hsotg *hsotg, int flags)
 	u32 pcgctl;
 
 	dev_dbg(hsotg->dev, "Exiting host clock gating.\n");
+
+	if (hsotg->rpm_suspended) {
+		/*
+		 * Rely on rpm_suspended, to resume once, as gadget/host exit_clock_gating
+		 * routines may get called several times, with rem_wakeup.
+		 */
+		pm_runtime_get(hsotg->dev);
+		hsotg->rpm_suspended = false;
+	}
 
 	/* Clear the Gate hclk. */
 	pcgctl = dwc2_readl(hsotg, PCGCTL);

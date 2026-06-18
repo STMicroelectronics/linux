@@ -859,6 +859,8 @@ struct dwc2_hregs_backup {
  * These are common for both host and peripheral modes:
  *
  * @dev:                The struct device pointer
+ * @ddev:		Device struct used to manage debugfs access with power
+ *			saving modes (runtime PM).
  * @regs:		Pointer to controller regs
  * @hw_params:          Parameters that were autodetected from the
  *                      hardware registers
@@ -881,6 +883,9 @@ struct dwc2_hregs_backup {
  * @hibernated:		True if core is hibernated
  * @in_ppd:		True if core is partial power down mode.
  * @bus_suspended:	True if bus is suspended
+ * @rpm_suspended:	Flag to balance runtime PM calls, in PM routines that
+ *			may re-enter during low power resume or remote wakeup
+ *			requests.
  * @suspended_from:	The device state before the host has suspended the bus.
  * @reset_phy_on_wake:	Quirk saying that we should assert PHY reset on a
  *			remote wakeup.
@@ -1065,6 +1070,7 @@ struct dwc2_hregs_backup {
  */
 struct dwc2_hsotg {
 	struct device *dev;
+	struct device *ddev;
 	void __iomem *regs;
 	/** Params detected from hardware */
 	struct dwc2_hw_params hw_params;
@@ -1081,6 +1087,7 @@ struct dwc2_hsotg {
 	unsigned int hibernated:1;
 	unsigned int in_ppd:1;
 	bool bus_suspended;
+	bool rpm_suspended;
 	enum usb_device_state suspended_from;
 	unsigned int reset_phy_on_wake:1;
 	unsigned int need_phy_for_wake:1;
