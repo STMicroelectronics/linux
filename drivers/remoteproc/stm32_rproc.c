@@ -165,7 +165,8 @@ static u64 stm32_rproc_get_vect_table(struct rproc *rproc, const struct firmware
 		return elf_shdr_get_sh_addr(class, shdr);
 	}
 
-	return 0;
+	/* The fallback is to get the entry point */
+	return rproc_elf_get_boot_addr(rproc, fw);
 }
 
 static int stm32_rproc_pa_to_da(struct rproc *rproc, phys_addr_t pa, u64 *da)
