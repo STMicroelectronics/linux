@@ -77,7 +77,8 @@ struct rm68200 {
 	struct device *dev;
 	struct drm_panel panel;
 	struct gpio_desc *reset_gpio;
-	struct regulator *supply;
+	struct regulator *vcc;
+	struct regulator *iovcc;
 };
 
 static const struct drm_display_mode default_mode = {
@@ -266,7 +267,8 @@ static int rm68200_unprepare(struct drm_panel *panel)
 		msleep(20);
 	}
 
-	regulator_disable(ctx->supply);
+	regulator_disable(ctx->iovcc);
+	regulator_disable(ctx->vcc);
 
 	return 0;
 }
@@ -277,9 +279,16 @@ static int rm68200_prepare(struct drm_panel *panel)
 	struct mipi_dsi_device *dsi = to_mipi_dsi_device(ctx->dev);
 	int ret;
 
-	ret = regulator_enable(ctx->supply);
+	ret = regulator_enable(ctx->vcc);
 	if (ret < 0) {
-		dev_err(ctx->dev, "failed to enable supply: %d\n", ret);
+		dev_err(ctx->dev, "failed to enable vcc supply: %d\n", ret);
+		return ret;
+	}
+
+	ret = regulator_enable(ctx->iovcc);
+	if (ret < 0) {
+		dev_err(ctx->dev, "failed to enable iovcc supply: %d\n", ret);
+		regulator_disable(ctx->vcc);
 		return ret;
 	}
 
@@ -383,10 +392,15 @@ static int rm68200_probe(struct mipi_dsi_device *dsi)
 			gpiod_direction_output(ctx->reset_gpio, 0);
 	}
 
-	ctx->supply = devm_regulator_get(dev, "power");
-	if (IS_ERR(ctx->supply))
-		return dev_err_probe(dev, PTR_ERR(ctx->supply),
-				     "cannot get regulator\n");
+	ctx->vcc = devm_regulator_get(dev, "vcc");
+	if (IS_ERR(ctx->vcc))
+		return dev_err_probe(dev, PTR_ERR(ctx->vcc),
+				     "cannot get vcc regulator\n");
+
+	ctx->iovcc = devm_regulator_get(dev, "iovcc");
+	if (IS_ERR(ctx->iovcc))
+		return dev_err_probe(dev, PTR_ERR(ctx->iovcc),
+				     "cannot get iovcc regulator\n");
 
 	mipi_dsi_set_drvdata(dsi, ctx);
 
