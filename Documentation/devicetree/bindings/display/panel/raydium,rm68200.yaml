@@ -28,7 +28,12 @@ properties:
   backlight: true
   enable-gpios: true
   port: true
-  power-supply: true
+
+  vcc-supply:
+    description: Panel power supply
+
+  iovcc-supply:
+    description: I/O voltage supply
 
   reset-gpios:
     maxItems: 1
@@ -37,7 +42,8 @@ additionalProperties: false
 
 required:
   - compatible
-  - power-supply
+  - vcc-supply
+  - iovcc-supply
   - reg
 
 examples:
@@ -49,7 +55,8 @@ examples:
         compatible = "raydium,rm68200";
         reg = <0>;
         reset-gpios = <&gpiof 15 0>;
-        power-supply = <&v1v8>;
+        vcc-supply = <&v1v8>;
+        iovcc-supply = <&v1v8>;
         backlight = <&pwm_backlight>;
       };
     };
