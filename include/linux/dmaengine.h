@@ -394,6 +394,32 @@ enum dma_slave_buswidth {
 };
 
 /**
+ * enum dma_residue_granularity - Granularity of the reported transfer residue
+ * @DMA_RESIDUE_GRANULARITY_DESCRIPTOR: Residue reporting is not supported. The
+ *  DMA channel is only able to tell whether a descriptor has been completed or
+ *  not, which means residue reporting is not supported by this channel. The
+ *  residue field of the dma_tx_state field will always be 0.
+ * @DMA_RESIDUE_GRANULARITY_SEGMENT: Residue is updated after each successfully
+ *  completed segment of the transfer (For cyclic transfers this is after each
+ *  period). This is typically implemented by having the hardware generate an
+ *  interrupt after each transferred segment and then the driver updates the
+ *  outstanding residue by the size of the segment. Another possibility is if
+ *  the hardware supports scatter-gather and the segment descriptor has a field
+ *  which gets set after the segment has been completed. The driver then counts
+ *  the number of segments without the flag set to compute the residue.
+ * @DMA_RESIDUE_GRANULARITY_BURST: Residue is updated after each transferred
+ *  burst. This is typically only supported if the hardware has a progress
+ *  register of some sort (E.g. a register with the current read/write address
+ *  or a register with the amount of bursts/beats/bytes that have been
+ *  transferred or still need to be transferred).
+ */
+enum dma_residue_granularity {
+	DMA_RESIDUE_GRANULARITY_DESCRIPTOR = 0,
+	DMA_RESIDUE_GRANULARITY_SEGMENT = 1,
+	DMA_RESIDUE_GRANULARITY_BURST = 2,
+};
+
+/**
  * struct dma_slave_config - dma slave channel runtime config
  * @direction: whether the data shall go in or out on this slave
  * channel, right now. DMA_MEM_TO_DEV and DMA_DEV_TO_MEM are
@@ -428,6 +454,11 @@ enum dma_slave_buswidth {
  * @device_fc: Flow Controller Settings. Only valid for slave channels. Fill
  * with 'true' if peripheral should be flow controller. Direction will be
  * selected at Runtime.
+ * @residue_granularity: Preferred residue reporting precision requested by the
+ * DMA client to match its latency/overhead constraints. A value of 0 means no
+ * explicit client preference was provided, and DMA drivers may keep their
+ * default residue reporting behavior. Clients that need a specific granularity
+ * should explicitly request it here.
  * @peripheral_config: peripheral configuration for programming peripheral
  * for dmaengine transfer
  * @peripheral_size: peripheral configuration buffer size
@@ -455,34 +486,9 @@ struct dma_slave_config {
 	u32 src_port_window_size;
 	u32 dst_port_window_size;
 	bool device_fc;
+	enum dma_residue_granularity residue_granularity;
 	void *peripheral_config;
 	size_t peripheral_size;
-};
-
-/**
- * enum dma_residue_granularity - Granularity of the reported transfer residue
- * @DMA_RESIDUE_GRANULARITY_DESCRIPTOR: Residue reporting is not support. The
- *  DMA channel is only able to tell whether a descriptor has been completed or
- *  not, which means residue reporting is not supported by this channel. The
- *  residue field of the dma_tx_state field will always be 0.
- * @DMA_RESIDUE_GRANULARITY_SEGMENT: Residue is updated after each successfully
- *  completed segment of the transfer (For cyclic transfers this is after each
- *  period). This is typically implemented by having the hardware generate an
- *  interrupt after each transferred segment and then the drivers updates the
- *  outstanding residue by the size of the segment. Another possibility is if
- *  the hardware supports scatter-gather and the segment descriptor has a field
- *  which gets set after the segment has been completed. The driver then counts
- *  the number of segments without the flag set to compute the residue.
- * @DMA_RESIDUE_GRANULARITY_BURST: Residue is updated after each transferred
- *  burst. This is typically only supported if the hardware has a progress
- *  register of some sort (E.g. a register with the current read/write address
- *  or a register with the amount of bursts/beats/bytes that have been
- *  transferred or still need to be transferred).
- */
-enum dma_residue_granularity {
-	DMA_RESIDUE_GRANULARITY_DESCRIPTOR = 0,
-	DMA_RESIDUE_GRANULARITY_SEGMENT = 1,
-	DMA_RESIDUE_GRANULARITY_BURST = 2,
 };
 
 /**
