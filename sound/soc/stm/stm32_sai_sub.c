@@ -1426,7 +1426,7 @@ static int stm32_sai_pcm_process_spdif(struct snd_pcm_substream *substream,
 
 /* No support of mmap in S/PDIF mode */
 static const struct snd_pcm_hardware stm32_sai_pcm_hw_spdif = {
-	.info = SNDRV_PCM_INFO_INTERLEAVED,
+	.info = SNDRV_PCM_INFO_INTERLEAVED | SNDRV_PCM_INFO_BATCH,
 	.buffer_bytes_max = 8 * PAGE_SIZE,
 	.period_bytes_min = 1024,
 	.period_bytes_max = PAGE_SIZE,
@@ -1435,7 +1435,7 @@ static const struct snd_pcm_hardware stm32_sai_pcm_hw_spdif = {
 };
 
 static const struct snd_pcm_hardware stm32_sai_pcm_hw = {
-	.info = SNDRV_PCM_INFO_INTERLEAVED | SNDRV_PCM_INFO_MMAP,
+	.info = SNDRV_PCM_INFO_INTERLEAVED | SNDRV_PCM_INFO_MMAP | SNDRV_PCM_INFO_BATCH,
 	.buffer_bytes_max = 8 * PAGE_SIZE,
 	.period_bytes_min = 1024, /* 5ms at 48kHz */
 	.period_bytes_max = PAGE_SIZE,
@@ -1477,14 +1477,30 @@ static struct snd_soc_dai_driver stm32_sai_capture_dai = {
 		.ops = &stm32_sai_pcm_dai_ops2,
 };
 
+static int stm32_sai_prepare_slave_config(struct snd_pcm_substream *substream,
+					  struct snd_pcm_hw_params *params,
+					  struct dma_slave_config *slave_config)
+{
+	int ret;
+
+	ret = snd_dmaengine_pcm_prepare_slave_config(substream, params, slave_config);
+	if (ret)
+		return ret;
+
+	/* Prefer DMA_RESIDUE_GRANULARITY_SEGMENT to avoid disruptive DMA synchronization */
+	slave_config->residue_granularity = DMA_RESIDUE_GRANULARITY_SEGMENT;
+
+	return 0;
+}
+
 static const struct snd_dmaengine_pcm_config stm32_sai_pcm_config = {
 	.pcm_hardware = &stm32_sai_pcm_hw,
-	.prepare_slave_config = snd_dmaengine_pcm_prepare_slave_config,
+	.prepare_slave_config = stm32_sai_prepare_slave_config,
 };
 
 static const struct snd_dmaengine_pcm_config stm32_sai_pcm_config_spdif = {
 	.pcm_hardware = &stm32_sai_pcm_hw_spdif,
-	.prepare_slave_config = snd_dmaengine_pcm_prepare_slave_config,
+	.prepare_slave_config = stm32_sai_prepare_slave_config,
 	.process = stm32_sai_pcm_process_spdif,
 };
 
