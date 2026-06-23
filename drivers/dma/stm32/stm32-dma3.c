@@ -1194,9 +1194,28 @@ static int stm32_dma3_chan_get_curr_hwdesc(struct stm32_dma3_swdesc *swdesc, u32
 	return -EINVAL;
 }
 
-static void stm32_dma3_chan_set_residue(struct stm32_dma3_chan *chan,
-					struct stm32_dma3_swdesc *swdesc,
-					struct dma_tx_state *txstate)
+static void stm32_dma3_chan_set_segment_residue(struct stm32_dma3_chan *chan,
+						struct stm32_dma3_swdesc *swdesc,
+						struct dma_tx_state *txstate)
+{
+	struct stm32_dma3_ddata *ddata = to_stm32_dma3_ddata(chan);
+	u32 cllr = readl_relaxed(ddata->base + STM32_DMA3_CLLR(chan->id));
+	int curr_lli;
+
+	/* Only the current descriptor index matters for segment-granularity residue */
+	curr_lli = stm32_dma3_chan_get_curr_hwdesc(swdesc, cllr, NULL);
+	if (curr_lli < 0) {
+		dev_err(chan2dev(chan), "Can't get current hwdesc\n");
+		return;
+	}
+
+	/* Set residue as remaining transfer size starting at current LLI */
+	dma_set_residue(txstate, swdesc->lli[curr_lli].residue);
+}
+
+static void stm32_dma3_chan_set_burst_residue(struct stm32_dma3_chan *chan,
+					      struct stm32_dma3_swdesc *swdesc,
+					      struct dma_tx_state *txstate)
 {
 	struct stm32_dma3_ddata *ddata = to_stm32_dma3_ddata(chan);
 	struct device *dev = chan2dev(chan);
@@ -1924,8 +1943,16 @@ static enum dma_status stm32_dma3_tx_status(struct dma_chan *c, dma_cookie_t coo
 		swdesc = chan->swdesc;
 
 	/* Get residue/in_flight_bytes only if a transfer is currently running (swdesc != NULL) */
-	if (swdesc)
-		stm32_dma3_chan_set_residue(chan, swdesc, txstate);
+	if (swdesc) {
+		/*
+		 * Keep legacy burst-level residue reporting unless the client
+		 * explicitly requests segment granularity.
+		 */
+		if (chan->dma_config.residue_granularity == DMA_RESIDUE_GRANULARITY_SEGMENT)
+			stm32_dma3_chan_set_segment_residue(chan, swdesc, txstate);
+		else
+			stm32_dma3_chan_set_burst_residue(chan, swdesc, txstate);
+	}
 
 	spin_unlock_irqrestore(&chan->vchan.lock, flags);
 
