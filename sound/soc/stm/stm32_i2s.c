@@ -1107,7 +1107,7 @@ static const struct snd_soc_dai_ops stm32_i2s_pcm_dai_ops = {
 };
 
 static const struct snd_pcm_hardware stm32_i2s_pcm_hw = {
-	.info = SNDRV_PCM_INFO_INTERLEAVED | SNDRV_PCM_INFO_MMAP,
+	.info = SNDRV_PCM_INFO_INTERLEAVED | SNDRV_PCM_INFO_MMAP | SNDRV_PCM_INFO_BATCH,
 	.buffer_bytes_max = 8 * PAGE_SIZE,
 	.period_bytes_min = 1024,
 	.period_bytes_max = 4 * PAGE_SIZE,
@@ -1115,9 +1115,25 @@ static const struct snd_pcm_hardware stm32_i2s_pcm_hw = {
 	.periods_max = 8,
 };
 
+static int stm32_i2s_prepare_slave_config(struct snd_pcm_substream *substream,
+					  struct snd_pcm_hw_params *params,
+					  struct dma_slave_config *slave_config)
+{
+	int ret;
+
+	ret = snd_dmaengine_pcm_prepare_slave_config(substream, params, slave_config);
+	if (ret)
+		return ret;
+
+	/* Prefer DMA_RESIDUE_GRANULARITY_SEGMENT to avoid disruptive DMA synchronization */
+	slave_config->residue_granularity = DMA_RESIDUE_GRANULARITY_SEGMENT;
+
+	return 0;
+}
+
 static const struct snd_dmaengine_pcm_config stm32_i2s_pcm_config = {
 	.pcm_hardware	= &stm32_i2s_pcm_hw,
-	.prepare_slave_config = snd_dmaengine_pcm_prepare_slave_config,
+	.prepare_slave_config = stm32_i2s_prepare_slave_config,
 	.prealloc_buffer_size = PAGE_SIZE * 8,
 };
 
