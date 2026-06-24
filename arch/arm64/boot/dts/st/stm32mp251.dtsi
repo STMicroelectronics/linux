@@ -2194,6 +2194,27 @@
 				status = "disabled";
 			};
 
+			ucpd: typec@480a0000 {
+				compatible = "st,stm32mp25-ucpd";
+				reg = <0x480a0000 0x400>;
+				interrupts-extended = <&exti1 46 IRQ_TYPE_LEVEL_HIGH>;
+				interrupt-names = "ucpd";
+				clocks = <&rcc CK_BUS_USBTC>, <&rcc CK_KER_USBTC>;
+				clock-names = "apb", "ker";
+				resets = <&rcc USBTC_R>;
+				reset-names = "ucpd";
+				nvmem-cells = <&ucpd_trim_rd_cc1 &ucpd_trim_rd_cc2
+					       &ucpd_trim_3a_cc1 &ucpd_trim_3a_cc2
+					       &ucpd_trim_1a5_cc1 &ucpd_trim_1a5_cc2>;
+				nvmem-cell-names = "trim_rd_cc1", "trim_rd_cc2",
+						   "trim_3a_cc1", "trim_3a_cc2",
+						   "trim_1a5_cc1", "trim_1a5_cc2";
+				ucpd-supply = <&scmi_vdd33ucpd>;
+				access-controllers = <&rifsc 69>;
+				power-domains = <&d1_pd>;
+				status = "disabled";
+			};
+
 			combophy: phy@480c0000 {
 				compatible = "st,stm32mp25-combophy";
 				reg = <0x480c0000 0x1000>;
@@ -2499,9 +2520,39 @@
 				reg = <0x1b8 0x2>;
 			};
 
+			ucpd_trim_3a_cc1: trim-3a-cc1@1bd,1 {
+				reg = <0x1bd 0x1>;
+				bits = <1 4>;
+			};
+
+			ucpd_trim_3a_cc2: trim-3a-cc2@1bf,1 {
+				reg = <0x1bf 0x1>;
+				bits = <1 4>;
+			};
+
 			package-otp@1e8 {
 				reg = <0x1e8 0x1>;
 				bits = <0 3>;
+			};
+
+			ucpd_trim_rd_cc1: trim-rd-cc1@1e8,4 {
+				reg = <0x1e8 0x1>;
+				bits = <4 4>;
+			};
+
+			ucpd_trim_1a5_cc1: trim-1a5-cc1@1e9,0 {
+				reg = <0x1e9 0x1>;
+				bits = <0 4>;
+			};
+
+			ucpd_trim_rd_cc2: trim-rd-cc2@1e9,4 {
+				reg = <0x1e9 0x1>;
+				bits = <4 4>;
+			};
+
+			ucpd_trim_1a5_cc2: trim-1a5-cc2@1ea,0 {
+				reg = <0x1ea 0x1>;
+				bits = <0 4>;
 			};
 		};
 
