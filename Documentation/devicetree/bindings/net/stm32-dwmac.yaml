@@ -130,6 +130,8 @@ properties:
       MAC.
     type: boolean
 
+  wakeup-source: true
+
 required:
   - compatible
   - clocks
