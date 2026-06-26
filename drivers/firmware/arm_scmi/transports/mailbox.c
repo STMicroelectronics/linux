@@ -13,6 +13,7 @@
 #include <linux/of_address.h>
 #include <linux/platform_device.h>
 #include <linux/slab.h>
+#include <linux/workqueue.h>
 
 #include "../common.h"
 
@@ -27,6 +28,8 @@
  * @shmem: Transmit/Receive shared memory area
  * @chan_lock: Lock that prevents multiple xfers from being queued
  * @io_ops: Transport specific I/O operations
+ * @rx_work: Work used to defer RX message handling out of the mailbox
+ *	     controller IRQ-thread context (see rx_callback())
  */
 struct scmi_mailbox {
 	struct mbox_client cl;
@@ -37,9 +40,11 @@ struct scmi_mailbox {
 	struct scmi_shared_mem __iomem *shmem;
 	struct mutex chan_lock;
 	struct scmi_shmem_io_ops *io_ops;
+	struct work_struct rx_work;
 };
 
 #define client_to_scmi_mailbox(c) container_of(c, struct scmi_mailbox, cl)
+#define work_to_scmi_mailbox(w) container_of(w, struct scmi_mailbox, rx_work)
 
 static struct scmi_transport_core_operations *core;
 
@@ -49,6 +54,14 @@ static void tx_prepare(struct mbox_client *cl, void *m)
 
 	core->shmem->tx_prepare(smbox->shmem, m, smbox->cinfo,
 				smbox->io_ops->toio);
+}
+
+static void rx_work_fn(struct work_struct *work)
+{
+	struct scmi_mailbox *smbox = work_to_scmi_mailbox(work);
+
+	core->rx_callback(smbox->cinfo,
+			  core->shmem->read_header(smbox->shmem), NULL);
 }
 
 static void rx_callback(struct mbox_client *cl, void *m)
@@ -73,8 +86,14 @@ static void rx_callback(struct mbox_client *cl, void *m)
 		return;
 	}
 
-	core->rx_callback(smbox->cinfo,
-		      core->shmem->read_header(smbox->shmem), NULL);
+	/*
+	 * Defer the handling (which calls complete()) out of the controller
+	 * IRQ-thread context: some controllers ack the RX channel to the
+	 * remote only after this callback returns, so waking the requester
+	 * inline would let it send the next request before the remote's TX
+	 * channel is freed. The message stays in shmem until handled.
+	 */
+	queue_work(system_highpri_wq, &smbox->rx_work);
 }
 
 static bool mailbox_chan_available(struct device_node *of_node, int idx)
@@ -211,6 +230,8 @@ static int mailbox_chan_setup(struct scmi_chan_info *cinfo, struct device *dev,
 	cl->tx_block = false;
 	cl->knows_txdone = tx;
 
+	INIT_WORK(&smbox->rx_work, rx_work_fn);
+
 	smbox->chan = mbox_request_channel(cl, tx ? 0 : p2a_chan);
 	if (IS_ERR(smbox->chan)) {
 		ret = PTR_ERR(smbox->chan);
@@ -254,6 +275,7 @@ static int mailbox_chan_free(int id, void *p, void *data)
 	struct scmi_mailbox *smbox = cinfo->transport_info;
 
 	if (smbox && !IS_ERR(smbox->chan)) {
+		cancel_work_sync(&smbox->rx_work);
 		mbox_free_channel(smbox->chan);
 		mbox_free_channel(smbox->chan_receiver);
 		mbox_free_channel(smbox->chan_platform_receiver);
