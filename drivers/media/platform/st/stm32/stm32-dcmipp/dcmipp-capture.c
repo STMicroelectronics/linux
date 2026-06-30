@@ -240,6 +240,14 @@ struct dcmipp_capture_device {
 
 	u32 vsync_frame_refresh_cnt;
 	u32 frame_skip_ratio;
+
+	/*
+	 * alternate_to_interlaced : enabled when source sends V4L2_FIELD_ALTERNATE
+	 * and capture is set to V4L2_FIELD_INTERLACED.
+	 * field: current field parity (0:top/even, 1:bottom/odd).
+	 */
+	bool alternate_to_interlaced;
+	bool field;
 };
 
 static const struct dcmipp_capture_pix_map *
@@ -436,6 +444,15 @@ static int dcmipp_capture_s_fmt_vid_cap(struct file *file, void *priv,
 		f->fmt.pix.ycbcr_enc);
 
 	vcap->format = f->fmt.pix;
+
+	/*
+	 * Alternate to interlaced requires at least 2 buffers,
+	 * one for top and one for bottom field.
+	 * In addition, 2 extra buffers are needed to avoid starvation
+	 */
+	if (vcap->format.field == V4L2_FIELD_INTERLACED)
+		vcap->queue.min_queued_buffers =
+			min(vcap->queue.min_queued_buffers, 4);
 
 	return 0;
 }
@@ -666,6 +683,36 @@ static int dcmipp_capture_start_streaming(struct vb2_queue *vq,
 					 vcap->s_subdev_pad_nb, BIT_ULL(0));
 	if (ret)
 		goto err_media_pipeline_stop;
+
+	/*
+	 * Check if alternate to interlaced mode should be enabled:
+	 * source subdev must be sending V4L2_FIELD_ALTERNATE and capture
+	 * format must be set to V4L2_FIELD_INTERLACED.
+	 */
+	vcap->alternate_to_interlaced = false;
+	if (vcap->format.field == V4L2_FIELD_INTERLACED) {
+		struct v4l2_subdev_format source_fmt = {
+			.which = V4L2_SUBDEV_FORMAT_ACTIVE,
+		};
+		struct media_pad *pad;
+
+		pad = media_pad_remote_pad_first(&vcap->vdev.entity.pads[0]);
+		if (!pad || !is_media_entity_v4l2_subdev(pad->entity)) {
+			ret = -EINVAL;
+			v4l2_subdev_disable_streams(vcap->s_subdev,
+						    vcap->s_subdev_pad_nb, BIT_ULL(0));
+			goto err_media_pipeline_stop;
+		}
+		source_fmt.pad = pad->index;
+
+		ret = v4l2_subdev_call(vcap->s_subdev, pad, get_fmt,
+				       NULL, &source_fmt);
+		if (!ret &&
+		    source_fmt.format.field == V4L2_FIELD_ALTERNATE) {
+			vcap->alternate_to_interlaced = true;
+			dev_dbg(vcap->dev, "Alternate to interlaced mode enabled\n");
+		}
+	}
 
 	spin_lock_irq(&vcap->irqlock);
 
@@ -958,7 +1005,8 @@ static void dcmipp_buffer_done(struct dcmipp_capture_device *vcap,
 	vbuf = &buf->vb;
 
 	vbuf->sequence = vcap->sequence++;
-	vbuf->field = V4L2_FIELD_NONE;
+	vbuf->field = vcap->alternate_to_interlaced ? V4L2_FIELD_INTERLACED :
+					 V4L2_FIELD_NONE;
 	vbuf->vb2_buf.timestamp = ktime_get_ns();
 	vb2_set_plane_payload(&vbuf->vb2_buf, 0, bytesused);
 	vb2_buffer_done(&vbuf->vb2_buf,
@@ -1089,8 +1137,24 @@ static irqreturn_t dcmipp_capture_irq_thread(int irq, void *arg)
 		 */
 		if (--vcap->vsync_frame_refresh_cnt == 0) {
 			vcap->vsync_frame_refresh_cnt = vcap->frame_skip_ratio;
-			swap(vcap->active, vcap->next);
-			dcmipp_capture_set_next_frame_or_stop(vcap);
+
+			if (vcap->alternate_to_interlaced && !vcap->field) {
+				/*
+				 * Top/even field captured: keep the same
+				 * buffer but shift one line down to insert the
+				 * bottom/odd field into it.
+				 */
+				vcap->field = 1;
+				if (vcap->active)
+					reg_write(vcap, DCMIPP_PxPPM0AR1(vcap->pipe_id),
+						  vcap->active->addrs[0] +
+						  vcap->active->strides[0]);
+			} else {
+				/* Both fields done (or progressive): move on */
+				vcap->field = 0;
+				swap(vcap->active, vcap->next);
+				dcmipp_capture_set_next_frame_or_stop(vcap);
+			}
 		}
 	}
 

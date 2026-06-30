@@ -85,7 +85,7 @@ static void dcmipp_isp_adjust_fmt(struct v4l2_mbus_framefmt *fmt, u32 pad)
 	fmt->height = clamp_t(u32, fmt->height, DCMIPP_FRAME_MIN_HEIGHT,
 			      DCMIPP_PIXEL_FRAME_MAX_HEIGHT);
 
-	if (fmt->field == V4L2_FIELD_ANY || fmt->field == V4L2_FIELD_ALTERNATE)
+	if (fmt->field == V4L2_FIELD_ANY)
 		fmt->field = V4L2_FIELD_NONE;
 
 	dcmipp_colorimetry_clamp(fmt);

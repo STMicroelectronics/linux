@@ -268,7 +268,7 @@ static void dcmipp_inp_adjust_fmt(struct dcmipp_inp_device *inp,
 	fmt->height = clamp_t(u32, fmt->height, DCMIPP_FRAME_MIN_HEIGHT,
 			      DCMIPP_FRAME_MAX_HEIGHT);
 
-	if (fmt->field == V4L2_FIELD_ANY || fmt->field == V4L2_FIELD_ALTERNATE)
+	if (fmt->field == V4L2_FIELD_ANY)
 		fmt->field = fmt_default.field;
 
 	dcmipp_colorimetry_clamp(fmt);
