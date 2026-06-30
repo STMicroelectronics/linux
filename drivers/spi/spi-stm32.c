@@ -2515,8 +2515,25 @@ static int stm32_spi_probe(struct platform_device *pdev)
 	if (spi->dma_tx || spi->dma_rx)
 		ctrl->can_dma = stm32_spi_can_dma;
 
-	spi->sram_pool = of_gen_pool_get(pdev->dev.of_node, "sram", 0);
-	if (spi->sram_pool) {
+	spi->mdma_rx = dma_request_chan(spi->dev, "rxm2m");
+	if (IS_ERR(spi->mdma_rx)) {
+		ret = PTR_ERR(spi->mdma_rx);
+		if (ret == -ENODEV) {
+			dev_info(&pdev->dev, "rx mdma disabled\n");
+			spi->mdma_rx = NULL;
+		} else {
+			dev_err_probe(&pdev->dev, ret, "failed to request rx mdma channel\n");
+			goto err_dma_rx_release;
+		}
+	} else {
+		spi->sram_pool = of_gen_pool_get(pdev->dev.of_node, "sram", 0);
+		if (!spi->sram_pool) {
+			ret = -EINVAL;
+			dev_err_probe(&pdev->dev, ret,
+				      "sram required when using rx mdma channel\n");
+			goto err_pool_free;
+		}
+
 		spi->sram_rx_buf_size = gen_pool_size(spi->sram_pool);
 		dev_info(&pdev->dev, "SRAM pool: %zu KiB for RX DMA/MDMA chaining\n",
 			 spi->sram_rx_buf_size / 1024);
@@ -2526,21 +2543,6 @@ static int stm32_spi_probe(struct platform_device *pdev)
 			ret = -ENOMEM;
 			dev_err(&pdev->dev, "failed to allocate SRAM buffer\n");
 			goto err_pool_free;
-		} else {
-			spi->mdma_rx = dma_request_chan(spi->dev, "rxm2m");
-			if (IS_ERR(spi->mdma_rx)) {
-				ret = PTR_ERR(spi->mdma_rx);
-				spi->mdma_rx = NULL;
-				if (ret == -EPROBE_DEFER) {
-					goto err_pool_free;
-				} else {
-					gen_pool_free(spi->sram_pool,
-						      (unsigned long)spi->sram_rx_buf,
-						      spi->sram_rx_buf_size);
-					dev_warn(&pdev->dev,
-						 "failed to request rx mdma channel, DMA only\n");
-				}
-			}
 		}
 	}
 
@@ -2571,12 +2573,13 @@ err_pm_disable:
 	pm_runtime_set_suspended(&pdev->dev);
 	pm_runtime_dont_use_autosuspend(&pdev->dev);
 
-	if (spi->mdma_rx)
-		dma_release_channel(spi->mdma_rx);
 err_pool_free:
 	if (spi->sram_rx_buf)
 		gen_pool_free(spi->sram_pool, (unsigned long)spi->sram_rx_buf,
 			      spi->sram_rx_buf_size);
+	if (spi->mdma_rx)
+		dma_release_channel(spi->mdma_rx);
+err_dma_rx_release:
 	if (spi->dma_rx)
 		dma_release_channel(spi->dma_rx);
 err_dma_tx_release:
