@@ -133,8 +133,6 @@ patternProperties:
       - reg
 
 required:
-  - "#address-cells"
-  - "#size-cells"
   - compatible
   - reg
   - clocks
