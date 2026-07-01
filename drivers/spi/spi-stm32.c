@@ -2523,7 +2523,9 @@ static int stm32_spi_probe(struct platform_device *pdev)
 		spi->sram_rx_buf = gen_pool_dma_zalloc(spi->sram_pool, spi->sram_rx_buf_size,
 						       &spi->sram_dma_rx_buf);
 		if (!spi->sram_rx_buf) {
+			ret = -ENOMEM;
 			dev_err(&pdev->dev, "failed to allocate SRAM buffer\n");
+			goto err_pool_free;
 		} else {
 			spi->mdma_rx = dma_request_chan(spi->dev, "rxm2m");
 			if (IS_ERR(spi->mdma_rx)) {
