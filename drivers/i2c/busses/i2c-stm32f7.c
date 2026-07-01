@@ -1625,12 +1625,12 @@ static irqreturn_t stm32f7_i2c_isr_event_thread(int irq, void *data)
 
 	status = readl_relaxed(i2c_dev->base + STM32F7_I2C_ISR);
 
-	if (!i2c_dev->master_mode)
-		return stm32f7_i2c_slave_isr_event(i2c_dev, status);
-
 	/* Handle errors in case of this handler is used for events/errors */
 	if (i2c_dev->setup.single_it_line && (status & STM32F7_ERR_EVENTS))
 		return stm32f7_i2c_handle_isr_errs(i2c_dev, status);
+
+	if (!i2c_dev->master_mode)
+		return stm32f7_i2c_slave_isr_event(i2c_dev, status);
 
 	/* NACK received */
 	if (status & STM32F7_I2C_ISR_NACKF) {
