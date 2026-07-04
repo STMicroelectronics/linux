@@ -127,6 +127,17 @@ bool adv7533_mode_fixup(struct adv7511 *adv,
 	struct mipi_dsi_device *dsi = adv->dsi;
 	int lanes, ret;
 
+	/*
+	 * Only 4-lane designs support switching between 3 and 4 lanes
+	 * depending on pixel clock; boards wired for 2 or 3 lanes must
+	 * keep the lane count fixed at what was set from DT. Otherwise
+	 * this would force a lane count that doesn't match what is
+	 * physically wired (e.g. forcing 3 lanes on a 2-lane design),
+	 * leaving the display blank.
+	 */
+	if (dsi->lanes != 4)
+		return true;
+
 	if (mode->clock > 80000)
 		lanes = 4;
 	else
