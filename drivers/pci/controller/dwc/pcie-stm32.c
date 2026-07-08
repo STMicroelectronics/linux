@@ -19,6 +19,7 @@
 #include "pcie-designware.h"
 #include "pcie-stm32.h"
 #include "../../pci.h"
+#include "../../pcie/portdrv.h"
 
 struct stm32_pcie {
 	struct dw_pcie pci;
@@ -28,6 +29,8 @@ struct stm32_pcie {
 	struct clk *clk;
 	struct gpio_desc *perst_gpio;
 	struct gpio_desc *wake_gpio;
+	int aer_irq;
+	int pme_irq;
 };
 
 static void stm32_pcie_deassert_perst(struct stm32_pcie *stm32_pcie)
@@ -147,11 +150,109 @@ static const struct dw_pcie_ops dw_pcie_ops = {
 	.stop_link = stm32_pcie_stop_link
 };
 
-static int stm32_add_pcie_port(struct stm32_pcie *stm32_pcie)
+/*
+ * PME/AER platform irq in this driver only re-initialises the platform IRQ glue logic.
+ * The handling is done by the generic pci drivers (trough platform IRQ hook), through shared IRQ
+ */
+static irqreturn_t stm32_pcie_pme_msi_irq_handler(int irq, void *priv)
+{
+	struct stm32_pcie *stm32_pcie = priv;
+
+	regmap_write(stm32_pcie->regmap, SYSCFG_PCIEPMEMSICR, 1);
+	regmap_write(stm32_pcie->regmap, SYSCFG_PCIEPMEMSICR, 0);
+
+	return IRQ_HANDLED;
+}
+
+static irqreturn_t stm32_pcie_aer_msi_irq_handler(int irq, void *priv)
+{
+	struct stm32_pcie *stm32_pcie = priv;
+
+	regmap_write(stm32_pcie->regmap, SYSCFG_PCIEAERRCMSICR, 1);
+
+	return IRQ_WAKE_THREAD;
+}
+
+static irqreturn_t stm32_pcie_aer_msi_isr_handler(int irq, void *priv)
+{
+	struct stm32_pcie *stm32_pcie = priv;
+
+	regmap_write(stm32_pcie->regmap, SYSCFG_PCIEAERRCMSICR, 0);
+
+	return IRQ_HANDLED;
+}
+
+static int stm32_pcie_port_irqs(struct pci_dev *pci_dev, u32 *pme, u32 *aer, u32 *dpc)
+{
+	struct dw_pcie_rp *pp = pci_dev->bus->sysdata;
+	struct dw_pcie *pci = to_dw_pcie_from_pp(pp);
+	struct stm32_pcie *stm32_pcie = to_stm32_pcie(pci);
+	int nirqs = 0;
+
+	if (aer && stm32_pcie->aer_irq)
+		nirqs++;
+	if (pme && stm32_pcie->pme_irq)
+		nirqs++;
+
+	nirqs = pci_alloc_irq_vectors(pci_dev, nirqs, nirqs, PCI_IRQ_MSI);
+	if (nirqs < 0)
+		return nirqs;
+
+	if (aer && stm32_pcie->aer_irq)
+		*aer = stm32_pcie->aer_irq;
+	if (pme && stm32_pcie->pme_irq)
+		*pme = stm32_pcie->pme_irq;
+
+	return 0;
+}
+
+static int stm32_add_pcie_port(struct stm32_pcie *stm32_pcie, struct platform_device *pdev)
 {
 	struct device *dev = stm32_pcie->pci.dev;
 	unsigned int wake_irq;
 	int ret;
+
+	/* Use generic AER driver if we can register the port_drv */
+	if (pci_aer_available()) {
+		stm32_pcie->aer_irq = platform_get_irq_byname_optional(pdev, "aer");
+		if (stm32_pcie->aer_irq < 0) {
+			if (stm32_pcie->aer_irq != -ENXIO)
+				return dev_err_probe(dev, stm32_pcie->aer_irq,
+						     "failed to get AER IRQ\n");
+			stm32_pcie->aer_irq = 0;
+		}
+
+		if (stm32_pcie->aer_irq) {
+			ret = devm_request_threaded_irq(dev, stm32_pcie->aer_irq,
+							stm32_pcie_aer_msi_irq_handler,
+							stm32_pcie_aer_msi_isr_handler,
+							IRQF_SHARED, "stm32-aer-msi", stm32_pcie);
+			if (ret < 0)
+				return dev_err_probe(dev, stm32_pcie->aer_irq,
+						     "failed to request AER MSI IRQ\n");
+		}
+	}
+
+	stm32_pcie->pme_irq = platform_get_irq_byname_optional(pdev, "pme");
+	if (stm32_pcie->pme_irq < 0) {
+		if (stm32_pcie->pme_irq != -ENXIO)
+			return dev_err_probe(dev, stm32_pcie->pme_irq,
+					     "failed to get PME MSI IRQ\n");
+		stm32_pcie->pme_irq = 0;
+	}
+
+	if (stm32_pcie->pme_irq) {
+		ret = devm_request_irq(dev, stm32_pcie->pme_irq,
+				       stm32_pcie_pme_msi_irq_handler,
+				       IRQF_SHARED, "stm32-pme-msi", stm32_pcie);
+		if (ret < 0)
+			return dev_err_probe(dev, stm32_pcie->pme_irq,
+					     "failed to request PME MSI IRQ\n");
+	}
+
+	/* Register AER/PME pordrv hook */
+	if (stm32_pcie->pme_irq || stm32_pcie->aer_irq)
+		pcie_port_set_irqs_hook(stm32_pcie_port_irqs);
 
 	ret = phy_set_mode(stm32_pcie->phy, PHY_MODE_PCIE);
 	if (ret)
@@ -195,6 +296,8 @@ static void stm32_remove_pcie_port(struct stm32_pcie *stm32_pcie)
 	dev_pm_clear_wake_irq(stm32_pcie->pci.dev);
 
 	stm32_pcie_assert_perst(stm32_pcie);
+
+	pcie_port_set_irqs_hook(NULL);
 
 	phy_exit(stm32_pcie->phy);
 }
@@ -276,7 +379,7 @@ static int stm32_pcie_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, stm32_pcie);
 
-	ret = stm32_add_pcie_port(stm32_pcie);
+	ret = stm32_add_pcie_port(stm32_pcie, pdev);
 	if (ret)
 		return ret;
 
