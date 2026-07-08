@@ -2317,6 +2317,10 @@
 						<0 0 0 2 &intc 0 0 GIC_SPI 265 IRQ_TYPE_LEVEL_HIGH>,
 						<0 0 0 3 &intc 0 0 GIC_SPI 266 IRQ_TYPE_LEVEL_HIGH>,
 						<0 0 0 4 &intc 0 0 GIC_SPI 267 IRQ_TYPE_LEVEL_HIGH>;
+				msi-map = <0x0 &v2m0 0x0 0x10000>;
+				interrupts = <GIC_SPI 232 IRQ_TYPE_LEVEL_HIGH>,
+					     <GIC_SPI 238 IRQ_TYPE_LEVEL_HIGH>;
+				interrupt-names = "aer", "pme";
 				#address-cells = <3>;
 				#size-cells = <2>;
 				ranges = <0x02000000 0x0 0x10010000 0x10010000 0x0 0x7ff0000>,
@@ -2324,7 +2328,6 @@
 				dma-ranges = <0x42000000 0x0 0x80000000 0x80000000 0x0 0x80000000>;
 				clocks = <&scmi_clk CK_SCMI_ICN_PCIE>;
 				resets = <&rcc PCIE_R>;
-				msi-parent = <&v2m0>;
 				access-controllers = <&rifsc 68>;
 				power-domains = <&d1_pd>;
 				status = "disabled";
