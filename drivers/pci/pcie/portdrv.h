@@ -11,6 +11,9 @@
 
 #include <linux/compiler.h>
 
+/* Hook for the platform to provide alternative IRQs than MSI or legacy */
+int pcie_port_set_irqs_hook(int (*hook)(struct pci_dev *dev, u32 *ppme, u32 *paer, u32 *pdpc));
+
 /* Service Type */
 #define PCIE_PORT_SERVICE_PME_SHIFT	0	/* Power Management Event */
 #define PCIE_PORT_SERVICE_PME		(1 << PCIE_PORT_SERVICE_PME_SHIFT)
