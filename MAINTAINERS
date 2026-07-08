@@ -24374,6 +24374,14 @@ S:	Maintained
 F:	Documentation/devicetree/bindings/arm/stm32/st,stm32-syscon.yaml
 F:	drivers/soc/st/stm32_syscon.c
 
+ST STM32 TYPEC UCPD DRIVERS
+M:	Christian Bruel <christian.bruel@foss.st.com>
+S:	Maintained
+F:	Documentation/devicetree/bindings/usb/st,stm32-ucpd.yaml
+F:	Documentation/devicetree/bindings/usb/st,tcpp.yaml
+F:	drivers/usb/typec/tcpm/st_tcpp.[ch]
+F:	drivers/usb/typec/tcpm/stm32_ucpd.c
+
 ST STPDDC60 DRIVER
 M:	Daniel Nilsson <daniel.nilsson@flex.com>
 L:	linux-hwmon@vger.kernel.org
