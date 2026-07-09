@@ -998,6 +998,16 @@ static int rtl8211e_led_hw_control_set(struct phy_device *phydev, u8 index,
 	return ret;
 }
 
+static int rtl8211e_disable_autonomous_eee(struct phy_device *phydev)
+{
+	/* Keep RTL8211E from advertising EEE to avoid RXC stop windows during
+	 * early MAC initialization on platforms that are sensitive to it.
+	 */
+	phy_disable_eee(phydev);
+
+	return 0;
+}
+
 static int rtl8211e_config_init(struct phy_device *phydev)
 {
 	u16 val;
@@ -1815,6 +1825,7 @@ static struct phy_driver realtek_drvs[] = {
 		.led_hw_is_supported = rtl8211x_led_hw_is_supported,
 		.led_hw_control_get = rtl8211e_led_hw_control_get,
 		.led_hw_control_set = rtl8211e_led_hw_control_set,
+		.disable_autonomous_eee = rtl8211e_disable_autonomous_eee,
 	}, {
 		PHY_ID_MATCH_EXACT(0x001cc916),
 		.name		= "RTL8211F Gigabit Ethernet",
