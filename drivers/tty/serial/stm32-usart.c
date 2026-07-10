@@ -1089,7 +1089,7 @@ static irqreturn_t stm32_usart_interrupt(int irq, void *ptr)
 		if (stm32_port->clk_am)
 			stm32_usart_disable_am(stm32_port);
 
-		pm_wakeup_event(tport->tty->dev, 0);
+		pm_wakeup_hard_event(tport->tty->dev);
 
 		ret = IRQ_HANDLED;
 	}
