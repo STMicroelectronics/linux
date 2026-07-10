@@ -610,7 +610,7 @@ static int stm32_rng_probe(struct platform_device *ofdev)
 
 	ret = devm_clk_bulk_get_all(dev, &priv->clk_bulk);
 	if (ret != priv->data->nb_clock)
-		return dev_err_probe(dev, -EINVAL, "Failed to get clocks: %d\n", ret);
+		return dev_err_probe(dev, ret, "Failed to get clocks: %d\n", ret);
 
 	if (priv->data->nb_clock == 2) {
 		const char *id = priv->clk_bulk[1].id;
