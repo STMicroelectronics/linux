@@ -1173,7 +1173,7 @@ static int stm32_hash_align_sgs(struct scatterlist *sg,
 		 */
 		if (init && secure_ctx) {
 			new_len += sizeof(u32);
-			if (unlikely(new_len > nbytes))
+			if (unlikely(new_len >= nbytes))
 				new_len -= bs;
 		}
 	}
