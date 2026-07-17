@@ -53,6 +53,8 @@ properties:
   power-domains:
     maxItems: 1
 
+  post-init-providers: true
+
 required:
   - compatible
   - reg
