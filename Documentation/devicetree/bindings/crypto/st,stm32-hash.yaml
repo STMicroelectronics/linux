@@ -51,6 +51,8 @@ properties:
   power-domains:
     maxItems: 1
 
+  post-init-providers: true
+
   access-controllers:
     minItems: 1
     maxItems: 2
