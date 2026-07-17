@@ -269,6 +269,7 @@ static __init int gicv2m_allocate_domains(struct irq_domain *parent)
 	struct irq_domain_info info = {
 		.ops		= &gicv2m_domain_ops,
 		.parent		= parent,
+		.domain_flags	= IRQ_DOMAIN_FLAG_MSI_IMMUTABLE,
 	};
 	struct v2m_data *v2m;
 
