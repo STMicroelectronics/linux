@@ -2299,6 +2299,7 @@
 				reg-names = "dbi", "dbi2", "atu", "addr_space";
 				clocks = <&scmi_clk CK_SCMI_ICN_PCIE>;
 				resets = <&rcc PCIE_R>;
+				msi-map = <0x0 &v2m0 0x0 0x1>;
 				phys = <&combophy PHY_TYPE_PCIE>;
 				access-controllers = <&rifsc 68>;
 				power-domains = <&d1_pd>;
