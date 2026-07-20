@@ -1574,6 +1574,7 @@ static struct bcm_device_data bcm4354_device_data = {
 
 static struct bcm_device_data bcm43438_device_data = {
 	.drive_rts_on_open = true,
+	.no_early_set_baudrate = true,
 };
 
 static struct bcm_device_data cyw4373a0_device_data = {
