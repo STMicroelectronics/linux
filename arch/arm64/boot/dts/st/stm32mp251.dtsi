@@ -3006,6 +3006,7 @@
 			nvmem-cell-names = "rsc-tbl-addr", "rsc-tbl-size";
 			power-domains = <&cluster_pd>, <&ret_pd>;
 			power-domain-names = "default", "sleep";
+			post-init-providers = <&cluster_pd>, <&ret_pd>;
 			status = "disabled";
 		};
 	};
