@@ -2063,6 +2063,7 @@ static int dcmi_probe(struct platform_device *pdev)
 		dcmi->sram_pool = of_gen_pool_get(pdev->dev.of_node, "sram", 0);
 		if (!dcmi->sram_pool) {
 			dev_info(&pdev->dev, "No SRAM pool, can't use MDMA chaining\n");
+			ret = -ENOMEM;
 			goto err_dma_slave_config;
 		}
 
@@ -2074,6 +2075,7 @@ static int dcmi_probe(struct platform_device *pdev)
 						     &dcmi->sram_dma_buf);
 		if (!dcmi->sram_buf) {
 			dev_err(dcmi->dev, "Failed to allocate from SRAM\n");
+			ret = -ENOMEM;
 			goto err_dma_slave_config;
 		}
 
