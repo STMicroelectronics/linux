@@ -74,12 +74,20 @@ static int stm32_pcie_suspend_noirq(struct device *dev)
 	if (ret)
 		return ret;
 
+	/*
+	 * The generic DWC suspend path may leave the link active when ASPM L1 is
+	 * enabled, so force the link down here.
+	 */
+	if (!stm32_pcie->pci.suspended) {
+		dw_pcie_stop_link(&stm32_pcie->pci);
+		stm32_pcie->pci.suspended = true;
+	}
+
 	stm32_pcie_assert_perst(stm32_pcie);
 
 	clk_disable_unprepare(stm32_pcie->clk);
 
-	if (!device_wakeup_path(dev))
-		phy_exit(stm32_pcie->phy);
+	phy_exit(stm32_pcie->phy);
 
 	return pinctrl_pm_select_sleep_state(dev);
 }
@@ -100,12 +108,10 @@ static int stm32_pcie_resume_noirq(struct device *dev)
 		return ret;
 	}
 
-	if (!device_wakeup_path(dev)) {
-		ret = phy_init(stm32_pcie->phy);
-		if (ret) {
-			pinctrl_pm_select_default_state(dev);
-			return ret;
-		}
+	ret = phy_init(stm32_pcie->phy);
+	if (ret) {
+		pinctrl_pm_select_default_state(dev);
+		return ret;
 	}
 
 	ret = clk_prepare_enable(stm32_pcie->clk);
