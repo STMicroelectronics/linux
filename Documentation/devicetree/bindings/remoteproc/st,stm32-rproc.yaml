@@ -179,6 +179,8 @@ properties:
       - const: default
       - const: sleep
 
+  post-init-providers: true
+
   keep-power-in-suspend:
     $ref: /schemas/types.yaml#/definitions/flag
     description:
