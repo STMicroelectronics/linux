@@ -46,8 +46,8 @@ dtb-$(CONFIG_ARCH_STM32) += \
 	stm32mp153c-mecio1r1.dtb \
 	stm32mp157a-avenger96.dtb \
 	stm32mp157a-dhcor-avenger96.dtb \
+	stm32mp157a-dk1.dtb \
 	stm32mp157a-dk1-no-scmi.dtb \
-	stm32mp157a-dk1-scmi.dtb \
 	stm32mp157a-iot-box.dtb \
 	stm32mp157a-microgea-stm32mp1-microdev2.0.dtb \
 	stm32mp157a-microgea-stm32mp1-microdev2.0-of7.dtb \
@@ -57,13 +57,13 @@ dtb-$(CONFIG_ARCH_STM32) += \
 	stm32mp157a-stinger96.dtb \
 	stm32mp157c-dhcom-pdk2.dtb \
 	stm32mp157c-dhcom-picoitx.dtb \
+	stm32mp157c-dk2.dtb \
 	stm32mp157c-dk2-no-scmi.dtb \
-	stm32mp157c-dk2-scmi.dtb \
+	stm32mp157c-ed1.dtb \
 	stm32mp157c-ed1-no-scmi.dtb \
-	stm32mp157c-ed1-scmi.dtb \
 	stm32mp157c-emsbc-argon.dtb \
+	stm32mp157c-ev1.dtb \
 	stm32mp157c-ev1-no-scmi.dtb \
-	stm32mp157c-ev1-scmi.dtb \
 	stm32mp157c-lxa-mc1.dtb \
 	stm32mp157c-lxa-tac-gen1.dtb \
 	stm32mp157c-lxa-tac-gen2.dtb \

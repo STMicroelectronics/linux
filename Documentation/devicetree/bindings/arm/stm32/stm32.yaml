@@ -115,28 +115,29 @@ properties:
           - enum:
               - shiratech,stm32mp157a-iot-box # IoT Box
               - shiratech,stm32mp157a-stinger96 # Stinger96
+              - st,stm32mp157a-dk1
               - st,stm32mp157a-dk1-no-scmi
-              - st,stm32mp157a-dk1-scmi
+              - st,stm32mp157c-dk2
               - st,stm32mp157c-dk2-no-scmi
-              - st,stm32mp157c-dk2-scmi
               - st,stm32mp157d-dk1
               - st,stm32mp157f-dk2
           - const: st,stm32mp157
 
       - items:
           - enum:
+              - st,stm32mp157c-ed1
               - st,stm32mp157c-ed1-no-scmi
-              - st,stm32mp157c-ed1-scmi
               - st,stm32mp157d-ed1
               - st,stm32mp157f-ed1
           - const: st,stm32mp157
       - items:
           - enum:
+              - st,stm32mp157c-ev1
               - st,stm32mp157c-ev1-no-scmi
-              - st,stm32mp157c-ev1-scmi
               - st,stm32mp157d-ev1
               - st,stm32mp157f-ev1
           - enum:
+              - st,stm32mp157c-ed1
               - st,stm32mp157c-ed1-no-scmi
               - st,stm32mp157d-ed1
               - st,stm32mp157f-ed1
