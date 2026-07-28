@@ -13,6 +13,7 @@
 		interrupts = <GIC_SPI 79 IRQ_TYPE_LEVEL_HIGH>;
 		resets = <&rcc DCMIPP_R>;
 		clocks = <&rcc DCMIPP_K>;
+		power-domains = <&d1_pd>;
 		access-controllers = <&etzpc 4>;
 		status = "disabled";
 
@@ -28,6 +29,7 @@
 		clocks = <&rcc LTDC_PX>;
 		clock-names = "lcd";
 		resets = <&scmi_reset RST_SCMI_LTDC>;
+		power-domains = <&d1_pd>;
 		access-controllers = <&etzpc 3>;
 		status = "disabled";
 	};

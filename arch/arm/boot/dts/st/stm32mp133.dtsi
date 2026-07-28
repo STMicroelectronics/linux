@@ -17,6 +17,7 @@
 			interrupt-names = "int0", "int1";
 			clocks = <&scmi_clk CK_SCMI_HSE>, <&rcc FDCAN_K>;
 			clock-names = "hclk", "cclk";
+			power-domains = <&d1_pd>;
 			bosch,mram-cfg = <0x0 0 0 32 0 0 2 2>;
 			status = "disabled";
 		};
@@ -30,6 +31,7 @@
 			interrupt-names = "int0", "int1";
 			clocks = <&scmi_clk CK_SCMI_HSE>, <&rcc FDCAN_K>;
 			clock-names = "hclk", "cclk";
+			power-domains = <&d1_pd>;
 			bosch,mram-cfg = <0x1400 0 0 32 0 0 2 2>;
 			status = "disabled";
 		};
@@ -47,6 +49,7 @@
 		#interrupt-cells = <1>;
 		#address-cells = <1>;
 		#size-cells = <0>;
+		power-domains = <&d1_pd>;
 		access-controllers = <&etzpc 32>;
 		status = "disabled";
 
@@ -89,6 +92,7 @@
 			 <&rcc ETH2STP>,
 			 <&rcc ETH2PTP_K>,
 			 <&rcc ETH2CK_K>;
+		power-domains = <&d1_pd>;
 		st,syscon = <&syscfg 0x4 0xff000000>;
 		snps,mixed-burst;
 		snps,pbl = <2>;

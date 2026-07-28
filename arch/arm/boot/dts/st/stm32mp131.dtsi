@@ -22,9 +22,54 @@
 			compatible = "arm,cortex-a7";
 			device_type = "cpu";
 			reg = <0>;
-			power-domains = <&scmi_perf 0>;
-			power-domain-names = "perf";
+			power-domains = <&cpu0_pd>, <&scmi_perf 0>;
+			power-domain-names = "psci", "perf";
+			enable-method = "psci";
 			#cooling-cells = <2>;
+
+		};
+
+		domain-idle-states {
+			stop1: domain-stop1 {
+				compatible = "domain-idle-state";
+				arm,psci-suspend-param = <0x00000012>;
+				/* TODO: update latency values */
+				entry-latency-us = <300>;
+				exit-latency-us = <500>;
+				min-residency-us = <1500>;
+			};
+
+			lp_stop1: domain-lp-stop1 {
+				compatible = "domain-idle-state";
+				arm,psci-suspend-param = <0x0000022>;
+				/* TODO: update latency values */
+				entry-latency-us = <350>;
+				exit-latency-us = <600>;
+				min-residency-us = <2000>;
+			};
+
+			lplv_stop1: domain-lplv-stop1 {
+				compatible = "domain-idle-state";
+				arm,psci-suspend-param = <0x00000222>;
+				/* TODO: update latency values */
+				entry-latency-us = <500>;
+				exit-latency-us = <2000>;
+				min-residency-us = <2500>;
+			};
+		};
+
+		idle-states {
+			entry-method = "psci";
+
+			cpu_pwrdn: cpu-power-down {
+				compatible = "arm,idle-state";
+				arm,psci-suspend-param = <0x00000002>;
+				local-timer-stop;
+				/* TODO: update latency values */
+				entry-latency-us = <150>;
+				exit-latency-us = <200>;
+				min-residency-us = <1000>;
+			};
 		};
 	};
 
@@ -104,9 +149,32 @@
 		      <0xa0022000 0x2000>;
 	};
 
+	d1_pd: power-domain-d1 {
+		compatible = "st,stm32mp-pm-domain";
+		#power-domain-cells = <0>;
+		power-domains = <&pd_core>;
+	};
+
 	psci: psci {
 		compatible = "arm,psci-1.0";
 		method = "smc";
+
+		cpu0_pd: power-domain-cpu0 {
+			#power-domain-cells = <0>;
+			domain-idle-states = <&cpu_pwrdn>;
+			power-domains = <&pd_core>;
+		};
+
+		pd_core: power-domain-cluster {
+			#power-domain-cells = <0>;
+			domain-idle-states = <&stop1>, <&lp_stop1>;
+			power-domains = <&pd_core_ret>;
+		};
+
+		pd_core_ret: power-domain-retention {
+			#power-domain-cells = <0>;
+			domain-idle-states = <&lplv_stop1>;
+		};
 	};
 
 	timer {
@@ -116,7 +184,7 @@
 			     <GIC_PPI 11 (GIC_CPU_MASK_SIMPLE(1) | IRQ_TYPE_LEVEL_LOW)>,
 			     <GIC_PPI 10 (GIC_CPU_MASK_SIMPLE(1) | IRQ_TYPE_LEVEL_LOW)>;
 		interrupt-parent = <&intc>;
-		always-on;
+		arm,no-tick-in-suspend;
 	};
 
 	thermal-zones {
@@ -181,6 +249,7 @@
 			       <&dmamux1 21 0x400 0x1>,
 			       <&dmamux1 22 0x400 0x1>;
 			dma-names = "ch1", "ch2", "ch3", "ch4", "up";
+			power-domains = <&d1_pd>;
 			status = "disabled";
 
 			pwm {
@@ -217,6 +286,7 @@
 			       <&dmamux1 27 0x400 0x1>,
 			       <&dmamux1 28 0x400 0x1>;
 			dma-names = "ch1", "ch2", "ch3", "ch4", "up", "trig";
+			power-domains = <&d1_pd>;
 			status = "disabled";
 
 			pwm {
@@ -251,6 +321,7 @@
 			       <&dmamux1 31 0x400 0x1>,
 			       <&dmamux1 32 0x400 0x1>;
 			dma-names = "ch1", "ch2", "ch3", "up";
+			power-domains = <&d1_pd>;
 			status = "disabled";
 
 			pwm {
@@ -287,6 +358,7 @@
 			       <&dmamux1 59 0x400 0x1>,
 			       <&dmamux1 60 0x400 0x1>;
 			dma-names = "ch1", "ch2", "ch3", "ch4", "up", "trig";
+			power-domains = <&d1_pd>;
 			status = "disabled";
 
 			pwm {
@@ -318,6 +390,7 @@
 			clock-names = "int";
 			dmas = <&dmamux1 69 0x400 0x1>;
 			dma-names = "up";
+			power-domains = <&d1_pd>;
 			status = "disabled";
 
 			counter {
@@ -343,6 +416,7 @@
 			clock-names = "int";
 			dmas = <&dmamux1 70 0x400 0x1>;
 			dma-names = "up";
+			power-domains = <&d1_pd>;
 			status = "disabled";
 
 			counter {
@@ -399,6 +473,7 @@
 			dmas = <&dmamux1 39 0x400 0x01>,
 			       <&dmamux1 40 0x400 0x01>;
 			dma-names = "rx", "tx";
+			power-domains = <&d1_pd>;
 			status = "disabled";
 		};
 
@@ -413,6 +488,7 @@
 			dmas = <&dmamux1 39 0x400 0x01>,
 			       <&dmamux1 40 0x400 0x01>;
 			dma-names = "rx", "tx";
+			power-domains = <&d1_pd>;
 			status = "disabled";
 		};
 
@@ -424,6 +500,7 @@
 			dmas = <&dmamux1 61 0x400 0x01>,
 			       <&dmamux1 62 0x400 0x01>;
 			dma-names = "rx", "tx";
+			power-domains = <&d1_pd>;
 			status = "disabled";
 		};
 
@@ -438,6 +515,7 @@
 			dmas = <&dmamux1 61 0x400 0x01>,
 			       <&dmamux1 62 0x400 0x01>;
 			dma-names = "rx", "tx";
+			power-domains = <&d1_pd>;
 			status = "disabled";
 		};
 
@@ -460,6 +538,7 @@
 			interrupts-extended = <&exti 28 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&rcc USART3_K>;
 			resets = <&rcc USART3_R>;
+			power-domains = <&d1_pd>;
 			wakeup-source;
 			dmas = <&dmamux1 45 0x400 0x5>,
 			       <&dmamux1 46 0x400 0x1>;
@@ -473,6 +552,7 @@
 			interrupts-extended = <&exti 30 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&rcc UART4_K>;
 			resets = <&rcc UART4_R>;
+			power-domains = <&d1_pd>;
 			wakeup-source;
 			dmas = <&dmamux1 63 0x400 0x5>,
 			       <&dmamux1 64 0x400 0x1>;
@@ -486,6 +566,7 @@
 			interrupts-extended = <&exti 31 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&rcc UART5_K>;
 			resets = <&rcc UART5_R>;
+			power-domains = <&d1_pd>;
 			wakeup-source;
 			dmas = <&dmamux1 65 0x400 0x5>,
 			       <&dmamux1 66 0x400 0x1>;
@@ -509,6 +590,7 @@
 			wakeup-source;
 			st,syscfg-fmp = <&syscfg 0x4 0x1>;
 			i2c-analog-filter;
+			power-domains = <&d1_pd>;
 			status = "disabled";
 		};
 
@@ -528,6 +610,7 @@
 			st,syscfg-fmp = <&syscfg 0x4 0x2>;
 			wakeup-source;
 			i2c-analog-filter;
+			power-domains = <&d1_pd>;
 			status = "disabled";
 		};
 
@@ -537,6 +620,7 @@
 			interrupts-extended = <&exti 32 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&rcc UART7_K>;
 			resets = <&rcc UART7_R>;
+			power-domains = <&d1_pd>;
 			wakeup-source;
 			dmas = <&dmamux1 79 0x400 0x5>,
 			       <&dmamux1 80 0x400 0x1>;
@@ -550,6 +634,7 @@
 			interrupts-extended = <&exti 33 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&rcc UART8_K>;
 			resets = <&rcc UART8_R>;
+			power-domains = <&d1_pd>;
 			wakeup-source;
 			dmas = <&dmamux1 81 0x400 0x5>,
 			       <&dmamux1 82 0x400 0x1>;
@@ -578,6 +663,7 @@
 			       <&dmamux1 17 0x400 0x1>;
 			dma-names = "ch1", "ch2", "ch3", "ch4",
 				    "up", "trig", "com";
+			power-domains = <&d1_pd>;
 			status = "disabled";
 
 			pwm {
@@ -619,6 +705,7 @@
 			       <&dmamux1 53 0x400 0x1>;
 			dma-names = "ch1", "ch2", "ch3", "ch4",
 				    "up", "trig", "com";
+			power-domains = <&d1_pd>;
 			status = "disabled";
 
 			pwm {
@@ -645,6 +732,7 @@
 			interrupts-extended = <&exti 29 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&rcc USART6_K>;
 			resets = <&rcc USART6_R>;
+			power-domains = <&d1_pd>;
 			wakeup-source;
 			dmas = <&dmamux1 71 0x400 0x5>,
 			       <&dmamux1 72 0x400 0x1>;
@@ -660,6 +748,7 @@
 			dmas = <&dmamux1 37 0x400 0x01>,
 			       <&dmamux1 38 0x400 0x01>;
 			dma-names = "rx", "tx";
+			power-domains = <&d1_pd>;
 			status = "disabled";
 		};
 
@@ -674,6 +763,7 @@
 			dmas = <&dmamux1 37 0x400 0x01>,
 			       <&dmamux1 38 0x400 0x01>;
 			dma-names = "rx", "tx";
+			power-domains = <&d1_pd>;
 			status = "disabled";
 		};
 
@@ -694,6 +784,7 @@
 				clocks = <&rcc SAI1_K>;
 				clock-names = "sai_ck";
 				dmas = <&dmamux1 87 0x400 0x01>;
+				power-domains = <&d1_pd>;
 				status = "disabled";
 			};
 
@@ -704,6 +795,7 @@
 				clocks = <&rcc SAI1_K>;
 				clock-names = "sai_ck";
 				dmas = <&dmamux1 88 0x400 0x01>;
+				power-domains = <&d1_pd>;
 				status = "disabled";
 			};
 		};
@@ -725,6 +817,7 @@
 				clocks = <&rcc SAI2_K>;
 				clock-names = "sai_ck";
 				dmas = <&dmamux1 89 0x400 0x01>;
+				power-domains = <&d1_pd>;
 				status = "disabled";
 			};
 
@@ -735,6 +828,7 @@
 				clocks = <&rcc SAI2_K>;
 				clock-names = "sai_ck";
 				dmas = <&dmamux1 90 0x400 0x01>;
+				power-domains = <&d1_pd>;
 				status = "disabled";
 			};
 		};
@@ -744,6 +838,7 @@
 			reg = <0x4400d000 0x800>;
 			clocks = <&rcc DFSDM_K>;
 			clock-names = "dfsdm";
+			power-domains = <&d1_pd>;
 			#address-cells = <1>;
 			#size-cells = <0>;
 			status = "disabled";
@@ -996,6 +1091,7 @@
 			interrupt-controller;
 			#interrupt-cells = <2>;
 			reg = <0x5000d000 0x400>;
+			power-domains = <&pd_core_ret>;
 			interrupts-extended =
 				<&intc GIC_SPI 6   IRQ_TYPE_LEVEL_HIGH>,	/* EXTI_0 */
 				<&intc GIC_SPI 7   IRQ_TYPE_LEVEL_HIGH>,
@@ -1267,6 +1363,7 @@
 			clocks = <&usbphyc>, <&rcc USBH>;
 			resets = <&rcc USBH_R>;
 			interrupts = <GIC_SPI 75 IRQ_TYPE_LEVEL_HIGH>;
+			power-domains = <&d1_pd>;
 			wakeup-source;
 			status = "disabled";
 		};
@@ -1278,6 +1375,7 @@
 			resets = <&rcc USBH_R>;
 			interrupts = <GIC_SPI 76 IRQ_TYPE_LEVEL_HIGH>;
 			companion = <&usbh_ohci>;
+			power-domains = <&d1_pd>;
 			wakeup-source;
 			status = "disabled";
 		};
@@ -1362,6 +1460,7 @@
 				#interrupt-cells = <1>;
 				#address-cells = <1>;
 				#size-cells = <0>;
+				power-domains = <&d1_pd>;
 				access-controllers = <&etzpc 33>;
 				status = "disabled";
 
@@ -1412,6 +1511,7 @@
 				dr_mode = "otg";
 				otg-rev = <0x200>;
 				usb33d-supply = <&scmi_usb33>;
+				power-domains = <&d1_pd>;
 				wakeup-source;
 				access-controllers = <&etzpc 34>;
 				status = "disabled";
@@ -1423,6 +1523,7 @@
 				interrupts-extended = <&exti 26 IRQ_TYPE_LEVEL_HIGH>;
 				clocks = <&rcc USART1_K>;
 				resets = <&rcc USART1_R>;
+				power-domains = <&d1_pd>;
 				wakeup-source;
 				dmas = <&dmamux1 41 0x400 0x5>,
 				       <&dmamux1 42 0x400 0x1>;
@@ -1437,6 +1538,7 @@
 				interrupts-extended = <&exti 27 IRQ_TYPE_LEVEL_HIGH>;
 				clocks = <&rcc USART2_K>;
 				resets = <&rcc USART2_R>;
+				power-domains = <&d1_pd>;
 				wakeup-source;
 				dmas = <&dmamux1 43 0x400 0x5>,
 				       <&dmamux1 44 0x400 0x1>;
@@ -1453,6 +1555,7 @@
 				dmas = <&dmamux1 83 0x400 0x01>,
 				       <&dmamux1 84 0x400 0x01>;
 				dma-names = "rx", "tx";
+				power-domains = <&d1_pd>;
 				access-controllers = <&etzpc 18>;
 				status = "disabled";
 			};
@@ -1468,6 +1571,7 @@
 				dmas = <&dmamux1 83 0x400 0x01>,
 				       <&dmamux1 84 0x400 0x01>;
 				dma-names = "rx", "tx";
+				power-domains = <&d1_pd>;
 				access-controllers = <&etzpc 18>;
 				status = "disabled";
 			};
@@ -1483,6 +1587,7 @@
 				dmas = <&dmamux1 85 0x400 0x01>,
 				       <&dmamux1 86 0x400 0x01>;
 				dma-names = "rx", "tx";
+				power-domains = <&d1_pd>;
 				access-controllers = <&etzpc 19>;
 				status = "disabled";
 			};
@@ -1503,6 +1608,7 @@
 				st,syscfg-fmp = <&syscfg 0x4 0x4>;
 				wakeup-source;
 				i2c-analog-filter;
+				power-domains = <&d1_pd>;
 				access-controllers = <&etzpc 20>;
 				status = "disabled";
 			};
@@ -1523,6 +1629,7 @@
 				st,syscfg-fmp = <&syscfg 0x4 0x8>;
 				wakeup-source;
 				i2c-analog-filter;
+				power-domains = <&d1_pd>;
 				access-controllers = <&etzpc 21>;
 				status = "disabled";
 			};
@@ -1543,6 +1650,7 @@
 				st,syscfg-fmp = <&syscfg 0x4 0x10>;
 				wakeup-source;
 				i2c-analog-filter;
+				power-domains = <&d1_pd>;
 				access-controllers = <&etzpc 22>;
 				status = "disabled";
 			};
@@ -1556,6 +1664,7 @@
 				interrupt-names = "global";
 				clocks = <&rcc TIM12_K>;
 				clock-names = "int";
+				power-domains = <&d1_pd>;
 				access-controllers = <&etzpc 23>;
 				status = "disabled";
 
@@ -1586,6 +1695,7 @@
 				interrupt-names = "global";
 				clocks = <&rcc TIM13_K>;
 				clock-names = "int";
+				power-domains = <&d1_pd>;
 				access-controllers = <&etzpc 24>;
 				status = "disabled";
 
@@ -1616,6 +1726,7 @@
 				interrupt-names = "global";
 				clocks = <&rcc TIM14_K>;
 				clock-names = "int";
+				power-domains = <&d1_pd>;
 				access-controllers = <&etzpc 25>;
 				status = "disabled";
 
@@ -1651,6 +1762,7 @@
 				       <&dmamux1 107 0x400 0x1>,
 				       <&dmamux1 108 0x400 0x1>;
 				dma-names = "ch1", "up", "trig", "com";
+				power-domains = <&d1_pd>;
 				access-controllers = <&etzpc 26>;
 				status = "disabled";
 
@@ -1684,6 +1796,7 @@
 				dmas = <&dmamux1 109 0x400 0x1>,
 				       <&dmamux1 110 0x400 0x1>;
 				dma-names = "ch1", "up";
+				power-domains = <&d1_pd>;
 				access-controllers = <&etzpc 27>;
 				status = "disabled";
 
@@ -1717,6 +1830,7 @@
 				dmas = <&dmamux1 111 0x400 0x1>,
 				       <&dmamux1 112 0x400 0x1>;
 				dma-names = "ch1", "up";
+				power-domains = <&d1_pd>;
 				access-controllers = <&etzpc 28>;
 				status = "disabled";
 
@@ -1811,6 +1925,7 @@
 				resets = <&rcc HASH1_R>;
 				dmas = <&mdma 30 0x2 0x1000a02 0x0 0x0>;
 				dma-names = "in";
+				power-domains = <&d1_pd>;
 				access-controllers = <&etzpc 41>;
 				status = "disabled";
 			};
@@ -1820,6 +1935,7 @@
 				reg = <0x54004000 0x400>;
 				clocks = <&rcc RNG1_K>;
 				resets = <&rcc RNG1_R>;
+				power-domains = <&d1_pd>;
 				access-controllers = <&etzpc 40>;
 				status = "disabled";
 			};
@@ -1836,6 +1952,7 @@
 				#size-cells = <1>;
 				clocks = <&rcc FMC_K>;
 				resets = <&rcc FMC_R>;
+				power-domains = <&d1_pd>;
 				access-controllers = <&etzpc 54>;
 				status = "disabled";
 
@@ -1870,6 +1987,7 @@
 				dma-names = "tx", "rx";
 				clocks = <&rcc QSPI_K>;
 				resets = <&rcc QSPI_R>;
+				power-domains = <&d1_pd>;
 				access-controllers = <&etzpc 55>;
 				status = "disabled";
 			};
@@ -1885,6 +2003,7 @@
 				cap-sd-highspeed;
 				cap-mmc-highspeed;
 				max-frequency = <130000000>;
+				power-domains = <&d1_pd>;
 				access-controllers = <&etzpc 50>;
 				status = "disabled";
 			};
@@ -1900,6 +2019,7 @@
 				cap-sd-highspeed;
 				cap-mmc-highspeed;
 				max-frequency = <130000000>;
+				power-domains = <&d1_pd>;
 				access-controllers = <&etzpc 51>;
 				status = "disabled";
 			};
@@ -1923,6 +2043,7 @@
 					 <&rcc ETH1STP>,
 					 <&rcc ETH1PTP_K>,
 					 <&rcc ETH1CK_K>;
+				power-domains = <&d1_pd>;
 				st,syscon = <&syscfg 0x4 0xff0000>;
 				snps,mixed-burst;
 				snps,pbl = <2>;

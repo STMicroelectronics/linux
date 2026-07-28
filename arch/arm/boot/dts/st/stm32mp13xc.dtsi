@@ -15,6 +15,7 @@
 		       <&mdma 29 0x3 0x400808 0x0 0x0>;
 		dma-names = "mem2cryp", "cryp2mem";
 		access-controllers = <&etzpc 42>;
+		power-domains = <&d1_pd>;
 		status = "disabled";
 	};
 };
