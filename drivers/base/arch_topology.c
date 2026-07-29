@@ -379,6 +379,33 @@ static cpumask_var_t cpus_to_visit;
 static void parsing_done_workfn(struct work_struct *work);
 static DECLARE_WORK(parsing_done_work, parsing_done_workfn);
 
+/**
+ * topology_set_freq_ref() - Update the capacity reference frequency.
+ * @cpus: The CPUs for which the reference frequency has to be updated.
+ * @max_freq: The new maximum frequency (in kHz) reachable by @cpus.
+ *
+ * The capacity reference frequency is the frequency at which a CPU reaches its
+ * maximum capacity, and is used both for frequency invariance (as the scaling
+ * denominator) and by the schedutil governor to derive the target frequency.
+ * It is frozen at boot to the non-boost maximum, so it must be refreshed when
+ * the reachable maximum changes at runtime, e.g. when the cpufreq boost state
+ * is toggled and boost frequencies enter or leave cpuinfo.max_freq. Keeping it
+ * in sync allows the utilization-proportional governor to select boost OPPs.
+ */
+void topology_set_freq_ref(const struct cpumask *cpus, unsigned long max_freq)
+{
+	int cpu;
+
+	if (WARN_ON_ONCE(!max_freq))
+		return;
+
+	for_each_cpu(cpu, cpus) {
+		per_cpu(capacity_freq_ref, cpu) = max_freq;
+		freq_inv_set_max_ratio(cpu, (u64)max_freq * HZ_PER_KHZ);
+	}
+}
+EXPORT_SYMBOL_GPL(topology_set_freq_ref);
+
 static int
 init_cpu_capacity_callback(struct notifier_block *nb,
 			   unsigned long val,
@@ -453,6 +480,10 @@ static void parsing_done_workfn(struct work_struct *work)
 }
 
 #else
+void topology_set_freq_ref(const struct cpumask *cpus, unsigned long max_freq)
+{
+}
+
 core_initcall(free_raw_capacity);
 #endif
 
