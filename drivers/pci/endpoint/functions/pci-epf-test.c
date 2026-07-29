@@ -10,6 +10,7 @@
 #include <linux/delay.h>
 #include <linux/dmaengine.h>
 #include <linux/io.h>
+#include <linux/swiotlb.h>
 #include <linux/module.h>
 #include <linux/msi.h>
 #include <linux/slab.h>
@@ -74,6 +75,7 @@ struct pci_epf_test {
 	struct completion	transfer_complete;
 	bool			dma_supported;
 	bool			dma_private;
+	u32                     max_swiotlb_mapping;
 	const struct pci_epc_features *epc_features;
 	struct pci_epf_bar	db_bar;
 };
@@ -454,11 +456,12 @@ static void pci_epf_test_read(struct pci_epf_test *epf_test,
 	ssize_t map_size = 0;
 	u32 flags = le32_to_cpu(reg->flags);
 	u32 checksum = le32_to_cpu(reg->checksum);
+	bool use_dma_region;
 	u32 status = 0;
 
 	orig_size = src_size = le32_to_cpu(reg->size);
-
-	src_buf = kzalloc(src_size, GFP_KERNEL);
+	use_dma_region = (flags & FLAG_USE_DMA) && src_size > epf_test->max_swiotlb_mapping;
+	src_buf = kzalloc(src_size, use_dma_region ? GFP_KERNEL | GFP_DMA : GFP_KERNEL);
 	if (!src_buf) {
 		ret = -ENOMEM;
 		goto set_status;
@@ -550,11 +553,12 @@ static void pci_epf_test_write(struct pci_epf_test *epf_test,
 	size_t orig_size, dst_size;
 	ssize_t map_size = 0;
 	u32 flags = le32_to_cpu(reg->flags);
+	bool use_dma_region;
 	u32 status = 0;
 
 	orig_size = dst_size = le32_to_cpu(reg->size);
-
-	dst_buf = kzalloc(dst_size, GFP_KERNEL);
+	use_dma_region = (flags & FLAG_USE_DMA) && orig_size > epf_test->max_swiotlb_mapping;
+	dst_buf = kzalloc(dst_size, use_dma_region ? GFP_KERNEL | GFP_DMA : GFP_KERNEL);
 	if (!dst_buf) {
 		ret = -ENOMEM;
 		goto set_status;
@@ -950,6 +954,7 @@ static int pci_epf_test_epc_init(struct pci_epf *epf)
 	int ret;
 
 	epf_test->dma_supported = true;
+	epf_test->max_swiotlb_mapping = IO_TLB_SEGSIZE * IO_TLB_SIZE;
 
 	ret = pci_epf_test_init_dma_chan(epf_test);
 	if (ret)
