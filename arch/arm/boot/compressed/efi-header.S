@@ -104,9 +104,9 @@ extra_header_fields:
 section_table:
 		.ascii	".text\0\0\0"
 		.long	__pecoff_code_size		@ VirtualSize
-		.long	__efi_start			@ VirtualAddress
+		.long	start_offset			@ VirtualAddress
 		.long	__pecoff_code_size		@ SizeOfRawData
-		.long	__efi_start			@ PointerToRawData
+		.long	start_offset			@ PointerToRawData
 		.long	0				@ PointerToRelocations
 		.long	0				@ PointerToLineNumbers
 		.short	0				@ NumberOfRelocations
