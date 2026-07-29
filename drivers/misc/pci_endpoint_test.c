@@ -18,6 +18,7 @@
 #include <linux/mutex.h>
 #include <linux/random.h>
 #include <linux/slab.h>
+#include <linux/swiotlb.h>
 #include <linux/uaccess.h>
 #include <linux/pci.h>
 #include <linux/pci_ids.h>
@@ -130,6 +131,7 @@ struct pci_endpoint_test {
 	struct miscdevice miscdev;
 	enum pci_barno test_reg_bar;
 	size_t alignment;
+	u32 max_swiotlb_mapping;
 	u32 ep_caps;
 	const char *name;
 };
@@ -498,6 +500,7 @@ static int pci_endpoint_test_copy(struct pci_endpoint_test *test,
 	size_t offset;
 	size_t alignment = test->alignment;
 	int irq_type = test->irq_type;
+	bool use_dma_region;
 	u32 src_crc32;
 	u32 dst_crc32;
 	int ret;
@@ -524,7 +527,10 @@ static int pci_endpoint_test_copy(struct pci_endpoint_test *test,
 		return -EINVAL;
 	}
 
-	orig_src_addr = kzalloc(size + alignment, GFP_KERNEL);
+	use_dma_region = size + alignment > test->max_swiotlb_mapping;
+	orig_src_addr = kzalloc(size + alignment,
+				use_dma_region ? GFP_KERNEL | GFP_DMA : GFP_KERNEL);
+
 	if (!orig_src_addr) {
 		dev_err(dev, "Failed to allocate source buffer\n");
 		return -ENOMEM;
@@ -556,7 +562,8 @@ static int pci_endpoint_test_copy(struct pci_endpoint_test *test,
 
 	src_crc32 = crc32_le(~0, src_addr, size);
 
-	orig_dst_addr = kzalloc(size + alignment, GFP_KERNEL);
+	orig_dst_addr = kzalloc(size + alignment,
+				use_dma_region ? GFP_KERNEL | GFP_DMA : GFP_KERNEL);
 	if (!orig_dst_addr) {
 		dev_err(dev, "Failed to allocate destination address\n");
 		ret = -ENOMEM;
@@ -631,6 +638,7 @@ static int pci_endpoint_test_write(struct pci_endpoint_test *test,
 	size_t offset;
 	size_t alignment = test->alignment;
 	int irq_type = test->irq_type;
+	bool use_dma_region;
 	size_t size;
 	u32 crc32;
 	int ret;
@@ -657,7 +665,10 @@ static int pci_endpoint_test_write(struct pci_endpoint_test *test,
 		return -EINVAL;
 	}
 
-	orig_addr = kzalloc(size + alignment, GFP_KERNEL);
+	use_dma_region = size + alignment > test->max_swiotlb_mapping;
+	orig_addr = kzalloc(size + alignment,
+			    use_dma_region ? GFP_KERNEL | GFP_DMA : GFP_KERNEL);
+
 	if (!orig_addr) {
 		dev_err(dev, "Failed to allocate address\n");
 		return -ENOMEM;
@@ -728,6 +739,7 @@ static int pci_endpoint_test_read(struct pci_endpoint_test *test,
 	dma_addr_t orig_phys_addr;
 	size_t offset;
 	size_t alignment = test->alignment;
+	bool use_dma_region;
 	int irq_type = test->irq_type;
 	u32 crc32;
 	int ret;
@@ -754,7 +766,10 @@ static int pci_endpoint_test_read(struct pci_endpoint_test *test,
 		return -EINVAL;
 	}
 
-	orig_addr = kzalloc(size + alignment, GFP_KERNEL);
+	use_dma_region = size + alignment > test->max_swiotlb_mapping;
+	orig_addr = kzalloc(size + alignment,
+			    use_dma_region ? GFP_KERNEL | GFP_DMA : GFP_KERNEL);
+
 	if (!orig_addr) {
 		dev_err(dev, "Failed to allocate destination address\n");
 		return -ENOMEM;
@@ -1087,6 +1102,7 @@ static int pci_endpoint_test_probe(struct pci_dev *pdev,
 	}
 
 	pci_endpoint_test_get_capabilities(test);
+	test->max_swiotlb_mapping = IO_TLB_SEGSIZE * IO_TLB_SIZE;
 
 	misc_device = &test->miscdev;
 	misc_device->minor = MISC_DYNAMIC_MINOR;
