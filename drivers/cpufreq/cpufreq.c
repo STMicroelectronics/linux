@@ -2788,6 +2788,13 @@ int cpufreq_boost_set_sw(struct cpufreq_policy *policy, int state)
 		return ret;
 	}
 
+	/*
+	 * Keep the capacity reference frequency in sync with the reachable
+	 * maximum so that frequency invariance and the schedutil governor can
+	 * account for boost frequencies entering or leaving cpuinfo.max_freq.
+	 */
+	arch_set_freq_ref(policy->related_cpus, policy->cpuinfo.max_freq);
+
 	ret = freq_qos_update_request(policy->max_freq_req, policy->max);
 	if (ret < 0)
 		return ret;
