@@ -392,17 +392,15 @@ static int stm32_pcie_probe(struct platform_device *pdev)
 		goto err_remove_port;
 	}
 
-	ret = pm_runtime_set_active(dev);
+	ret = devm_pm_runtime_set_active_enabled(dev);
 	if (ret < 0) {
-		dev_err_probe(dev, ret, "Failed to activate runtime PM\n");
+		dev_err_probe(dev, ret, "Failed to enable runtime PM\n");
 		goto err_disable_clk;
 	}
 
-	pm_runtime_no_callbacks(dev);
-
-	ret = devm_pm_runtime_enable(dev);
+	ret = devm_pm_runtime_get_noresume(dev);
 	if (ret < 0) {
-		dev_err_probe(dev, ret, "Failed to enable runtime PM\n");
+		dev_err_probe(dev, ret, "Failed to get runtime PM\n");
 		goto err_disable_clk;
 	}
 
@@ -440,8 +438,6 @@ static void stm32_pcie_remove(struct platform_device *pdev)
 	clk_disable_unprepare(stm32_pcie->clk);
 
 	stm32_remove_pcie_port(stm32_pcie);
-
-	pm_runtime_put_noidle(&pdev->dev);
 }
 
 static const struct of_device_id stm32_pcie_of_match[] = {
