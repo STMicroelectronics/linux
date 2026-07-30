@@ -980,6 +980,7 @@ static void plugged_cb(struct device *dev, bool plugged)
 	} else {
 		hdmi_codec_jack_report(hcp, 0);
 		memset(hcp->eld, 0, sizeof(hcp->eld));
+		memset(&hcp->eld_parsed, 0, sizeof(hcp->eld_parsed));
 	}
 }
 
