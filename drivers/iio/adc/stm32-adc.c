@@ -2129,7 +2129,14 @@ static irqreturn_t stm32_adc_isr(int irq, void *data)
 			adc->bufi++;
 			if (adc->bufi >= adc->num_conv) {
 				stm32_adc_conv_irq_disable(adc);
-				iio_trigger_poll(indio_dev->trig);
+				/*
+				 * iio_trigger_poll() must run from hard IRQ context, while
+				 * iio_trigger_poll_nested() is for threaded context.
+				 */
+				if (in_hardirq())
+					iio_trigger_poll(indio_dev->trig);
+				else
+					iio_trigger_poll_nested(indio_dev->trig);
 			}
 		} else {
 			complete(&adc->completion);
