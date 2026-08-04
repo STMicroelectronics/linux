@@ -453,7 +453,7 @@
 		reg = <0x34>;
 		enable-gpios = <&gpioa 3 GPIO_ACTIVE_HIGH>;
 		interrupt-parent = <&gpiog>;
-		interrupts = <1 IRQ_TYPE_EDGE_FALLING>;
+		interrupts = <1 IRQ_TYPE_EDGE_BOTH>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&tcpp_flgn_pins_a>;
 		status = "okay";
@@ -917,15 +917,19 @@
 };
 
 &ucpd {
+	vconn-cc1-gpios = <&gpiof 5 GPIO_ACTIVE_HIGH>;
+	vconn-cc2-gpios = <&gpioc 3 GPIO_ACTIVE_HIGH>;
+	vconn-supply = <&scmi_v5v_vconn>;
 	st,tcpp = <&tcpp>;
 	status = "okay";
 
 	connector {
 		compatible = "usb-c-connector";
 		label = "USB-C";
-		data-role = "device";
-		power-role = "sink";
-		typec-power-opmode = "default";
+		data-role = "dual";
+		power-role = "dual";
+		try-power-role = "sink";
+		typec-power-opmode = "1.5A";
 		pd-disable;
 		self-powered;
 		port {
