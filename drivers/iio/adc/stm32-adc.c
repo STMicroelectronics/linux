@@ -2442,6 +2442,31 @@ static const struct iio_chan_spec_ext_info stm32_adc_ext_info[] = {
 	{ }
 };
 
+static ssize_t stm32_adc_read_description(struct iio_dev *indio_dev,
+					  uintptr_t private,
+					  const struct iio_chan_spec *chan,
+					  char *buf)
+{
+	return sysfs_emit(buf, "%s\n", (const char *)private);
+}
+
+static const struct iio_chan_spec_ext_info stm32_adc_vrefint_ext_info[] = {
+	IIO_ENUM("trigger_polarity", IIO_SHARED_BY_ALL, &stm32_adc_trig_pol),
+	{
+		.name = "trigger_polarity_available",
+		.shared = IIO_SHARED_BY_ALL,
+		.read = iio_enum_available_read,
+		.private = (uintptr_t)&stm32_adc_trig_pol,
+	},
+	{
+		.name = "description",
+		.shared = IIO_SEPARATE,
+		.read = stm32_adc_read_description,
+		.private = (uintptr_t)"VREF+ voltage (mV) from VREFINT and calibration data",
+	},
+	{ }
+};
+
 static void stm32_adc_debugfs_init(struct iio_dev *indio_dev)
 {
 	struct stm32_adc *adc = iio_priv(indio_dev);
@@ -2541,7 +2566,10 @@ static void stm32_adc_chan_init_one(struct iio_dev *indio_dev,
 	chan->scan_type.sign = 'u';
 	chan->scan_type.realbits = adc->cfg->adc_info->resolutions[adc->res];
 	chan->scan_type.storagebits = 16;
-	chan->ext_info = stm32_adc_ext_info;
+	if (chan->channel == adc->int_ch[STM32_ADC_INT_CH_VREFINT])
+		chan->ext_info = stm32_adc_vrefint_ext_info;
+	else
+		chan->ext_info = stm32_adc_ext_info;
 
 	/* pre-build selected channels mask */
 	adc->pcsel |= BIT(chan->channel);
