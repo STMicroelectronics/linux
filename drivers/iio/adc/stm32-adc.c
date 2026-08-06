@@ -375,9 +375,14 @@ static const struct stm32_adc_info stm32mp13_adc_info = {
 	.num_ovs = ARRAY_SIZE(stm32mp13_adc_oversampling_avail),
 };
 
-/* stm32mp25 can have up to 20 channels */
+/*
+ * stm32mp25 can have up to 20 channels.
+ * Keep channel 19 (VREF+) hidden on STM32MP25: it is the ADC reference
+ * supply itself, so exposing it as a regular input is not meaningful.
+ * Reference voltage must be derived from VREFINT calibration data.
+ */
 static const struct stm32_adc_info stm32mp25_adc_info = {
-	.max_channels = STM32_ADC_CH_MAX,
+	.max_channels = STM32_ADC_CH_MAX - 1,
 	.resolutions = stm32f4_adc_resolutions,
 	.oversampling = stm32h7_adc_oversampling_avail,
 	.num_res = ARRAY_SIZE(stm32f4_adc_resolutions),
