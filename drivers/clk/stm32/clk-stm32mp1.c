@@ -10,10 +10,12 @@
 #include <linux/delay.h>
 #include <linux/err.h>
 #include <linux/io.h>
+#include <linux/mfd/syscon.h>
 #include <linux/module.h>
 #include <linux/of.h>
 #include <linux/of_address.h>
 #include <linux/platform_device.h>
+#include <linux/regmap.h>
 #include <linux/reset-controller.h>
 #include <linux/slab.h>
 #include <linux/spinlock.h>
@@ -108,6 +110,8 @@ static DEFINE_SPINLOCK(rlock);
 #define RCC_TIMG2PRER		0x82C
 #define RCC_RTCDIVR		0x44
 #define RCC_DBGCFGR		0x80C
+#define RCC_TZCR		0x00
+#define RCC_MP_GCR		0x10C
 
 #define RCC_CLR	0x4
 
@@ -2412,6 +2416,51 @@ static int stm32_rcc_init(struct device *dev, void __iomem *base,
 
 static void stm32_clk_summary_debugfs_create(struct device *dev, void __iomem *base);
 
+static bool stm32mp1_rcc_syscon_readable_reg(struct device *dev, unsigned int reg)
+{
+	return reg == RCC_TZCR || reg == RCC_MP_GCR;
+}
+
+static bool stm32mp1_rcc_syscon_writeable_reg(struct device *dev, unsigned int reg)
+{
+	return reg == RCC_MP_GCR;
+}
+
+static const struct regmap_config stm32mp1_rcc_syscon_regmap_cfg = {
+	.reg_bits = 32,
+	.val_bits = 32,
+	.reg_stride = 4,
+	.max_register = 0xFFC,
+	.use_raw_spinlock = true,
+	.readable_reg = stm32mp1_rcc_syscon_readable_reg,
+	.writeable_reg = stm32mp1_rcc_syscon_writeable_reg,
+};
+
+static void stm32mp1_rcc_register_syscon(struct device *dev, void __iomem *base)
+{
+	struct device_node *np = dev_of_node(dev);
+	struct regmap *regmap;
+	int ret;
+
+	if (!of_device_is_compatible(np, "syscon"))
+		return;
+
+	regmap = devm_regmap_init_mmio(dev, base, &stm32mp1_rcc_syscon_regmap_cfg);
+	if (IS_ERR(regmap)) {
+		ret = PTR_ERR(regmap);
+		goto warn;
+	}
+
+	ret = devm_of_syscon_register_regmap(dev, np, regmap);
+	if (ret)
+		goto warn;
+
+	return;
+
+warn:
+	dev_warn(dev, "failed to register RCC syscon regmap: %d\n", ret);
+}
+
 static int stm32mp1_rcc_init(struct device *dev)
 {
 	void __iomem *base;
@@ -2433,6 +2482,7 @@ out:
 
 		of_node_put(dev_of_node(dev));
 	} else {
+		stm32mp1_rcc_register_syscon(dev, base);
 		stm32_clk_summary_debugfs_create(dev, base);
 	}
 

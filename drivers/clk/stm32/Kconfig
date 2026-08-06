@@ -22,6 +22,7 @@ config COMMON_CLK_STM32MP157
 	bool "Clock driver for stm32mp15x clocks"
 	depends on ARM || COMPILE_TEST
 	default ARCH_STM32
+	select MFD_SYSCON
 	help
 	  Support for stm32mp15x SoC family clocks.
 
