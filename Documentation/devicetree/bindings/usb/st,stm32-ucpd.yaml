@@ -63,6 +63,15 @@ properties:
   ucpd-supply:
     description: phandle to the UCPD regulator supply.
 
+  vconn-cc1-gpios:
+    description: Vconn on CC1 gate enable GPIO.
+
+  vconn-cc2-gpios:
+    description: Vconn on CC2 gate enable GPIO.
+
+  vconn-supply:
+    description: phandle to the regulator supplying Vconn gates.
+
   connector:
     type: object
     $ref: ../connector/usb-connector.yaml#
@@ -86,6 +95,7 @@ additionalProperties: false
 examples:
   - |
     #include <dt-bindings/clock/st,stm32mp25-rcc.h>
+    #include <dt-bindings/gpio/gpio.h>
     #include <dt-bindings/interrupt-controller/arm-gic.h>
     #include <dt-bindings/reset/st,stm32mp25-rcc.h>
 
@@ -101,6 +111,9 @@ examples:
         access-controllers = <&rifsc 69>;
         power-domains = <&d1_pd>;
         ucpd-supply = <&scmi_vdd33ucpd>;
+        vconn-cc1-gpios = <&gpiof 5 GPIO_ACTIVE_HIGH>;
+        vconn-cc2-gpios = <&gpioc 3 GPIO_ACTIVE_HIGH>;
+        vconn-supply = <&vconn>;
         st,tcpp = <&tcpp03>;
 
         connector {
