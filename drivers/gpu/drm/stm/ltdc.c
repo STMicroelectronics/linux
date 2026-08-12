@@ -1069,6 +1069,7 @@ static void ltdc_crtc_atomic_enable(struct drm_crtc *crtc,
 	struct drm_encoder *encoder = NULL, *en_iter;
 	struct drm_bridge *bridge = NULL, *br_iter;
 	struct drm_display_mode *mode = &crtc->state->adjusted_mode;
+	struct drm_bridge_state *bridge_state;
 	u32 hsync, vsync, accum_hbp, accum_vbp, accum_act_w, accum_act_h;
 	u32 total_width, total_height;
 	u32 bus_formats = MEDIA_BUS_FMT_RGB888_1X24;
@@ -1101,12 +1102,12 @@ static void ltdc_crtc_atomic_enable(struct drm_crtc *crtc,
 		drm_connector_list_iter_end(&iter);
 	}
 
-	if (bridge && bridge->timings) {
-		bus_flags = bridge->timings->input_bus_flags;
-	} else if (connector) {
-		bus_flags = connector->display_info.bus_flags;
-		if (connector->display_info.num_bus_formats)
-			bus_formats = connector->display_info.bus_formats[0];
+	if (bridge) {
+		bridge_state = drm_atomic_get_new_bridge_state(state, bridge);
+		if (bridge_state) {
+			bus_formats = bridge_state->input_bus_cfg.format;
+			bus_flags = bridge_state->input_bus_cfg.flags;
+		}
 	}
 
 	if (encoder->encoder_type == DRM_MODE_ENCODER_LVDS) {
