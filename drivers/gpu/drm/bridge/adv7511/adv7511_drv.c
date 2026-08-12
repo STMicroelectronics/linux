@@ -8,6 +8,7 @@
 #include <linux/clk.h>
 #include <linux/device.h>
 #include <linux/gpio/consumer.h>
+#include <linux/media-bus-format.h>
 #include <linux/module.h>
 #include <linux/of.h>
 #include <linux/slab.h>
@@ -300,6 +301,7 @@ static void adv7511_set_link_config(struct adv7511 *adv7511,
 	adv7511->hsync_polarity = config->hsync_polarity;
 	adv7511->vsync_polarity = config->vsync_polarity;
 	adv7511->rgb = config->input_colorspace == HDMI_COLORSPACE_RGB;
+	adv7511->input_colorspace = config->input_colorspace;
 }
 
 static void __adv7511_power_on(struct adv7511 *adv7511)
@@ -883,6 +885,47 @@ static int adv7511_bridge_attach(struct drm_bridge *bridge,
 	return ret;
 }
 
+static u32 *adv7511_bridge_atomic_get_input_bus_fmts(struct drm_bridge *bridge,
+						     struct drm_bridge_state *bridge_state,
+						     struct drm_crtc_state *crtc_state,
+						     struct drm_connector_state *conn_state,
+						     u32 output_fmt,
+						     unsigned int *num_input_fmts)
+{
+	struct adv7511 *adv = bridge_to_adv7511(bridge);
+	u32 input_fmt;
+	u32 *input_fmts;
+
+	switch (adv->input_colorspace) {
+	case HDMI_COLORSPACE_YUV422:
+		input_fmt = MEDIA_BUS_FMT_YUYV8_1X16;
+		break;
+	case HDMI_COLORSPACE_YUV444:
+		input_fmt = MEDIA_BUS_FMT_YUV8_1X24;
+		break;
+	case HDMI_COLORSPACE_RGB:
+	default:
+		input_fmt = MEDIA_BUS_FMT_RGB888_1X24;
+		break;
+	}
+
+	if (output_fmt != MEDIA_BUS_FMT_FIXED && output_fmt != input_fmt) {
+		*num_input_fmts = 0;
+		return NULL;
+	}
+
+	input_fmts = kmalloc(sizeof(*input_fmts), GFP_KERNEL);
+	if (!input_fmts) {
+		*num_input_fmts = 0;
+		return NULL;
+	}
+
+	input_fmts[0] = input_fmt;
+	*num_input_fmts = 1;
+
+	return input_fmts;
+}
+
 static enum drm_connector_status
 adv7511_bridge_detect(struct drm_bridge *bridge, struct drm_connector *connector)
 {
@@ -988,6 +1031,7 @@ static int adv7511_bridge_hdmi_write_infoframe(struct drm_bridge *bridge,
 static const struct drm_bridge_funcs adv7511_bridge_funcs = {
 	.mode_valid = adv7511_bridge_mode_valid,
 	.mode_fixup = adv7511_bridge_mode_fixup,
+	.atomic_get_input_bus_fmts = adv7511_bridge_atomic_get_input_bus_fmts,
 	.attach = adv7511_bridge_attach,
 	.detect = adv7511_bridge_detect,
 	.edid_read = adv7511_bridge_edid_read,
@@ -1232,6 +1276,7 @@ static int adv7511_probe(struct i2c_client *i2c)
 	adv7511->powered = false;
 	adv7511->status = connector_status_disconnected;
 	adv7511->info = i2c_get_match_data(i2c);
+	adv7511->input_colorspace = HDMI_COLORSPACE_RGB;
 
 	memset(&link_config, 0, sizeof(link_config));
 

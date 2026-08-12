@@ -375,6 +375,7 @@ struct adv7511 {
 	enum adv7511_sync_polarity vsync_polarity;
 	enum adv7511_sync_polarity hsync_polarity;
 	bool rgb;
+	enum hdmi_colorspace input_colorspace;
 
 	struct gpio_desc *gpio_pd;
 
