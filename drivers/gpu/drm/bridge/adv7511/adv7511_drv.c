@@ -973,6 +973,7 @@ static int adv7511_bridge_hdmi_write_infoframe(struct drm_bridge *bridge,
 					       const u8 *buffer, size_t len)
 {
 	struct adv7511 *adv7511 = bridge_to_adv7511(bridge);
+	u8 avi_yuv_infoframe[] = {0x02, 0x0d, 0x4d, 0x22, 0x00, 0x00, 0x00, 0x00};
 
 	switch (type) {
 	case HDMI_INFOFRAME_TYPE_AUDIO:
@@ -996,8 +997,13 @@ static int adv7511_bridge_hdmi_write_infoframe(struct drm_bridge *bridge,
 				   BIT(6), BIT(6));
 
 		/* The AVI infoframe id is not configurable */
-		regmap_bulk_write(adv7511->regmap, ADV7511_REG_AVI_INFOFRAME_VERSION,
-				  buffer + 1, len - 1);
+		if (!adv7511->rgb) {
+			regmap_bulk_write(adv7511->regmap, ADV7511_REG_AVI_INFOFRAME_VERSION,
+					  avi_yuv_infoframe, sizeof(avi_yuv_infoframe));
+		} else {
+			regmap_bulk_write(adv7511->regmap, ADV7511_REG_AVI_INFOFRAME_VERSION,
+					  buffer + 1, len - 1);
+		}
 
 		regmap_write(adv7511->regmap, ADV7511_REG_AUDIO_INFOFRAME_LENGTH, 0x2);
 		regmap_write(adv7511->regmap, ADV7511_REG_AUDIO_INFOFRAME(1), 0x1);
