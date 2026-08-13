@@ -4434,8 +4434,6 @@ static int wm8994_component_probe(struct snd_soc_component *component)
 		wm8994->lrclk_shared[1] = 0;
 	}
 
-	pm_runtime_put(component->dev);
-
 	/* Latch volume update bits */
 	for (i = 0; i < ARRAY_SIZE(wm8994_vu_bits); i++)
 		snd_soc_component_update_bits(component, wm8994_vu_bits[i].reg,
@@ -4614,6 +4612,8 @@ static int wm8994_component_probe(struct snd_soc_component *component)
 		break;
 	}
 
+	pm_runtime_put(component->dev);
+
 	return 0;
 
 err_irq:
@@ -4632,6 +4632,7 @@ err_irq:
 	wm8994_free_irq(wm8994->wm8994, WM8994_IRQ_FIFOS_ERR, component);
 	wm8994_free_irq(wm8994->wm8994, WM8994_IRQ_TEMP_SHUT, component);
 	wm8994_free_irq(wm8994->wm8994, WM8994_IRQ_TEMP_WARN, component);
+	pm_runtime_put(component->dev);
 
 	return ret;
 }
