@@ -2481,6 +2481,8 @@ static int __maybe_unused stm32_usart_serial_suspend(struct device *dev)
 
 
 	if (device_may_wakeup(dev) || device_wakeup_path(dev)) {
+		pm_runtime_get_sync(port->dev);
+
 		ret = pm_runtime_force_suspend(dev);
 		if (ret)
 			return ret;
@@ -2526,6 +2528,8 @@ static int __maybe_unused stm32_usart_serial_resume(struct device *dev)
 		ret = pm_runtime_force_resume(dev);
 		if (ret)
 			return ret;
+
+		pm_runtime_put_sync_autosuspend(port->dev);
 	}
 
 	ret = uart_resume_port(&stm32_usart_driver, port);
