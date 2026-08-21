@@ -5,7 +5,6 @@
 #include <arm/st/stm32mp15xc.dtsi>
 #include <arm/st/stm32mp15-pinctrl.dtsi>
 #include <arm/st/stm32mp15xxad-pinctrl.dtsi>
-#include <arm/st/stm32mp15-scmi.dtsi>
 #include <dt-bindings/gpio/gpio.h>
 #include <dt-bindings/leds/common.h>
 
@@ -34,6 +33,27 @@
 		optee {
 			compatible = "linaro,optee-tz";
 			method = "smc";
+			interrupt-parent = <&intc>;
+			interrupts = <GIC_PPI 15 (GIC_CPU_MASK_SIMPLE(1) | IRQ_TYPE_LEVEL_LOW)>;
+			bootph-some-ram;
+		};
+
+		scmi: scmi {
+			compatible = "linaro,scmi-optee";
+			#address-cells = <1>;
+			#size-cells = <0>;
+			linaro,optee-channel-id = <0>;
+			bootph-some-ram;
+
+			scmi_clk: protocol@14 {
+				reg = <0x14>;
+				#clock-cells = <1>;
+			};
+
+			scmi_reset: protocol@16 {
+				reg = <0x16>;
+				#reset-cells = <1>;
+			};
 		};
 	};
 
@@ -82,11 +102,25 @@
 		dais = <&i2s1_port>;
 	};
 
+	arm_wdt: watchdog {
+		compatible = "arm,smc-wdt";
+		arm,smc-id = <0xbc000000>;
+		timeout-sec = <32>;
+		bootph-all;
+		status = "okay";
+	};
+
 	wifi_pwrseq: wifi-pwrseq {
 		compatible = "mmc-pwrseq-simple";
 		reset-gpios = <&gpioe 12 GPIO_ACTIVE_LOW>; /* WLAN_REG_ON */
 	};
 };
+
+/delete-node/ &clk_hse;
+/delete-node/ &clk_hsi;
+/delete-node/ &clk_lse;
+/delete-node/ &clk_lsi;
+/delete-node/ &clk_csi;
 
 &adc {
 	pinctrl-names = "default";
@@ -143,33 +177,62 @@
 };
 
 &gpioa {
+	clocks = <&scmi_clk CK_SCMI_GPIOA>;
 	gpio-line-names =
 		"", "", "", "", "", "", "", "",
 		"", "", "", "", "", "HWID_PL_N", "HWID_CP", "";
 };
 
 &gpiob {
+	clocks = <&scmi_clk CK_SCMI_GPIOB>;
 	gpio-line-names =
 		"", "", "", "", "", "", "LED_LATCH", "",
 		"", "RELAY1_EN", "", "", "", "", "", "";
 };
 
 &gpioc {
+	clocks = <&scmi_clk CK_SCMI_GPIOC>;
 	gpio-line-names =
 		"", "", "", "", "", "", "", "",
 		"", "", "", "", "", "HWID_Q7", "", "";
 };
 
+&gpiod {
+	clocks = <&scmi_clk CK_SCMI_GPIOD>;
+};
+
 &gpioe {
+	clocks = <&scmi_clk CK_SCMI_GPIOE>;
 	gpio-line-names =
 		"", "", "", "", "RELAY2_EN", "", "", "",
 		"", "", "", "", "", "", "", "";
 };
 
+&gpiof {
+	clocks = <&scmi_clk CK_SCMI_GPIOF>;
+};
+
 &gpiog {
+	clocks = <&scmi_clk CK_SCMI_GPIOG>;
 	gpio-line-names =
 		"", "", "", "", "", "", "", "SW1",
 		"", "", "", "", "", "", "", "";
+};
+
+&gpioh {
+	clocks = <&scmi_clk CK_SCMI_GPIOH>;
+};
+
+&gpioi {
+	clocks = <&scmi_clk CK_SCMI_GPIOI>;
+};
+
+&gpioj {
+	clocks = <&scmi_clk CK_SCMI_GPIOJ>;
+};
+
+&gpiok {
+	clocks = <&scmi_clk CK_SCMI_GPIOK>;
 };
 
 &gpioz {
@@ -374,4 +437,8 @@
 		interrupts = <12 IRQ_TYPE_EDGE_RISING>; /* BT_HOST_WAKE */
 		interrupt-names = "host-wakeup";
 	};
+};
+
+&usart1 {
+	clocks = <&scmi_clk CK_SCMI_USART1>;
 };
