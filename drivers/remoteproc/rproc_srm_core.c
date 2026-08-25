@@ -5,8 +5,10 @@
  */
 
 #include <linux/component.h>
+#include <linux/fwnode.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
+#include <linux/of.h>
 #include <linux/platform_device.h>
 #include <linux/of_platform.h>
 #include <linux/remoteproc.h>
@@ -232,6 +234,23 @@ static void rproc_srm_core_unprepare(struct rproc_subdev *subdev)
 	devm_of_platform_depopulate(dev);
 }
 
+/*
+ * SRM sub-nodes are populated as platform devices only when the coprocessor
+ * starts, so fw_devlink cannot resolve their supplier links at boot and
+ * emits spurious "device link" errors. Drop those dangling fwnode links.
+ */
+static void rproc_srm_core_purge_fwnode_links(struct device *dev)
+{
+	struct device_node *child;
+
+	/* Links already picked up on the SRM core node itself. */
+	fwnode_links_purge(of_fwnode_handle(dev->of_node));
+
+	/* Links still attached to the not-yet-populated sub-nodes. */
+	for_each_child_of_node_scoped(dev->of_node, child)
+		fwnode_links_purge(of_fwnode_handle(child));
+}
+
 static int rproc_srm_core_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
@@ -245,6 +264,8 @@ static int rproc_srm_core_probe(struct platform_device *pdev)
 
 	rproc_srm_core->dev = dev;
 	BLOCKING_INIT_NOTIFIER_HEAD(&rproc_srm_core->notifier);
+
+	rproc_srm_core_purge_fwnode_links(dev);
 
 	/* Register rproc subdevice with (un)prepare ops */
 	rproc_srm_core->subdev.prepare = rproc_srm_core_prepare;
