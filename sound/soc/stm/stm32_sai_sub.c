@@ -414,7 +414,8 @@ static int stm32_sai_set_parent_rate(struct stm32_sai_sub_data *sai,
 
 	/*
 	 * Set minimum and maximum expected kernel clock frequency
-	 * - mclk on or spdif:
+	 * - mclk on: rate = mclk frequency
+	 * - mclk off (spdif):
 	 *   f_sai_ck = MCKDIV * mclk-fs * fs
 	 *   Here typical 256 ratio is assumed for mclk-fs
 	 * - mclk off:
@@ -423,15 +424,20 @@ static int stm32_sai_set_parent_rate(struct stm32_sai_sub_data *sai,
 	 *   Set constraint MCKDIV * FRL <= 256, to ensure MCKDIV is in available range
 	 *   f_sai_ck = sai_ck_max_rate * pow_of_two(FRL) / 256
 	 */
-	sai_ck_min_rate = rate * 256;
+	sai_ck_min_rate = rate;
 	if (!(rate % SAI_RATE_11K))
 		sai_ck_max_rate = SAI_MAX_SAMPLE_RATE_11K * 256;
 	else
 		sai_ck_max_rate = SAI_MAX_SAMPLE_RATE_8K * 256;
 
-	if (!sai->sai_mclk && !STM_SAI_PROTOCOL_IS_SPDIF(sai)) {
-		sai_ck_min_rate = rate * sai->fs_length;
-		sai_ck_max_rate /= DIV_ROUND_CLOSEST(256, roundup_pow_of_two(sai->fs_length));
+	if (!sai->sai_mclk) {
+		if (STM_SAI_PROTOCOL_IS_SPDIF(sai)) {
+			sai_ck_min_rate = rate * 256;
+		} else {
+			sai_ck_min_rate = rate * sai->fs_length;
+			sai_ck_max_rate /= DIV_ROUND_CLOSEST(256,
+							     roundup_pow_of_two(sai->fs_length));
+		}
 	}
 
 	/*
