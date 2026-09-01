@@ -18,6 +18,7 @@
 
 #include <drm/drm_crtc.h> /* This is only to get MAX_ELD_BYTES */
 #include <drm/drm_eld.h>
+#include <drm/drm_print.h>
 
 #define HDMI_CODEC_CHMAP_IDX_UNKNOWN  -1
 
@@ -468,8 +469,19 @@ static int hdmi_codec_startup(struct snd_pcm_substream *substream,
 	if (tx && hcp->hcd.ops->get_eld) {
 		ret = hcp->hcd.ops->get_eld(dai->dev->parent, hcp->hcd.data,
 					    hcp->eld, sizeof(hcp->eld));
-		if (ret)
+		if (ret) {
+			if (ret == -ENODEV) {
+				/*
+				 * ASoC treats -ENODEV as an error and logs it. Return
+				 * -EOPNOTSUPP instead to reject the open attempt silently
+				 * when no sink is connected.
+				 */
+				ret = -EOPNOTSUPP;
+				DRM_INFO_ONCE("HDMI: no sink connected, output unavailable\n");
+			}
+
 			goto err;
+		}
 
 		snd_parse_eld(dai->dev, &hcp->eld_parsed,
 			      hcp->eld, sizeof(hcp->eld));
