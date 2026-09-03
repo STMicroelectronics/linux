@@ -804,6 +804,40 @@ static int sii902x_audio_get_eld(struct device *dev, void *data,
 				 uint8_t *buf, size_t len)
 {
 	struct sii902x *sii902x = dev_get_drvdata(dev);
+	enum drm_connector_status status = sii902x->connector.status;
+
+	if (status == connector_status_unknown)
+		status = sii902x_detect(sii902x);
+
+	if (status == connector_status_disconnected)
+		return -ENODEV;
+
+	/*
+	 * If the bridge is attached but the ELD is still empty (EDID not yet
+	 * read by the display subsystem), read it now.
+	 *
+	 * An EDID read failure returns NULL, so get_eld() may succeed with an
+	 * empty ELD. The HDMI codec accepts an empty ELD and uses default audio
+	 * constraints, allowing the audio sink to open.
+	 *
+	 * ELD byte 0 holds the version field meaning the ELD has not been populated yet.
+	 *
+	 * Serialise against the display probe path (sii902x_get_modes) by
+	 * taking mode_config.mutex.
+	 */
+	if (sii902x->connector.dev) {
+		mutex_lock(&sii902x->connector.dev->mode_config.mutex);
+		if (sii902x->connector.eld[0] == 0) {
+			const struct drm_edid *drm_edid;
+
+			drm_edid = sii902x_edid_read(sii902x, &sii902x->connector);
+			if (drm_edid) {
+				drm_edid_connector_update(&sii902x->connector, drm_edid);
+				drm_edid_free(drm_edid);
+			}
+		}
+		mutex_unlock(&sii902x->connector.dev->mode_config.mutex);
+	}
 
 	mutex_lock(&sii902x->mutex);
 
