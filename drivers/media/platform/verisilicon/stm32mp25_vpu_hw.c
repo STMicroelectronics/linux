@@ -30,18 +30,6 @@ static const struct hantro_fmt stm32mp25_vdec_fmts[] = {
 		},
 	},
 	{
-		.fourcc = V4L2_PIX_FMT_NV16,
-		.codec_mode = HANTRO_MODE_NONE,
-		.frmsize = {
-			.min_width = FMT_MIN_WIDTH,
-			.max_width = FMT_4K_WIDTH,
-			.step_width = MB_DIM,
-			.min_height = FMT_MIN_HEIGHT,
-			.max_height = FMT_4K_HEIGHT,
-			.step_height = MB_DIM,
-		},
-	},
-	{
 		.fourcc = V4L2_PIX_FMT_VP8_FRAME,
 		.codec_mode = HANTRO_MODE_VP8_DEC,
 		.max_depth = 2,
