@@ -336,6 +336,7 @@ struct stm32_i3c_ddata {
 		/* Prevent races between transfers */
 		spinlock_t lock;
 	} xferqueue;
+	u32 timingr0_normal;
 };
 
 static inline struct stm32_i3c_ddata *to_stm32_i3c_ddata(struct i3c_master_controller *m)
@@ -446,6 +447,58 @@ static int stm32_i3c_master_write_txfifo(struct stm32_i3c_ddata *ddata)
 	}
 
 	return 0;
+}
+
+static int stm32_i3c_master_set_speed(struct i3c_master_controller *m,
+				      enum i3c_open_drain_speed speed)
+{
+	struct stm32_i3c_ddata *ddata = to_stm32_i3c_ddata(m);
+	unsigned long i3cclk_rate;
+	u32 timingr0, sclhi3c, cfgr;
+	int ret;
+
+	ret = pm_runtime_resume_and_get(ddata->dev);
+	if (ret)
+		return ret;
+
+	switch (speed) {
+	case I3C_OPEN_DRAIN_SLOW_SPEED:
+		i3cclk_rate = clk_get_rate(ddata->clk);
+		if (!i3cclk_rate) {
+			ret = -EINVAL;
+			goto out;
+		}
+		sclhi3c = DIV_ROUND_UP_ULL((u64)I3C_BUS_THIGH_INIT_OD_MIN_NS * i3cclk_rate,
+					   NSEC_PER_SEC) - 1;
+		if (sclhi3c > FIELD_MAX(I3C_TIMINGR0_SCLH_I3C)) {
+			ret = -EINVAL;
+			goto out;
+		}
+
+		timingr0 = ddata->timingr0_normal & ~I3C_TIMINGR0_SCLH_I3C;
+		timingr0 |= FIELD_PREP(I3C_TIMINGR0_SCLH_I3C, sclhi3c);
+		break;
+	case I3C_OPEN_DRAIN_NORMAL_SPEED:
+		timingr0 = ddata->timingr0_normal;
+		break;
+	default:
+		ret = -EINVAL;
+		goto out;
+	}
+
+	/* TIMINGR0 is read-only when the I3C peripheral is enabled hence ensure I3C peripheral is
+	 * disabled when writing into it
+	 */
+	cfgr = readl_relaxed(ddata->base + STM32_I3C_CFGR);
+	writel_relaxed(cfgr & ~I3C_CFGR_EN, ddata->base + STM32_I3C_CFGR);
+
+	writel_relaxed(timingr0, ddata->base + STM32_I3C_TIMINGR0);
+
+	writel_relaxed(cfgr, ddata->base + STM32_I3C_CFGR);
+
+out:
+	pm_runtime_put_autosuspend(ddata->dev);
+	return ret;
 }
 
 static int stm32_i3c_master_read_rxfifo(struct stm32_i3c_ddata *ddata, unsigned int max_len)
@@ -1042,6 +1095,7 @@ static int stm32_i3c_pure_timing_cfg(struct i3c_master_controller *m, unsigned l
 	writel_relaxed(timingr0, ddata->base + STM32_I3C_TIMINGR0);
 	writel_relaxed(timingr1, ddata->base + STM32_I3C_TIMINGR1);
 	writel_relaxed(0, ddata->base + STM32_I3C_TIMINGR2);
+	ddata->timingr0_normal = timingr0;
 
 	dev_dbg(ddata->dev, "%s: timingr0=%#x timingr1=%#x\n", __func__, timingr0, timingr1);
 
@@ -1163,6 +1217,7 @@ static int stm32_i3c_mixed_timing_cfg(struct i3c_master_controller *m, unsigned 
 	writel_relaxed(timingr0, ddata->base + STM32_I3C_TIMINGR0);
 	writel_relaxed(timingr1, ddata->base + STM32_I3C_TIMINGR1);
 	writel_relaxed(0, ddata->base + STM32_I3C_TIMINGR2);
+	ddata->timingr0_normal = timingr0;
 
 	dev_dbg(ddata->dev, "%s: timingr0=%#x timingr1=%#x\n", __func__, timingr0, timingr1);
 
@@ -2114,6 +2169,7 @@ static const struct i3c_master_controller_ops stm32_i3c_master_ops = {
 	.recycle_ibi_slot = stm32_i3c_master_recycle_ibi_slot,	/* Required if .request_ibi */
 	.enable_hotjoin = stm32_i3c_master_enable_hotjoin,
 	.disable_hotjoin = stm32_i3c_master_disable_hotjoin,
+	.set_speed = stm32_i3c_master_set_speed,
 };
 
 static int stm32_i3c_probe(struct platform_device *pdev)
