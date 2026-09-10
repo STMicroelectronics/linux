@@ -326,6 +326,8 @@ struct stm32_i3c_ddata {
 	void __iomem *base;
 	struct clk *clk;
 	int irq;
+	struct work_struct hotjoin_work;
+	bool hotjoin_enabled;
 	u32 nslots; /* Number of I3C targets, I2C targets are not limited */
 	unsigned long *slots;
 	struct {
@@ -351,6 +353,19 @@ static inline struct i3c_dev_desc *addr_to_i3c_dev_desc(struct i3c_master_contro
 			return i3cdev;
 	}
 	return NULL;
+}
+
+static void stm32_i3c_master_hotjoin_work(struct work_struct *work)
+{
+	struct stm32_i3c_ddata *ddata = container_of(work, struct stm32_i3c_ddata, hotjoin_work);
+	int ret;
+
+	if (!READ_ONCE(ddata->hotjoin_enabled))
+		return;
+
+	ret = i3c_master_do_daa(&ddata->master);
+	if (ret)
+		dev_err(ddata->dev, "Hot-Join DAA failed: %d\n", ret);
 }
 
 static void stm32_i3c_master_send_stop(struct stm32_i3c_ddata *ddata)
@@ -854,8 +869,9 @@ static irqreturn_t stm32_i3c_irq_handler(int irq, void *dev_id)
 	}
 
 	if (evr & I3C_EVR_HJF) {
-		/* TODO Hot-Join request */
-		dev_info(ddata->dev, "Hot-Join request\n");
+		dev_dbg(ddata->dev, "Hot-Join request\n");
+		if (READ_ONCE(ddata->hotjoin_enabled))
+			schedule_work(&ddata->hotjoin_work);
 	}
 
 	if (evr & I3C_EVR_CRF) {
@@ -1281,6 +1297,36 @@ static void stm32_i3c_master_bus_cleanup(struct i3c_master_controller *m)
 	writel_relaxed(0, ddata->base + STM32_I3C_IER);
 
 	pm_runtime_put_autosuspend(ddata->dev);
+}
+
+static int stm32_i3c_master_enable_hotjoin(struct i3c_master_controller *m)
+{
+	struct stm32_i3c_ddata *ddata = to_stm32_i3c_ddata(m);
+	u32 cfgr;
+	int ret;
+
+	ret = pm_runtime_resume_and_get(ddata->dev);
+	if (ret)
+		return ret;
+
+	cfgr = readl_relaxed(ddata->base + STM32_I3C_CFGR);
+	writel_relaxed(cfgr | I3C_CFGR_HJACK, ddata->base + STM32_I3C_CFGR);
+	WRITE_ONCE(ddata->hotjoin_enabled, true);
+
+	return 0;
+}
+
+static int stm32_i3c_master_disable_hotjoin(struct i3c_master_controller *m)
+{
+	struct stm32_i3c_ddata *ddata = to_stm32_i3c_ddata(m);
+	u32 cfgr;
+
+	WRITE_ONCE(ddata->hotjoin_enabled, false);
+	cfgr = readl_relaxed(ddata->base + STM32_I3C_CFGR);
+	writel_relaxed(cfgr & ~I3C_CFGR_HJACK, ddata->base + STM32_I3C_CFGR);
+	pm_runtime_put_autosuspend(ddata->dev);
+
+	return 0;
 }
 
 static int stm32_i3c_master_get_slot(struct stm32_i3c_ddata *ddata)
@@ -2066,6 +2112,8 @@ static const struct i3c_master_controller_ops stm32_i3c_master_ops = {
 	.enable_ibi = stm32_i3c_master_enable_ibi,		/* Required if .request_ibi */
 	.disable_ibi = stm32_i3c_master_disable_ibi,		/* Required if .request_ibi */
 	.recycle_ibi_slot = stm32_i3c_master_recycle_ibi_slot,	/* Required if .request_ibi */
+	.enable_hotjoin = stm32_i3c_master_enable_hotjoin,
+	.disable_hotjoin = stm32_i3c_master_disable_hotjoin,
 };
 
 static int stm32_i3c_probe(struct platform_device *pdev)
@@ -2119,6 +2167,7 @@ static int stm32_i3c_probe(struct platform_device *pdev)
 		return -ENOMEM;
 
 	ddata->dev = &pdev->dev;
+	INIT_WORK(&ddata->hotjoin_work, stm32_i3c_master_hotjoin_work);
 	platform_set_drvdata(pdev, ddata);
 
 	/* Read controller version before enabling autosuspend to ensure it is clocked */
@@ -2156,6 +2205,7 @@ static void stm32_i3c_remove(struct platform_device *pdev)
 {
 	struct stm32_i3c_ddata *ddata = platform_get_drvdata(pdev);
 
+	cancel_work_sync(&ddata->hotjoin_work);
 	pm_runtime_get_sync(&pdev->dev);
 
 	i3c_master_unregister(&ddata->master);
