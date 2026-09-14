@@ -548,7 +548,6 @@
 };
 
 &m_can1 {
-	clocks = <&scmi_clk CK_SCMI_HSE>, <&rcc FDCAN_K>;
 	pinctrl-names = "default", "sleep";
 	pinctrl-0 = <&m_can1_pins_a>;
 	pinctrl-1 = <&m_can1_sleep_pins_a>;

@@ -1,0 +1,19 @@
+// SPDX-License-Identifier: (GPL-2.0-only OR BSD-3-Clause)
+/*
+ * Copyright (C) STMicroelectronics 2026 - All Rights Reserved
+ * Author: Patrick Delaunay <patrick.delaunay@foss.st.com> for STMicroelectronics.
+ */
+
+#include "stm32mp151-scmi.dtsi"
+
+&m_can1 {
+	clocks = <&scmi_clk CK_SCMI_HSE>, <&rcc FDCAN_K>;
+};
+
+&m_can2 {
+	clocks = <&scmi_clk CK_SCMI_HSE>, <&rcc FDCAN_K>;
+};
+
+&optee {
+	interrupts = <GIC_PPI 15 (GIC_CPU_MASK_SIMPLE(2) | IRQ_TYPE_LEVEL_LOW)>;
+};

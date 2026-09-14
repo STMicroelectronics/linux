@@ -337,7 +337,7 @@
 	/delete-property/dmas;
 	/delete-property/dma-names;
 
-	pmic: stpmic@33 {
+	pmic@33 {
 		compatible = "st,stpmic1";
 		reg = <0x33>;
 		interrupts-extended = <&gpioa 0 IRQ_TYPE_EDGE_FALLING>;

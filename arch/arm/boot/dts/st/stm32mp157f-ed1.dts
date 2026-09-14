@@ -9,7 +9,8 @@
 #include "stm32mp15xf.dtsi"
 #include "stm32mp15-pinctrl.dtsi"
 #include "stm32mp15xxaa-pinctrl.dtsi"
-#include "stm32mp15-scmi.dtsi"
+#include "stm32mp157-scmi.dtsi"
+#include "stm32mp15xc-scmi.dtsi"
 #include <dt-bindings/gpio/gpio.h>
 #include <dt-bindings/input/linux-event-codes.h>
 #include <dt-bindings/leds/common.h>
@@ -187,19 +188,14 @@
 };
 
 &cpu0 {
-	clocks = <&scmi_clk CK_SCMI_MPU>;
 	cpu-supply = <&vddcore>;
 };
 
 &cpu1 {
-	clocks = <&scmi_clk CK_SCMI_MPU>;
 	cpu-supply = <&vddcore>;
 };
 
 &cryp1 {
-	clocks = <&scmi_clk CK_SCMI_CRYP1>;
-	resets = <&scmi_reset RST_SCMI_CRYP1>;
-	post-init-providers = <&scmi_clk>, <&scmi_reset>;
 	status = "okay";
 };
 
@@ -256,10 +252,6 @@
 	status = "okay";
 };
 
-&dsi {
-	clocks = <&rcc DSI>, <&scmi_clk CK_SCMI_HSE>, <&rcc DSI_PX>;
-};
-
 &dts {
 	status = "okay";
 };
@@ -270,62 +262,50 @@
 
 &gpioa {
 	bootph-all;
-	clocks = <&scmi_clk CK_SCMI_GPIOA>;
 };
 
 &gpiob {
 	bootph-all;
-	clocks = <&scmi_clk CK_SCMI_GPIOB>;
 };
 
 &gpioc {
 	bootph-all;
-	clocks = <&scmi_clk CK_SCMI_GPIOC>;
 };
 
 &gpiod {
 	bootph-all;
-	clocks = <&scmi_clk CK_SCMI_GPIOD>;
 };
 
 &gpioe {
 	bootph-all;
-	clocks = <&scmi_clk CK_SCMI_GPIOE>;
 };
 
 &gpiof {
 	bootph-all;
-	clocks = <&scmi_clk CK_SCMI_GPIOF>;
 };
 
 &gpiog {
 	bootph-all;
-	clocks = <&scmi_clk CK_SCMI_GPIOG>;
 };
 
 &gpioh {
 	bootph-all;
-	clocks = <&scmi_clk CK_SCMI_GPIOH>;
 };
 
 &gpioi {
 	bootph-all;
-	clocks = <&scmi_clk CK_SCMI_GPIOI>;
 };
 
 &gpioj {
 	bootph-all;
-	clocks = <&scmi_clk CK_SCMI_GPIOJ>;
 };
 
 &gpiok {
 	bootph-all;
-	clocks = <&scmi_clk CK_SCMI_GPIOK>;
 };
 
 &gpioz {
 	bootph-all;
-	clocks = <&scmi_clk CK_SCMI_GPIOZ>;
 };
 
 &gpu {
@@ -333,9 +313,6 @@
 };
 
 &hash1 {
-	clocks = <&scmi_clk CK_SCMI_HASH1>;
-	resets = <&scmi_reset RST_SCMI_HASH1>;
-	post-init-providers = <&scmi_clk>, <&scmi_reset>;
 	status = "okay";
 };
 
@@ -504,27 +481,17 @@
 	};
 };
 
-&i2c6 {
-	clocks = <&scmi_clk CK_SCMI_I2C6>;
-	resets = <&scmi_reset RST_SCMI_I2C6>;
-};
-
 &ipcc {
 	status = "okay";
 };
 
 &iwdg2 {
-	clocks = <&rcc IWDG2>, <&scmi_clk CK_SCMI_LSI>;
 	timeout-sec = <32>;
 	bootph-all;
 	status = "okay";
 };
 
 &m4_rproc {
-	/delete-property/ st,syscfg-holdboot;
-	resets = <&scmi_reset RST_SCMI_MCU>,
-		 <&scmi_reset RST_SCMI_MCU_HOLD_BOOT>;
-	reset-names = "mcu_rst", "hold_boot";
 	memory-region = <&retram>, <&mcuram>, <&mcuram2>, <&vdev0vring0>,
 			<&vdev0vring1>, <&vdev0buffer>;
 	mboxes = <&ipcc 0>, <&ipcc 1>, <&ipcc 2>, <&ipcc 3>;
@@ -534,16 +501,6 @@
 	interrupt-parent = <&exti>;
 	interrupts = <68 1>;
 	status = "okay";
-};
-
-&mdma1 {
-	resets = <&scmi_reset RST_SCMI_MDMA>;
-};
-
-&optee {
-	interrupt-parent = <&intc>;
-	interrupts = <GIC_PPI 15 (GIC_CPU_MASK_SIMPLE(2) | IRQ_TYPE_LEVEL_LOW)>;
-	bootph-some-ram;
 };
 
 &pinctrl {
@@ -558,36 +515,12 @@
 	bootph-some-ram;
 };
 
-&pwr_regulators {
-	vdd-supply = <&vdd>;
-	vdd_3v3_usbfs-supply = <&vdd_usb>;
-	bootph-all;
-};
-
 &rcc {
-	compatible = "st,stm32mp1-rcc-secure", "syscon";
-	clock-names = "hse", "hsi", "csi", "lse", "lsi";
-	clocks = <&scmi_clk CK_SCMI_HSE>,
-		 <&scmi_clk CK_SCMI_HSI>,
-		 <&scmi_clk CK_SCMI_CSI>,
-		 <&scmi_clk CK_SCMI_LSE>,
-		 <&scmi_clk CK_SCMI_LSI>;
 	bootph-all;
-};
-
-&rng1 {
-	clocks = <&scmi_clk CK_SCMI_RNG1>;
-	resets = <&scmi_reset RST_SCMI_RNG1>;
-	post-init-providers = <&scmi_clk>, <&scmi_reset>;
 };
 
 &rtc {
-	clocks = <&scmi_clk CK_SCMI_RTCAPB>, <&scmi_clk CK_SCMI_RTC>;
 	status = "okay";
-};
-
-&scmi {
-	bootph-some-ram;
 };
 
 &sdmmc1 {
@@ -665,11 +598,6 @@
 	};
 };
 
-&spi6 {
-	clocks = <&scmi_clk CK_SCMI_SPI6>;
-	resets = <&scmi_reset RST_SCMI_SPI6>;
-};
-
 &timers6 {
 	status = "okay";
 	/* spare dmas for other usage */
@@ -699,10 +627,6 @@
 	pins2 {
 		bootph-all;
 	};
-};
-
-&usart1 {
-	clocks = <&scmi_clk CK_SCMI_USART1>;
 };
 
 &usbotg_hs {

@@ -1,0 +1,11 @@
+// SPDX-License-Identifier: (GPL-2.0-only OR BSD-3-Clause)
+/*
+ * Copyright (C) STMicroelectronics 2026 - All Rights Reserved
+ * Author: Patrick Delaunay <patrick.delaunay@foss.st.com> for STMicroelectronics.
+ */
+
+#include "stm32mp153-scmi.dtsi"
+
+&dsi {
+	clocks = <&rcc DSI>, <&scmi_clk CK_SCMI_HSE>, <&rcc DSI_PX>;
+};
