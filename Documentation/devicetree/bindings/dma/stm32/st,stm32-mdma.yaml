@@ -78,6 +78,9 @@ properties:
     $ref: /schemas/types.yaml#/definitions/uint32-array
     description: Array of u32 mask to list memory devices addressed via AHB bus.
 
+  power-domains:
+    maxItems: 1
+
 required:
   - compatible
   - reg
