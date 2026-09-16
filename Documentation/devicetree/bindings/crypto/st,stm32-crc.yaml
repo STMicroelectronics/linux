@@ -9,6 +9,8 @@ title: STMicroelectronics STM32 CRC
 maintainers:
   - Lionel Debieve <lionel.debieve@foss.st.com>
 
+deprecated: true
+
 properties:
   compatible:
     const: st,stm32f7-crc
