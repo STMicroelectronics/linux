@@ -156,6 +156,10 @@ static void drm_bridge_connector_handle_hpd(struct drm_bridge_connector *drm_bri
 	connector->status = status;
 	mutex_unlock(&dev->mode_config.mutex);
 
+	/* Keep HDMI EDID/ELD and audio plug state synchronized with HPD. */
+	if (drm_bridge_connector->bridge_hdmi)
+		drm_atomic_helper_connector_hdmi_hotplug(connector, status);
+
 	drm_bridge_connector_hpd_notify(connector, status);
 
 	drm_kms_helper_connector_hotplug_event(connector);
