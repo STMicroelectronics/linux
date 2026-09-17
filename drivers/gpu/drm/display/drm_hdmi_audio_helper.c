@@ -85,6 +85,9 @@ static int drm_connector_hdmi_audio_get_eld(struct device *dev, void *data,
 {
 	struct drm_connector *connector = data;
 
+	if (READ_ONCE(connector->status) != connector_status_connected)
+		return -ENODEV;
+
 	mutex_lock(&connector->eld_mutex);
 	memcpy(buf, connector->eld, min(sizeof(connector->eld), len));
 	mutex_unlock(&connector->eld_mutex);
