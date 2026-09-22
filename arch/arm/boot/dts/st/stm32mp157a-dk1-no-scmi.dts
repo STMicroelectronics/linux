@@ -12,8 +12,8 @@
 #include "stm32mp15xx-dkx.dtsi"
 
 / {
-	model = "STMicroelectronics STM32MP157A-DK1 Discovery Board";
-	compatible = "st,stm32mp157a-dk1", "st,stm32mp157";
+	model = "STMicroelectronics STM32MP157A-DK1 without SCMI Discovery Board";
+	compatible = "st,stm32mp157a-dk1-no-scmi", "st,stm32mp157";
 
 	aliases {
 		ethernet0 = &ethernet0;

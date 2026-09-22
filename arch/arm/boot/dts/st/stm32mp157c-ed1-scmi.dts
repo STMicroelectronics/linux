@@ -6,7 +6,7 @@
 
 /dts-v1/;
 
-#include "stm32mp157c-ed1.dts"
+#include "stm32mp157c-ed1-no-scmi.dts"
 #include "stm32mp15-scmi.dtsi"
 
 / {
