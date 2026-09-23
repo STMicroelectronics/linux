@@ -759,6 +759,13 @@ static int stm32_ucpd_suspend(struct device *dev)
 		return 0;
 
 	disable_irq(ucpd->ucpd_irq);
+
+	/*
+	 * Make sure that the state machine is halted
+	 * to avoid CC read access during toggling.
+	 */
+	tcpm_port_suspend(ucpd->tcpm_port);
+
 	/* backup vconn_on flag */
 	ucpd->vconn_restore = ucpd->vconn_on;
 	stm32_ucpd_set_vconn(&ucpd->tcpc_dev, false);
@@ -792,6 +799,10 @@ static int stm32_ucpd_resume(struct device *dev)
 	__stm32_ucpd_set_cc(ucpd, ucpd->cc);
 	stm32_ucpd_set_vconn(&ucpd->tcpc_dev, ucpd->vconn_restore);
 	tcpp_set_vbus(ucpd->tcpp_dev, ucpd->vbus_on, ucpd->charge_on);
+
+	/* tcpm must be running to handle cc_change */
+	tcpm_port_resume(ucpd->tcpm_port);
+
 	enable_irq(ucpd->ucpd_irq);
 
 	return 0;
