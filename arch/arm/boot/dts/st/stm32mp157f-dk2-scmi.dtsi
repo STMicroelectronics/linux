@@ -70,7 +70,6 @@
 
 &iwdg2 {
 	clocks = <&rcc IWDG2>, <&scmi_clk CK_SCMI_LSI>;
-	status = "disabled";
 };
 
 &m4_rproc {
