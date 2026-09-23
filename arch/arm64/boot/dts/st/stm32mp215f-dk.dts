@@ -67,6 +67,29 @@
 	bootph-all;
 };
 
+&scmi_regu {
+	scmi_vddcore: regulator@5 {
+		reg = <VOLTD_SCMI_STPMIC_BUCK1>;
+		regulator-name = "vddcore";
+	};
+	scmi_vdd3v3_usb: regulator@f {
+		reg = <VOLTD_SCMI_STPMIC_LDO4>;
+		regulator-name = "vdd3v3_usb";
+	};
+	scmi_vdd_flash: regulator@10 {
+		reg = <VOLTD_SCMI_STPMIC_LDO5>;
+		regulator-name = "vdd_flash";
+	};
+	scmi_vdda_1v8: regulator@11 {
+		reg = <VOLTD_SCMI_STPMIC_LDO6>;
+		regulator-name = "vdda_1v8";
+	};
+	scmi_v3v3: regulator@15 {
+		reg = <VOLTD_SCMI_STPMIC_GPO1>;
+		regulator-name = "v3v3";
+	};
+};
+
 &scmi_reset {
 	bootph-all;
 };
