@@ -44,6 +44,50 @@
 	clocks = <&rcc DSI>, <&scmi_clk CK_SCMI_HSE>, <&rcc DSI_PX>;
 };
 
+&gpioa {
+	clocks = <&scmi_clk CK_SCMI_GPIOA>;
+};
+
+&gpiob {
+	clocks = <&scmi_clk CK_SCMI_GPIOB>;
+};
+
+&gpioc {
+	clocks = <&scmi_clk CK_SCMI_GPIOC>;
+};
+
+&gpiod {
+	clocks = <&scmi_clk CK_SCMI_GPIOD>;
+};
+
+&gpioe {
+	clocks = <&scmi_clk CK_SCMI_GPIOE>;
+};
+
+&gpiof {
+	clocks = <&scmi_clk CK_SCMI_GPIOF>;
+};
+
+&gpiog {
+	clocks = <&scmi_clk CK_SCMI_GPIOG>;
+};
+
+&gpioh {
+	clocks = <&scmi_clk CK_SCMI_GPIOH>;
+};
+
+&gpioi {
+	clocks = <&scmi_clk CK_SCMI_GPIOI>;
+};
+
+&gpioj {
+	clocks = <&scmi_clk CK_SCMI_GPIOJ>;
+};
+
+&gpiok {
+	clocks = <&scmi_clk CK_SCMI_GPIOK>;
+};
+
 &gpioz {
 	clocks = <&scmi_clk CK_SCMI_GPIOZ>;
 };
@@ -56,6 +100,11 @@
 &i2c4 {
 	clocks = <&scmi_clk CK_SCMI_I2C4>;
 	resets = <&scmi_reset RST_SCMI_I2C4>;
+};
+
+&i2c6 {
+	clocks = <&scmi_clk CK_SCMI_I2C6>;
+	resets = <&scmi_reset RST_SCMI_I2C6>;
 };
 
 &iwdg1 {
@@ -109,4 +158,13 @@
 
 &scmi {
 	bootph-some-ram;
+};
+
+&spi6 {
+	clocks = <&scmi_clk CK_SCMI_SPI6>;
+	resets = <&scmi_reset RST_SCMI_SPI6>;
+};
+
+&usart1 {
+	clocks = <&scmi_clk CK_SCMI_USART1>;
 };

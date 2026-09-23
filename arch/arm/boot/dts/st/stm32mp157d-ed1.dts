@@ -189,46 +189,57 @@
 
 &gpioa {
 	bootph-all;
+	clocks = <&scmi_clk CK_SCMI_GPIOA>;
 };
 
 &gpiob {
 	bootph-all;
+	clocks = <&scmi_clk CK_SCMI_GPIOB>;
 };
 
 &gpioc {
 	bootph-all;
+	clocks = <&scmi_clk CK_SCMI_GPIOC>;
 };
 
 &gpiod {
 	bootph-all;
+	clocks = <&scmi_clk CK_SCMI_GPIOD>;
 };
 
 &gpioe {
 	bootph-all;
+	clocks = <&scmi_clk CK_SCMI_GPIOE>;
 };
 
 &gpiof {
 	bootph-all;
+	clocks = <&scmi_clk CK_SCMI_GPIOF>;
 };
 
 &gpiog {
 	bootph-all;
+	clocks = <&scmi_clk CK_SCMI_GPIOG>;
 };
 
 &gpioh {
 	bootph-all;
+	clocks = <&scmi_clk CK_SCMI_GPIOH>;
 };
 
 &gpioi {
 	bootph-all;
+	clocks = <&scmi_clk CK_SCMI_GPIOI>;
 };
 
 &gpioj {
 	bootph-all;
+	clocks = <&scmi_clk CK_SCMI_GPIOJ>;
 };
 
 &gpiok {
 	bootph-all;
+	clocks = <&scmi_clk CK_SCMI_GPIOK>;
 };
 
 &gpioz {
@@ -407,6 +418,11 @@
 	};
 };
 
+&i2c6 {
+	clocks = <&scmi_clk CK_SCMI_I2C6>;
+	resets = <&scmi_reset RST_SCMI_I2C6>;
+};
+
 &ipcc {
 	status = "okay";
 };
@@ -563,6 +579,11 @@
 	};
 };
 
+&spi6 {
+	clocks = <&scmi_clk CK_SCMI_SPI6>;
+	resets = <&scmi_reset RST_SCMI_SPI6>;
+};
+
 &timers6 {
 	status = "okay";
 	/* spare dmas for other usage */
@@ -592,6 +613,10 @@
 	pins2 {
 		bootph-all;
 	};
+};
+
+&usart1 {
+	clocks = <&scmi_clk CK_SCMI_USART1>;
 };
 
 &usbotg_hs {
