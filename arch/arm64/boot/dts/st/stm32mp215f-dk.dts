@@ -6,6 +6,7 @@
 
 /dts-v1/;
 
+#include <dt-bindings/gpio/gpio.h>
 #include <dt-bindings/input/input.h>
 #include "stm32mp215.dtsi"
 #include "stm32mp21xf.dtsi"
@@ -27,6 +28,20 @@
 
 	gpio-keys {
 		compatible = "gpio-keys";
+
+		button-user-1 {
+			label = "User-1";
+			linux,code = <BTN_1>;
+			gpios = <&gpioc 4 GPIO_ACTIVE_HIGH>;
+			status = "okay";
+		};
+
+		button-user-2 {
+			label = "User-2";
+			linux,code = <BTN_2>;
+			gpios = <&gpiof 7 GPIO_ACTIVE_HIGH>;
+			status = "disabled";
+		};
 
 		button-wake-up {
 			label = "wake-up";
