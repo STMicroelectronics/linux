@@ -7987,6 +7987,29 @@ void tcpm_unregister_port(struct tcpm_port *port)
 }
 EXPORT_SYMBOL_GPL(tcpm_unregister_port);
 
+void tcpm_port_suspend(struct tcpm_port *port)
+{
+	if (port->attached)
+		return;
+
+	/*
+	 * stop toggling to avoid get_cc accesses
+	 * when the CC read access is suspended.
+	 */
+	kthread_cancel_work_sync(&port->state_machine);
+	hrtimer_cancel(&port->state_machine_timer);
+}
+EXPORT_SYMBOL_GPL(tcpm_port_suspend);
+
+void tcpm_port_resume(struct tcpm_port *port)
+{
+	if (port->attached)
+		return;
+
+	kthread_queue_work(port->wq, &port->state_machine);
+}
+EXPORT_SYMBOL_GPL(tcpm_port_resume);
+
 MODULE_AUTHOR("Guenter Roeck <groeck@chromium.org>");
 MODULE_DESCRIPTION("USB Type-C Port Manager");
 MODULE_LICENSE("GPL");
