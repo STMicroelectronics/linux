@@ -4604,6 +4604,7 @@ int device_move(struct device *dev, struct device *new_parent,
 	int error;
 	struct device *old_parent;
 	struct kobject *new_parent_kobj;
+	struct kobject *old_glue_dir;
 
 	dev = get_device(dev);
 	if (!dev)
@@ -4620,6 +4621,7 @@ int device_move(struct device *dev, struct device *new_parent,
 
 	pr_debug("device: '%s': %s: moving to '%s'\n", dev_name(dev),
 		 __func__, new_parent ? dev_name(new_parent) : "<NULL>");
+	old_glue_dir = get_glue_dir(dev);
 	error = kobject_move(&dev->kobj, new_parent_kobj);
 	if (error) {
 		cleanup_glue_dir(dev, new_parent_kobj);
@@ -4656,6 +4658,7 @@ int device_move(struct device *dev, struct device *new_parent,
 			goto out;
 		}
 	}
+	cleanup_glue_dir(dev, old_glue_dir);
 	switch (dpm_order) {
 	case DPM_ORDER_NONE:
 		break;
