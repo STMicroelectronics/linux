@@ -197,7 +197,7 @@ EXPORT_SYMBOL_GPL(__v4l2_find_nearest_size_conditional);
 int v4l2_g_parm_cap(struct video_device *vdev,
 		    struct v4l2_subdev *sd, struct v4l2_streamparm *a)
 {
-	struct v4l2_subdev_frame_interval ival = { 0 };
+	struct v4l2_subdev_frame_interval ival = { .which = V4L2_SUBDEV_FORMAT_ACTIVE };
 	int ret;
 
 	if (a->type != V4L2_BUF_TYPE_VIDEO_CAPTURE &&
@@ -219,6 +219,7 @@ int v4l2_s_parm_cap(struct video_device *vdev,
 		    struct v4l2_subdev *sd, struct v4l2_streamparm *a)
 {
 	struct v4l2_subdev_frame_interval ival = {
+		.which = V4L2_SUBDEV_FORMAT_ACTIVE,
 		.interval = a->parm.capture.timeperframe
 	};
 	int ret;
