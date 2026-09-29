@@ -375,7 +375,9 @@ static int mmci_card_busy(struct mmc_host *mmc)
 	int busy = 0;
 
 	spin_lock_irqsave(&host->lock, flags);
-	if (readl(host->base + MMCISTATUS) & host->variant->busy_detect_flag)
+	if (host->ops && host->ops->card_busy)
+		busy = host->ops->card_busy(host);
+	else if (readl(host->base + MMCISTATUS) & host->variant->busy_detect_flag)
 		busy = 1;
 	spin_unlock_irqrestore(&host->lock, flags);
 

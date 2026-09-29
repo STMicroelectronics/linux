@@ -523,6 +523,27 @@ complete:
 	return true;
 }
 
+static int sdmmc_card_busy(struct mmci_host *host)
+{
+	u32 status = readl_relaxed(host->base + MMCISTATUS);
+
+	if (status & MCI_STM32_BUSYD0)
+		return 1;
+
+	/*
+	 * SDMMC_D0 is only sampled by the hardware at the end of the command
+	 * response and a second time two SDMMC_CK cycles later. A card pulling
+	 * SDMMC_D0 low after that window is not seen, even though the line
+	 * stays low until the end of the voltage switch procedure. Report the
+	 * card as busy while this procedure is on-going, ie while VSWITCHEN is
+	 * set between pre_sig_volt_switch() and post_sig_volt_switch().
+	 */
+	if (host->pwr_reg & MCI_STM32_VSWITCHEN)
+		return 1;
+
+	return 0;
+}
+
 static int sdmmc_dlyb_mp15_enable(struct sdmmc_dlyb *dlyb)
 {
 	writel_relaxed(DLYB_CR_DEN, dlyb->base + DLYB_CR);
@@ -760,6 +781,7 @@ static struct mmci_host_ops sdmmc_variant_ops = {
 	.set_clkreg = mmci_sdmmc_set_clkreg,
 	.set_pwrreg = mmci_sdmmc_set_pwrreg,
 	.busy_complete = sdmmc_busy_complete,
+	.card_busy = sdmmc_card_busy,
 	.pre_sig_volt_switch = sdmmc_pre_sig_volt_vswitch,
 	.post_sig_volt_switch = sdmmc_post_sig_volt_switch,
 };
