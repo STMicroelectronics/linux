@@ -931,9 +931,11 @@ static void hx8394_remove(struct mipi_dsi_device *dsi)
 	struct hx8394 *ctx = mipi_dsi_get_drvdata(dsi);
 	int ret;
 
-	ret = mipi_dsi_detach(dsi);
-	if (ret < 0)
-		dev_err(&dsi->dev, "Failed to detach from DSI host: %d\n", ret);
+	if (dsi->attached) {
+		ret = mipi_dsi_detach(dsi);
+		if (ret < 0)
+			dev_err(&dsi->dev, "Failed to detach from DSI host: %d\n", ret);
+	}
 
 	drm_panel_remove(&ctx->panel);
 }
