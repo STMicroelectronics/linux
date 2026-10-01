@@ -6,12 +6,37 @@
 
 #include "stm32mp151-scmi.dtsi"
 
+/ {
+	cpus {
+
+		cpu1: cpu@1 {
+			/delete-property/ clock-names;
+			/delete-property/ clocks;
+			/delete-property/ operating-points-v2;
+
+			enable-method = "psci";
+			power-domains = <&cpu0_pd>, <&scmi_perf 0>;
+			power-domain-names = "psci", "perf";
+		};
+	};
+
+	psci {
+		cpu1_pd: power-domain-cpu1 {
+			#power-domain-cells = <0>;
+			domain-idle-states = <&cpu_pwrdn>;
+			power-domains = <&pd_core>;
+		};
+	};
+};
+
 &m_can1 {
 	clocks = <&scmi_clk CK_SCMI_HSE>, <&rcc FDCAN_K>;
+	power-domains = <&d1_pd>;
 };
 
 &m_can2 {
 	clocks = <&scmi_clk CK_SCMI_HSE>, <&rcc FDCAN_K>;
+	power-domains = <&d1_pd>;
 };
 
 &optee {

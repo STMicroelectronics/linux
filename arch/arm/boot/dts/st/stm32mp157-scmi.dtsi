@@ -8,4 +8,9 @@
 
 &dsi {
 	clocks = <&rcc DSI>, <&scmi_clk CK_SCMI_HSE>, <&rcc DSI_PX>;
+	power-domains = <&d1_pd>;
+};
+
+&gpu {
+	power-domains = <&d1_pd>;
 };

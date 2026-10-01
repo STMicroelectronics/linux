@@ -14,7 +14,6 @@
 #include <dt-bindings/gpio/gpio.h>
 #include <dt-bindings/input/linux-event-codes.h>
 #include <dt-bindings/leds/common.h>
-#include <dt-bindings/mfd/st,stpmic1.h>
 
 / {
 	model = "STMicroelectronics STM32MP157F eval daughter";
@@ -35,6 +34,13 @@
 			label = "User-1";
 			linux,code = <BTN_1>;
 			gpios = <&gpioa 14 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
+		};
+
+		button-wakeup {
+			label = "wake-up";
+			linux,code = <KEY_WAKEUP>;
+			interrupts-extended = <&optee 0>;
+			wakeup-source;
 		};
 	};
 
@@ -316,171 +322,6 @@
 	status = "okay";
 };
 
-&i2c4 {
-	pinctrl-names = "default", "sleep";
-	pinctrl-0 = <&i2c4_pins_a>;
-	pinctrl-1 = <&i2c4_sleep_pins_a>;
-	clocks = <&scmi_clk CK_SCMI_I2C4>;
-	resets = <&scmi_reset RST_SCMI_I2C4>;
-	i2c-scl-rising-time-ns = <185>;
-	i2c-scl-falling-time-ns = <20>;
-	clock-frequency = <400000>;
-	bootph-all;
-	status = "okay";
-
-	/* spare dmas for other usage */
-	/delete-property/dmas;
-	/delete-property/dma-names;
-
-	pmic: stpmic@33 {
-		compatible = "st,stpmic1";
-		reg = <0x33>;
-		interrupts-extended = <&gpioa 0 IRQ_TYPE_EDGE_FALLING>;
-		interrupt-controller;
-		#interrupt-cells = <2>;
-		bootph-all;
-		status = "okay";
-
-		regulators {
-			compatible = "st,stpmic1-regulators";
-			buck1-supply = <&vin>;
-			buck2-supply = <&vin>;
-			buck3-supply = <&vin>;
-			buck4-supply = <&vin>;
-			ldo1-supply = <&v3v3>;
-			ldo2-supply = <&v3v3>;
-			ldo3-supply = <&vdd_ddr>;
-			ldo4-supply = <&vin>;
-			ldo5-supply = <&v3v3>;
-			ldo6-supply = <&v3v3>;
-			vref_ddr-supply = <&vin>;
-			boost-supply = <&vin>;
-			pwr_sw1-supply = <&bst_out>;
-			pwr_sw2-supply = <&bst_out>;
-
-			vddcore: buck1 {
-				regulator-name = "vddcore";
-				regulator-min-microvolt = <1200000>;
-				regulator-max-microvolt = <1350000>;
-				regulator-always-on;
-				regulator-initial-mode = <0>;
-				regulator-over-current-protection;
-			};
-
-			vdd_ddr: buck2 {
-				regulator-name = "vdd_ddr";
-				regulator-min-microvolt = <1350000>;
-				regulator-max-microvolt = <1350000>;
-				regulator-always-on;
-				regulator-initial-mode = <0>;
-				regulator-over-current-protection;
-			};
-
-			vdd: buck3 {
-				regulator-name = "vdd";
-				regulator-min-microvolt = <3300000>;
-				regulator-max-microvolt = <3300000>;
-				regulator-always-on;
-				st,mask-reset;
-				regulator-initial-mode = <0>;
-				regulator-over-current-protection;
-			};
-
-			v3v3: buck4 {
-				regulator-name = "v3v3";
-				regulator-min-microvolt = <3300000>;
-				regulator-max-microvolt = <3300000>;
-				regulator-always-on;
-				regulator-over-current-protection;
-				regulator-initial-mode = <0>;
-			};
-
-			vdda: ldo1 {
-				regulator-name = "vdda";
-				regulator-min-microvolt = <2900000>;
-				regulator-max-microvolt = <2900000>;
-				interrupts = <IT_CURLIM_LDO1 0>;
-			};
-
-			v2v8: ldo2 {
-				regulator-name = "v2v8";
-				regulator-min-microvolt = <2800000>;
-				regulator-max-microvolt = <2800000>;
-				interrupts = <IT_CURLIM_LDO2 0>;
-			};
-
-			vtt_ddr: ldo3 {
-				regulator-name = "vtt_ddr";
-				regulator-min-microvolt = <500000>;
-				regulator-max-microvolt = <750000>;
-				regulator-always-on;
-				regulator-over-current-protection;
-			};
-
-			vdd_usb: ldo4 {
-				regulator-name = "vdd_usb";
-				interrupts = <IT_CURLIM_LDO4 0>;
-			};
-
-			vdd_sd: ldo5 {
-				regulator-name = "vdd_sd";
-				regulator-min-microvolt = <2900000>;
-				regulator-max-microvolt = <2900000>;
-				interrupts = <IT_CURLIM_LDO5 0>;
-				regulator-boot-on;
-			};
-
-			v1v8: ldo6 {
-				regulator-name = "v1v8";
-				regulator-min-microvolt = <1800000>;
-				regulator-max-microvolt = <1800000>;
-				interrupts = <IT_CURLIM_LDO6 0>;
-			};
-
-			vref_ddr: vref_ddr {
-				regulator-name = "vref_ddr";
-				regulator-always-on;
-			};
-
-			bst_out: boost {
-				regulator-name = "bst_out";
-				interrupts = <IT_OCP_BOOST 0>;
-			};
-
-			vbus_otg: pwr_sw1 {
-				regulator-name = "vbus_otg";
-				interrupts = <IT_OCP_OTG 0>;
-			};
-
-			vbus_sw: pwr_sw2 {
-				regulator-name = "vbus_sw";
-				interrupts = <IT_OCP_SWOUT 0>;
-				regulator-active-discharge = <1>;
-			};
-		};
-
-		onkey {
-			compatible = "st,stpmic1-onkey";
-			interrupts = <IT_PONKEY_F 0>, <IT_PONKEY_R 0>;
-			interrupt-names = "onkey-falling", "onkey-rising";
-			power-off-time-sec = <10>;
-			status = "okay";
-		};
-
-		watchdog {
-			compatible = "st,stpmic1-wdt";
-			status = "disabled";
-		};
-	};
-};
-
-&i2c4_pins_a {
-	bootph-all;
-	pins {
-		bootph-all;
-	};
-};
-
 &ipcc {
 	status = "okay";
 };
@@ -489,6 +330,14 @@
 	timeout-sec = <32>;
 	bootph-all;
 	status = "okay";
+};
+
+&lptimer4 {
+	status = "okay";
+
+	timer {
+		status = "okay";
+	};
 };
 
 &m4_rproc {
@@ -521,6 +370,59 @@
 
 &rtc {
 	status = "okay";
+};
+
+&scmi_regu {
+	vddcore: regulator@3 {
+		reg = <VOLTD_SCMI_STPMIC1_BUCK1>;
+		regulator-name = "vddcore";
+	};
+
+	vdd: regulator@5 {
+		reg = <VOLTD_SCMI_STPMIC1_BUCK3>;
+		regulator-name = "vdd";
+	};
+
+	v3v3: regulator@6 {
+		reg = <VOLTD_SCMI_STPMIC1_BUCK4>;
+		regulator-name = "v3v3";
+	};
+
+	vdda: regulator@7 {
+		reg = <VOLTD_SCMI_STPMIC1_LDO1>;
+		regulator-name = "vdda";
+	};
+
+	v2v8: regulator@8 {
+		reg = <VOLTD_SCMI_STPMIC1_LDO2>;
+		regulator-name = "v2v8";
+	};
+
+	vdd_usb: regulator@a {
+		reg = <VOLTD_SCMI_STPMIC1_LDO4>;
+		regulator-name = "vdd_usb";
+	};
+
+	vdd_sd: regulator@b {
+		reg = <VOLTD_SCMI_STPMIC1_LDO5>;
+		regulator-name = "vdd_sd";
+		regulator-boot-on;
+	};
+
+	v1v8: regulator@c {
+		reg = <VOLTD_SCMI_STPMIC1_LDO6>;
+		regulator-name = "v1v8";
+	};
+
+	vbus_otg: regulator@f {
+		reg = <VOLTD_SCMI_STPMIC1_PWR_SW1>;
+		regulator-name = "vbus_otg";
+	};
+
+	vbus_sw: regulator@10 {
+		reg = <VOLTD_SCMI_STPMIC1_PWR_SW2>;
+		regulator-name = "vbus_sw";
+	};
 };
 
 &sdmmc1 {

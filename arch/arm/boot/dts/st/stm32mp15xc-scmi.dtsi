@@ -8,4 +8,5 @@
 	clocks = <&scmi_clk CK_SCMI_CRYP1>;
 	resets = <&scmi_reset RST_SCMI_CRYP1>;
 	post-init-providers = <&scmi_clk>, <&scmi_reset>;
+	power-domains = <&d1_pd>;
 };

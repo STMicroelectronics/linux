@@ -4,7 +4,64 @@
  * Author: Alexandre Torgue <alexandre.torgue@foss.st.com> for STMicroelectronics.
  */
 
+#include <dt-bindings/input/input.h>
+#include <dt-bindings/regulator/st,stm32mp15-regulator.h>
+
 / {
+	/delete-node/ opp-table-cpu0;
+
+	cpus {
+
+		cpu@0 {
+			/delete-property/ clock-names;
+			/delete-property/ clocks;
+			/delete-property/ operating-points-v2;
+
+			enable-method = "psci";
+			power-domains = <&cpu0_pd>, <&scmi_perf 0>;
+			power-domain-names = "psci", "perf";
+		};
+
+		idle-states {
+			entry-method = "psci";
+
+			cpu_pwrdn: cpu-power-down {
+				compatible = "arm,idle-state";
+				arm,psci-suspend-param = <0x00000002>;
+				local-timer-stop;
+				entry-latency-us = <150>;
+				exit-latency-us = <200>;
+				min-residency-us = <1000>;
+			};
+		};
+
+		domain-idle-states {
+			stop1: domain-stop1 {
+				compatible = "domain-idle-state";
+				arm,psci-suspend-param = <0x00000012>;
+				entry-latency-us = <800>;
+				exit-latency-us = <450>;
+				min-residency-us = <1600>;
+			};
+
+			lp_stop1: domain-lp-stop1 {
+				compatible = "domain-idle-state";
+				arm,psci-suspend-param = <0x0000022>;
+				entry-latency-us = <800>;
+				exit-latency-us = <750>;
+				min-residency-us = <1600>;
+			};
+
+			lplv_stop1: domain-lplv-stop1 {
+				compatible = "domain-idle-state";
+				arm,psci-suspend-param = <0x00000222>;
+				entry-latency-us = <2800>;
+				exit-latency-us = <4700>;
+				min-residency-us = <5600>;
+			};
+		};
+	};
+
 	firmware {
 		optee: optee {
 			compatible = "linaro,optee-tz";
@@ -32,15 +89,108 @@
 				reg = <0x16>;
 				#reset-cells = <1>;
 			};
+
+			scmi_perf: protocol@13 {
+				reg = <0x13>;
+				#power-domain-cells = <1>;
+			};
+
+			scmi_voltd: protocol@17 {
+				reg = <0x17>;
+
+				scmi_regu: regulators {
+					#address-cells = <1>;
+					#size-cells = <0>;
+
+					reg11: regulator@0 {
+						reg = <VOLTD_SCMI_REG11>;
+						regulator-name = "reg11";
+						regulator-min-microvolt = <1100000>;
+						regulator-max-microvolt = <1100000>;
+					};
+
+					reg18: regulator@1 {
+						reg = <VOLTD_SCMI_REG18>;
+						regulator-name = "reg18";
+						regulator-min-microvolt = <1800000>;
+						regulator-max-microvolt = <1800000>;
+					};
+
+					usb33: regulator@2 {
+						reg = <VOLTD_SCMI_USB33>;
+						regulator-name = "usb33";
+						regulator-min-microvolt = <3300000>;
+						regulator-max-microvolt = <3300000>;
+					};
+				};
+			};
+		};
+	};
+
+	d1_pd: power-domain-d1 {
+		compatible = "st,stm32mp-pm-domain";
+		#power-domain-cells = <0>;
+		power-domains = <&pd_core>;
+	};
+
+	psci {
+		cpu0_pd: power-domain-cpu0 {
+			#power-domain-cells = <0>;
+			domain-idle-states = <&cpu_pwrdn>;
+			power-domains = <&pd_core>;
+		};
+
+		pd_core: power-domain-cluster {
+			#power-domain-cells = <0>;
+			domain-idle-states = <&stop1>, <&lp_stop1>;
+			power-domains = <&pd_core_ret>;
+		};
+
+		pd_core_ret: power-domain-retention {
+			#power-domain-cells = <0>;
+			domain-idle-states = <&lplv_stop1>;
 		};
 	};
 };
 
+/delete-node/ &pwr_regulators;
 /delete-node/ &clk_hse;
 /delete-node/ &clk_hsi;
 /delete-node/ &clk_lse;
 /delete-node/ &clk_lsi;
 /delete-node/ &clk_csi;
+
+&adc {
+	power-domains = <&d1_pd>;
+};
+
+&cec {
+	power-domains = <&d1_pd>;
+};
+
+&dac {
+	power-domains = <&d1_pd>;
+};
+
+&dcmi {
+	power-domains = <&d1_pd>;
+};
+
+&dfsdm {
+	power-domains = <&d1_pd>;
+};
+
+&ethernet0 {
+	power-domains = <&d1_pd>;
+};
+
+&exti {
+	power-domains = <&pd_core_ret>;
+};
+
+&fmc {
+	power-domains = <&d1_pd>;
+};
 
 &gpioa {
 	clocks = <&scmi_clk CK_SCMI_GPIOA>;
@@ -94,20 +244,55 @@
 	clocks = <&scmi_clk CK_SCMI_HASH1>;
 	resets = <&scmi_reset RST_SCMI_HASH1>;
 	post-init-providers = <&scmi_clk>, <&scmi_reset>;
+	power-domains = <&d1_pd>;
+};
+
+&i2c1 {
+	power-domains = <&d1_pd>;
+};
+
+&i2c2 {
+	power-domains = <&d1_pd>;
+};
+
+&i2c3 {
+	power-domains = <&d1_pd>;
 };
 
 &i2c4 {
 	clocks = <&scmi_clk CK_SCMI_I2C4>;
 	resets = <&scmi_reset RST_SCMI_I2C4>;
+	power-domains = <&d1_pd>;
+};
+
+&i2c5 {
+	power-domains = <&d1_pd>;
 };
 
 &i2c6 {
 	clocks = <&scmi_clk CK_SCMI_I2C6>;
 	resets = <&scmi_reset RST_SCMI_I2C6>;
+	power-domains = <&d1_pd>;
+};
+
+&i2s1 {
+	power-domains = <&d1_pd>;
+};
+
+&i2s2 {
+	power-domains = <&d1_pd>;
+};
+
+&i2s3 {
+	power-domains = <&d1_pd>;
 };
 
 &iwdg2 {
 	clocks = <&rcc IWDG2>, <&scmi_clk CK_SCMI_LSI>;
+};
+
+&ltdc {
+	power-domains = <&d1_pd>;
 };
 
 &m4_rproc {
@@ -116,10 +301,17 @@
 	resets = <&scmi_reset RST_SCMI_MCU>,
 		 <&scmi_reset RST_SCMI_MCU_HOLD_BOOT>;
 	reset-names = "mcu_rst", "hold_boot";
+	power-domains = <&pd_core>, <&pd_core_ret>;
+	power-domain-names = "default", "sleep";
+	keep-power-in-suspend;
 };
 
 &mdma1 {
 	resets = <&scmi_reset RST_SCMI_MDMA>;
+};
+
+&qspi {
+	power-domains = <&d1_pd>;
 };
 
 &rcc {
@@ -136,17 +328,184 @@
 	clocks = <&scmi_clk CK_SCMI_RNG1>;
 	resets = <&scmi_reset RST_SCMI_RNG1>;
 	post-init-providers = <&scmi_clk>, <&scmi_reset>;
+	power-domains = <&d1_pd>;
 };
 
 &rtc {
 	clocks = <&scmi_clk CK_SCMI_RTCAPB>, <&scmi_clk CK_SCMI_RTC>;
 };
 
+&sai1a {
+	power-domains = <&d1_pd>;
+};
+
+&sai1b {
+	power-domains = <&d1_pd>;
+};
+
+&sai2a {
+	power-domains = <&d1_pd>;
+};
+
+&sai2b {
+	power-domains = <&d1_pd>;
+};
+
+&sai3a {
+	power-domains = <&d1_pd>;
+};
+
+&sai3b {
+	power-domains = <&d1_pd>;
+};
+
+&sai4a {
+	power-domains = <&d1_pd>;
+};
+
+&sai4b {
+	power-domains = <&d1_pd>;
+};
+
+&sdmmc1 {
+	power-domains = <&d1_pd>;
+};
+
+&sdmmc2 {
+	power-domains = <&d1_pd>;
+};
+
+&sdmmc3 {
+	power-domains = <&d1_pd>;
+};
+
+&spi1 {
+	power-domains = <&d1_pd>;
+};
+
+&spi2 {
+	power-domains = <&d1_pd>;
+};
+
+&spi3 {
+	power-domains = <&d1_pd>;
+};
+
+&spi4 {
+	power-domains = <&d1_pd>;
+};
+
+&spi5 {
+	power-domains = <&d1_pd>;
+};
+
 &spi6 {
 	clocks = <&scmi_clk CK_SCMI_SPI6>;
 	resets = <&scmi_reset RST_SCMI_SPI6>;
+	power-domains = <&d1_pd>;
+};
+
+&timers1 {
+	power-domains = <&d1_pd>;
+};
+
+&timers2 {
+	power-domains = <&d1_pd>;
+};
+
+&timers3 {
+	power-domains = <&d1_pd>;
+};
+
+&timers4 {
+	power-domains = <&d1_pd>;
+};
+
+&timers5 {
+	power-domains = <&d1_pd>;
+};
+
+&timers6 {
+	power-domains = <&d1_pd>;
+};
+
+&timers7 {
+	power-domains = <&d1_pd>;
+};
+
+&timers8 {
+	power-domains = <&d1_pd>;
+};
+
+&timers12 {
+	power-domains = <&d1_pd>;
+};
+
+&timers13 {
+	power-domains = <&d1_pd>;
+};
+
+&timers14 {
+	power-domains = <&d1_pd>;
+};
+
+&timers15 {
+	power-domains = <&d1_pd>;
+};
+
+&timers16 {
+	power-domains = <&d1_pd>;
+};
+
+&timers17 {
+	power-domains = <&d1_pd>;
+};
+
+&uart4 {
+	power-domains = <&d1_pd>;
+};
+
+&uart5 {
+	power-domains = <&d1_pd>;
+};
+
+&uart7 {
+	power-domains = <&d1_pd>;
+};
+
+&uart8 {
+	power-domains = <&d1_pd>;
 };
 
 &usart1 {
 	clocks = <&scmi_clk CK_SCMI_USART1>;
+	power-domains = <&d1_pd>;
+};
+
+&usart2 {
+	power-domains = <&d1_pd>;
+};
+
+&usart3 {
+	power-domains = <&d1_pd>;
+};
+
+&usart6 {
+	power-domains = <&d1_pd>;
+};
+
+&usbh_ehci {
+	power-domains = <&d1_pd>;
+};
+
+&usbh_ohci {
+	power-domains = <&d1_pd>;
+};
+
+&usbotg_hs {
+	power-domains = <&d1_pd>;
+};
+
+&vrefbuf {
+	power-domains = <&pd_core_ret>;
 };

@@ -14,6 +14,15 @@
 	model = "STMicroelectronics STM32MP157C eval daughter";
 	compatible = "st,stm32mp157c-ed1", "st,stm32mp157";
 
+	gpio-keys {
+		button-wakeup {
+			label = "wake-up";
+			linux,code = <KEY_WAKEUP>;
+			interrupts-extended = <&optee 0>;
+			wakeup-source;
+		};
+	};
+
 	reserved-memory {
 		optee@fe000000 {
 			reg = <0xfe000000 0x2000000>;
@@ -28,7 +37,77 @@
 	status = "okay";
 };
 
+&i2c4 {
+	status = "disabled";
+
+	pmic@33 {
+		status = "disabled";
+		/delete-node/ regulators;
+	};
+};
+
 &iwdg1 {
 	/* IWDG1 is secure and managed through arm_wdt */
 	status = "disabled";
+};
+
+&lptimer4 {
+	status = "okay";
+
+	timer {
+		status = "okay";
+	};
+};
+
+&scmi_regu {
+	vddcore: regulator@3 {
+		reg = <VOLTD_SCMI_STPMIC1_BUCK1>;
+		regulator-name = "vddcore";
+	};
+
+	vdd: regulator@5 {
+		reg = <VOLTD_SCMI_STPMIC1_BUCK3>;
+		regulator-name = "vdd";
+	};
+
+	v3v3: regulator@6 {
+		reg = <VOLTD_SCMI_STPMIC1_BUCK4>;
+		regulator-name = "v3v3";
+	};
+
+	vdda: regulator@7 {
+		reg = <VOLTD_SCMI_STPMIC1_LDO1>;
+		regulator-name = "vdda";
+	};
+
+	v2v8: regulator@8 {
+		reg = <VOLTD_SCMI_STPMIC1_LDO2>;
+		regulator-name = "v2v8";
+	};
+
+	vdd_usb: regulator@a {
+		reg = <VOLTD_SCMI_STPMIC1_LDO4>;
+		regulator-name = "vdd_usb";
+	};
+
+	vdd_sd: regulator@b {
+		reg = <VOLTD_SCMI_STPMIC1_LDO5>;
+		regulator-name = "vdd_sd";
+		regulator-boot-on;
+	};
+
+	v1v8: regulator@c {
+		reg = <VOLTD_SCMI_STPMIC1_LDO6>;
+		regulator-name = "v1v8";
+	};
+
+	vbus_otg: regulator@f {
+		reg = <VOLTD_SCMI_STPMIC1_PWR_SW1>;
+		regulator-name = "vbus_otg";
+	};
+
+	vbus_sw: regulator@10 {
+		reg = <VOLTD_SCMI_STPMIC1_PWR_SW2>;
+		regulator-name = "vbus_sw";
+	};
 };
