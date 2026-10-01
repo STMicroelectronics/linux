@@ -1738,10 +1738,8 @@ static void ltdc_plane_update(struct drm_plane *plane, struct drm_atomic_state *
 
 	mode = &newstate->crtc->state->adjusted_mode;
 	if (dst.x1 < 0 || dst.y1 < 0 || dst.x2 <= dst.x1 || dst.y2 <= dst.y1 ||
-	    dst.x2 > mode->hdisplay || dst.y2 > mode->vdisplay) {
-		drm_err(plane->dev, "Invalid dst rectangle\n");
-		return;
-	}
+	    dst.x2 > mode->hdisplay || dst.y2 > mode->vdisplay)
+		drm_warn(plane->dev, "Invalid dst rectangle\n");
 
 	if (plane_rotation & DRM_MODE_ROTATE_90) {
 		/* stop display streaming to allows rotation */
