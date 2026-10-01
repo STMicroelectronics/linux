@@ -514,6 +514,7 @@ static int dw_mipi_dsi2_host_attach(struct mipi_dsi_host *host,
 {
 	struct dw_mipi_dsi2 *dsi2 = host_to_dsi2(host);
 	const struct dw_mipi_dsi2_plat_data *pdata = dsi2->plat_data;
+	struct drm_panel *panel;
 	struct drm_bridge *bridge;
 	int ret;
 
@@ -528,9 +529,16 @@ static int dw_mipi_dsi2_host_attach(struct mipi_dsi_host *host,
 	dsi2->format = device->format;
 	dsi2->mode_flags = device->mode_flags;
 
-	bridge = devm_drm_of_get_bridge(dsi2->dev, dsi2->dev->of_node, 1, 0);
-	if (IS_ERR(bridge))
-		return PTR_ERR(bridge);
+	ret = drm_of_find_panel_or_bridge(dsi2->dev->of_node, 1, 0,
+					  &panel, &bridge);
+	if (ret)
+		return ret;
+
+	if (panel) {
+		bridge = drm_panel_bridge_add(panel);
+		if (IS_ERR(bridge))
+			return PTR_ERR(bridge);
+	}
 
 	bridge->pre_enable_prev_first = true;
 	dsi2->panel_bridge = bridge;
