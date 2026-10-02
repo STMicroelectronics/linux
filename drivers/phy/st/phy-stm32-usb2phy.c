@@ -779,6 +779,14 @@ static irqreturn_t stm32_usb2phy_irq_wakeup_handler(int irq, void *dev_id)
 	return IRQ_HANDLED;
 }
 
+static void stm32_usb2phy_reset_deassert(void *data)
+{
+	struct reset_control *rstc = data;
+
+	/* Balance reset_control_assert and back to default (e.g. not asserted) */
+	reset_control_deassert(rstc);
+}
+
 static int stm32_usb2phy_probe(struct platform_device *pdev)
 {
 	struct stm32_usb2phy *phy_dev;
@@ -870,6 +878,19 @@ static int stm32_usb2phy_probe(struct platform_device *pdev)
 	ret = stm32_usb2phy_tuning(phy);
 	if (ret)
 		return dev_err_probe(dev, ret, "can't set tuning parameters\n");
+
+	/*
+	 * From cold boot, the PHY reset isn't asserted. Proper power-on reset operation assumes
+	 * the reset to be asserted. So assert it, as it is necessary for warm reboot, before it
+	 * can be enabled in stm32_usb2phy_enable().
+	 */
+	ret = reset_control_assert(phy_dev->rstc);
+	if (ret)
+		return dev_err_probe(dev, ret, "can't assert reset\n");
+
+	ret = devm_add_action_or_reset(phy_dev->dev, stm32_usb2phy_reset_deassert, phy_dev->rstc);
+	if (ret)
+		return dev_err_probe(dev, ret, "can't add reset deassert action\n");
 
 	phy_provider = devm_of_phy_provider_register(dev, of_phy_simple_xlate);
 	if (IS_ERR(phy_provider))
