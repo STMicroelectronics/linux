@@ -52,6 +52,11 @@
 	resets = <&scmi_reset RST_SCMI_I2C4>;
 };
 
+&iwdg1 {
+	/* IWDG1 is secure and managed through arm_wdt */
+	status = "disabled";
+};
+
 &iwdg2 {
 	clocks = <&rcc IWDG2>, <&scmi_clk CK_SCMI_LSI>;
 };
